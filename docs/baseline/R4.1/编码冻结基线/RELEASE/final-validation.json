@@ -1,0 +1,49 @@
+{
+  "release_id": "PDBR-2026.08.06-R4.1",
+  "version": "1.4.1-governance-cleanup",
+  "executed_at": "2026-08-06T17:50:46+08:00",
+  "release_status": "GOVERNANCE_CLEANUP_COMPLETED",
+  "code_readiness": "READY_WITH_RUNTIME_DB_VALIDATION_PENDING",
+  "implementation_release_readiness": "NOT_EVALUATED_IMPLEMENTATION_NOT_PRESENT",
+  "code_baseline_static_validation": "PASS",
+  "governance_cleanup_validation": "PASS",
+  "typescript_generation_and_compile": "PASS",
+  "mysql84_empty_database_execution": "NOT_EXECUTED_ENVIRONMENT_UNAVAILABLE",
+  "mysql84_blocking_scope": "DATABASE_MODULE_FORMAL_MERGE",
+  "real_acceptance_evidence": "NOT_EVALUATED_IMPLEMENTATION_NOT_PRESENT",
+  "acceptance_specification_count": 1691,
+  "acceptance_not_started_count": 1691,
+  "acceptance_passed_count": 0,
+  "pending_user_decisions": 0,
+  "codex_project_initialization": "ALLOWED",
+  "phased_implementation": "ALLOWED",
+  "database_module_formal_merge": "BLOCKED_UNTIL_MYSQL84_RUNTIME_GATE_PASSES",
+  "implementation_release": "NOT_EVALUATED_UNTIL_REAL_ACCEPTANCE_EVIDENCE_EXISTS",
+  "conclusion": "R4.1 governance contradictions are closed. Codex project initialization and phased implementation are allowed. MySQL 8.4 runtime validation remains honestly pending and blocks only database-module formal merge; implementation release remains unevaluated.",
+  "evidence": [
+    {
+      "path": "validation/evidence/static-validation.json",
+      "sha256": "9199f907259577f43e28ec4020625f0a35f614ec049ce8eb28ecccabdf5ddc50"
+    },
+    {
+      "path": "validation/evidence/governance-validation.json",
+      "sha256": "5e25945461d04ae0c684f9d4eb076def9b62042570d7a3a363e58e617919ef23"
+    },
+    {
+      "path": "validation/evidence/typescript-validation.json",
+      "sha256": "262d57750643bdd791334c86e470ed3547f75d02ef1da2c6af87f07f0bafc65b"
+    },
+    {
+      "path": "validation/evidence/mysql84-gate.json",
+      "sha256": "3abc7e60833245dfea106b112da3b9cb23125ebd0cdce4294b91961a69bd65ba"
+    },
+    {
+      "path": "validation/evidence/docx-render-validation.json",
+      "sha256": "a809be7425172cfadd8573aeef07592fc3dd555e11237fa82ac1c182e79f9597"
+    },
+    {
+      "path": "validation/evidence/validation-run.json",
+      "sha256": "4a18421120040a52ce019f541b838322e5b20db372158aaeb0f4f64937b92376"
+    }
+  ]
+}

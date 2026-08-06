@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ai-test-platform:event:technical_alert_endpoint.recovered:1.0.0",
+  "title": "technical_alert_endpoint.recovered",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "event_id",
+    "event_type",
+    "event_version",
+    "occurred_at",
+    "aggregate_id",
+    "sequence",
+    "correlation_id",
+    "causation_id",
+    "project_id",
+    "payload"
+  ],
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "minLength": 26,
+      "maxLength": 26
+    },
+    "event_type": {
+      "const": "technical_alert_endpoint.recovered"
+    },
+    "event_version": {
+      "const": "1.0.0"
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "aggregate_id": {
+      "type": "string",
+      "minLength": 26,
+      "maxLength": 26
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "correlation_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "causation_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "project_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 26,
+      "maxLength": 26
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "signature_config_ref",
+        "to_state",
+        "expected_version",
+        "new_version",
+        "changed_by",
+        "change_summary",
+        "technical_alert_endpoint_id",
+        "endpoint_code"
+      ],
+      "properties": {
+        "signature_config_ref": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 255
+        },
+        "project_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 26,
+          "maxLength": 26
+        },
+        "from_state": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "to_state": {
+          "type": "string",
+          "const": "RECOVERED"
+        },
+        "expected_version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "new_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "changed_by": {
+          "type": "string",
+          "minLength": 1
+        },
+        "change_summary": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "technical_alert_endpoint_id": {
+          "type": "string",
+          "minLength": 26,
+          "maxLength": 26,
+          "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "endpoint_code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 191
+        }
+      }
+    }
+  },
+  "x-forbidden-fields": [
+    "plaintext_password",
+    "secret_value",
+    "access_token",
+    "refresh_token",
+    "raw_credential"
+  ],
+  "x-aggregate-id-field": "technical_alert_endpoint_id",
+  "x-release-id": "PDBR-2026.08.06-R4.1"
+}

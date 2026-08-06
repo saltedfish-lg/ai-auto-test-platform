@@ -1,0 +1,106 @@
+{
+  "release_id": "PDBR-2026.08.06-R4.1",
+  "version": "1.4.1-governance-cleanup",
+  "created_at": "2026-08-06T17:50:46+08:00",
+  "release_status": "GOVERNANCE_CLEANUP_COMPLETED",
+  "code_readiness": "READY_WITH_RUNTIME_DB_VALIDATION_PENDING",
+  "implementation_release_readiness": "NOT_EVALUATED_IMPLEMENTATION_NOT_PRESENT",
+  "pending_user_decisions": 0,
+  "parent_release": {
+    "release_id": "PDBR-2026.08.06-R4",
+    "status": "SUPERSEDED_BY_R4_1",
+    "reason": "R4 contained stale coding-readiness, authority-order, open-decision, gate-scope and package-count governance fields."
+  },
+  "current_release_rule": "PDBR-2026.08.06-R4.1 is the only current recommended Codex code-input baseline. R4 and earlier releases are historical provenance only.",
+  "current_authority": "CURRENT_FORMAL_CODE_INPUT_BASELINE",
+  "authority_model_id": "AUTHORITY-MODEL-R4.1-001",
+  "gate_model": {
+    "CODE_BASELINE_READINESS": {
+      "status": "READY_WITH_RUNTIME_DB_VALIDATION_PENDING",
+      "codex_project_initialization": "ALLOWED",
+      "phased_implementation": "ALLOWED",
+      "database_module_formal_merge": "BLOCKED_UNTIL_MYSQL84_RUNTIME_GATE_PASSES"
+    },
+    "IMPLEMENTATION_RELEASE_READINESS": {
+      "status": "NOT_EVALUATED_IMPLEMENTATION_NOT_PRESENT",
+      "acceptance_specifications": 1691,
+      "acceptance_not_started": 1691,
+      "acceptance_passed": 0,
+      "production_release": "NOT_ALLOWED_WITHOUT_REAL_ACCEPTANCE_EVIDENCE"
+    }
+  },
+  "counts": {
+    "state_dimensions": 127,
+    "ddl_tables": 82,
+    "ddl_foreign_keys": 171,
+    "permissions": 50,
+    "roles": 12,
+    "role_permission_mappings": 600,
+    "openapi_paths": 133,
+    "openapi_operations": 245,
+    "openapi_schemas": 455,
+    "openapi_example_fail": 0,
+    "events": 628,
+    "event_producers": 31,
+    "event_consumer_sets": 8,
+    "acceptance": 1691,
+    "acceptance_passed": 0,
+    "database_object_tables": 77,
+    "database_technical_tables": 5,
+    "typescript_types": 455,
+    "typescript_client_methods": 245,
+    "package_file_count_including_root_manifest": 719,
+    "root_manifest_entry_count": 718,
+    "package_inventory_entry_count": 717
+  },
+  "gate_results": [
+    {
+      "gate_id": "FORMAL_PARSE_AND_STATIC_CONTRACTS",
+      "status": "PASS",
+      "blocking_scope": "CODE_BASELINE_STATIC",
+      "detail": "errors=0; tables=82; openapi_ops=245; events=628",
+      "evidence": "validation/evidence/static-validation.json"
+    },
+    {
+      "gate_id": "GOVERNANCE_CLEANUP",
+      "status": "PASS",
+      "blocking_scope": "CODE_BASELINE_GOVERNANCE",
+      "detail": "NEEDS_REFINEMENT=0; direct_code_input_false=0; core_scaffold_blocked_true=0; current authority aligned",
+      "evidence": "validation/evidence/governance-validation.json"
+    },
+    {
+      "gate_id": "TYPESCRIPT_TYPED_CLIENT",
+      "status": "PASS",
+      "blocking_scope": "CODE_BASELINE_STATIC",
+      "detail": "455 schema types and 245 client methods; strict compile passed",
+      "evidence": "validation/evidence/typescript-validation.json"
+    },
+    {
+      "gate_id": "MYSQL84_EMPTY_DATABASE_EXECUTION",
+      "status": "NOT_EXECUTED_ENVIRONMENT_UNAVAILABLE",
+      "blocking_scope": "DATABASE_MODULE_FORMAL_MERGE",
+      "blocks_code_initialization": false,
+      "blocks_non_database_module_development": false,
+      "detail": "No MySQL 8.4 server, Docker or Podman available in the execution environment.",
+      "evidence": "validation/evidence/mysql84-gate.json"
+    },
+    {
+      "gate_id": "REAL_ACCEPTANCE_EVIDENCE",
+      "status": "NOT_EVALUATED_IMPLEMENTATION_NOT_PRESENT",
+      "blocking_scope": "IMPLEMENTATION_RELEASE_READINESS",
+      "detail": "1691 specifications remain SPECIFIED/NOT_STARTED; passed=0.",
+      "evidence": "编码冻结基线/ACCEPTANCE_CLOSURE/acceptance-closure.json"
+    },
+    {
+      "gate_id": "PACKAGE_INTEGRITY",
+      "status": "PASS",
+      "blocking_scope": "RELEASE_INTEGRITY",
+      "detail": "Root Manifest and Skill Manifest are regenerated from final package contents.",
+      "evidence": "编码冻结基线/RELEASE/manifest-verification.json"
+    }
+  ],
+  "validation_entrypoint": "编码冻结基线/RELEASE/validation/run_all_validation.py",
+  "inventory": "编码冻结基线/RELEASE/package-inventory.json",
+  "root_manifest": "MANIFEST.sha256",
+  "skill_manifest": "核心CodexSkill/ai-auto-test-platform-core/MANIFEST.sha256"
+}

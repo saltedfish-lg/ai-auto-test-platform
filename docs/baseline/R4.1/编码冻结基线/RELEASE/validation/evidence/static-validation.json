@@ -1,0 +1,94 @@
+{
+  "release_id": "PDBR-2026.08.06-R4.1",
+  "executed_at": "2026-08-06T09:50:35Z",
+  "validator": "validate_all.py",
+  "python": "3.13.5 (main, May  5 2026, 21:05:52) [GCC 14.2.0]",
+  "status": "PASS",
+  "metrics": {
+    "state_dimensions": 127,
+    "ddl_tables": 82,
+    "ddl_foreign_keys": 171,
+    "permissions": 50,
+    "roles": 12,
+    "role_permission_mappings": 600,
+    "openapi_paths": 133,
+    "openapi_operations": 245,
+    "openapi_schemas": 455,
+    "openapi_example_fail": 0,
+    "events": 628,
+    "event_producers": 31,
+    "event_consumer_sets": 8,
+    "acceptance": 1691,
+    "acceptance_passed": 0
+  },
+  "checks": [
+    {
+      "check": "FORMAL_PARSE",
+      "status": "PASS",
+      "detail": "parse errors=0",
+      "errors": []
+    },
+    {
+      "check": "GOVERNANCE_AND_ARCHITECTURE",
+      "status": "PASS",
+      "detail": "R4.1 metadata and frozen architecture",
+      "errors": []
+    },
+    {
+      "check": "CORE_IDENTITY_STATE_LIFECYCLE",
+      "status": "PASS",
+      "detail": "objects=96, dimensions=127",
+      "errors": []
+    },
+    {
+      "check": "STATE_OWNER_REGISTRY",
+      "status": "PASS",
+      "detail": "registry dimensions=127",
+      "errors": []
+    },
+    {
+      "check": "DDL_STATIC_AND_SCHEMA",
+      "status": "PASS",
+      "detail": "tables=82, fks=171",
+      "errors": []
+    },
+    {
+      "check": "OBJECT_TABLE_IDENTITY_MAPPING",
+      "status": "PASS",
+      "detail": "target identities aligned",
+      "errors": []
+    },
+    {
+      "check": "RBAC_CLOSURE_AND_SEED",
+      "status": "PASS",
+      "detail": "counts=(50, 12, 600); seed=(50, 12, 600)",
+      "errors": []
+    },
+    {
+      "check": "OPENAPI_3_1_2",
+      "status": "PASS",
+      "detail": "paths=133, ops=245, schemas=455",
+      "errors": []
+    },
+    {
+      "check": "EVENT_CONTRACTS",
+      "status": "PASS",
+      "detail": "events=628, schemas=628",
+      "errors": []
+    },
+    {
+      "check": "ACCEPTANCE_SPECIFICATION",
+      "status": "PASS",
+      "detail": "specified=1691, passed=0",
+      "errors": []
+    },
+    {
+      "check": "AGENTS_SKILL_GATE_CONSISTENCY",
+      "status": "PASS",
+      "detail": "two-level gate model aligned",
+      "errors": []
+    }
+  ],
+  "error_count": 0,
+  "errors": []
+}

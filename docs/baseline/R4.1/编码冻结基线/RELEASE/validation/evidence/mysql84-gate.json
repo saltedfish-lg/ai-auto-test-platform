@@ -1,0 +1,24 @@
+{
+  "release_id": "PDBR-2026.08.06-R4.1",
+  "gate": "MYSQL84_EMPTY_DATABASE_EXECUTION",
+  "blocking_scope": "DATABASE_MODULE_FORMAL_MERGE",
+  "executed_at": "2026-08-06T09:50:39Z",
+  "details": {
+    "docker": null,
+    "podman": null,
+    "mysql_client": null
+  },
+  "required_steps": [
+    "empty database",
+    "V3 migration",
+    "V4 seed first run",
+    "V4 seed second run",
+    "foreign key rejection",
+    "unique key rejection",
+    "check constraint rejection",
+    "illegal state rejection",
+    "idempotency and optimistic-lock schema checks"
+  ],
+  "status": "NOT_EXECUTED_ENVIRONMENT_UNAVAILABLE",
+  "note": "No MySQL 8.4 server/container runtime detected. This result is intentionally not PASS."
+}

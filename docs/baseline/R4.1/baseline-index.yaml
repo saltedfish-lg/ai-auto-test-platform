@@ -1,0 +1,47 @@
+metadata:
+  projection: GENERATED_NAVIGATION
+  authority: NON_AUTHORITATIVE
+  release_id: PDBR-2026.08.06-R4.1
+  version: 1.4.1-governance-cleanup
+  parent_release_id: PDBR-2026.08.06-R4
+read_order:
+- 产品总体需求与系统边界/产品总体需求与系统边界.yaml
+- 用户角色、核心场景与模块菜单/用户角色、核心场景与模块菜单.yaml
+- 核心对象、业务规则与生命周期/核心对象、业务规则与生命周期.yaml
+- 权限、并发与资源冲突规则/权限、并发与资源冲突规则.yaml
+- AI测试流程与Runner业务规则/AI测试流程与Runner业务规则.yaml
+- 数据安全、制品生命周期与验收基线/数据安全、制品生命周期与验收基线.yaml
+- 编码冻结基线/SYSTEM_DESIGN.yaml
+- 编码冻结基线/DATABASE_DDL/V3__platform_contract_rebuild.sql
+- 编码冻结基线/OPENAPI/openapi.yaml
+- 编码冻结基线/EVENT_CONTRACTS/event-registry.yaml
+- 编码冻结基线/STATE_OWNER_REGISTRY/state-owner-registry.yaml
+- 编码冻结基线/PERMISSION_CLOSURE/permission-closure.yaml
+- 编码冻结基线/ACCEPTANCE_CLOSURE/acceptance-closure.json
+- 编码冻结基线/ADR/ADR-register.yaml
+- 系统技术架构技术选型与AGENTS/AGENTS.md
+- 核心CodexSkill/ai-auto-test-platform-core/SKILL.md
+authority_model:
+  model_id: AUTHORITY-MODEL-R4.1-001
+  responsibilities:
+  - authority: RELEASE_AND_MANIFEST
+    scope: 当前发布身份、成员资格、版本、状态和哈希；不得改写产品业务语义。
+  - authority: SIX_CORE_YAML_FACTS
+    scope: 产品范围、角色场景、对象规则、权限并发、AI/Runner和安全验收业务语义。
+  - authority: SYSTEM_DESIGN_AND_ENGINEERING_CONTRACTS
+    scope: 技术实现和物理契约；必须服从六份核心YAML，同一工程契约内部以标准格式文件为权威。
+  - authority: ADR
+    scope: 决策及理由；只有同步受影响核心事实与工程契约后才成为当前实施依据。
+  - authority: AGENTS_AND_SKILL
+    scope: Codex执行流程、修改边界和门禁；不得自行改变产品或工程契约。
+  - authority: NAVIGATION_AND_PROJECTIONS
+    scope: Markdown导航、DOCX和图形为非权威阅读投影。
+  conflict_resolution:
+    product_fact_vs_engineering_contract: 停止实现并以六份核心YAML为业务语义，修复工程契约后继续。
+    adr_vs_old_yaml: ADR必须先同步核心YAML和工程契约；未同步时不得仅凭ADR覆盖。
+    release_vs_business_fact: Release只决定成员和版本，不得覆盖业务事实。
+current_status:
+  release_status: GOVERNANCE_CLEANUP_COMPLETED
+  code_readiness: READY_WITH_RUNTIME_DB_VALIDATION_PENDING
+  implementation_release_readiness: NOT_EVALUATED_IMPLEMENTATION_NOT_PRESENT
+  pending_user_decisions: 0

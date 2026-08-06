@@ -1,0 +1,44 @@
+{
+  "release_id": "PDBR-2026.08.06-R4.1",
+  "executed_at": "2026-08-06T09:50:39Z",
+  "status": "PASS",
+  "generator_command": "python 编码冻结基线/RELEASE/validation/generate_ts_client.py",
+  "compile_command": "tsc -p 编码冻结基线/RELEASE/validation/tsconfig.json",
+  "generator_result": {
+    "release_id": "PDBR-2026.08.06-R4.1",
+    "schema_types": 455,
+    "client_methods": 245,
+    "outputs": [
+      "types.ts",
+      "client.ts"
+    ]
+  },
+  "compile_returncode": 0,
+  "tools": {
+    "node": "v22.16.0",
+    "typescript": "Version 5.8.3",
+    "python": "3.13.5"
+  },
+  "outputs": [
+    {
+      "path": "编码冻结基线/RELEASE/validation/generated/types.ts",
+      "size": 88381,
+      "sha256": "60a7a65821f4285757e3ad582dadfb6b2686b1496e2210577f2d776797d6b7c7"
+    },
+    {
+      "path": "编码冻结基线/RELEASE/validation/generated/client.ts",
+      "size": 110455,
+      "sha256": "e1aad1876b7ed15616110285d68daba9c35a0c55e30d43680ad663776305e8f2"
+    },
+    {
+      "path": "编码冻结基线/RELEASE/validation/generated/generation-report.json",
+      "size": 143,
+      "sha256": "2f426387ad0128500ed08edaffc7d49eac48187efe9f5bc04ee5e3dd31b1188f"
+    }
+  ],
+  "stdout_paths": [
+    "编码冻结基线/RELEASE/validation/evidence/typescript-generation.stdout",
+    "编码冻结基线/RELEASE/validation/evidence/typescript-compile.stdout"
+  ],
+  "stderr_path": "编码冻结基线/RELEASE/validation/evidence/typescript-compile.stderr"
+}

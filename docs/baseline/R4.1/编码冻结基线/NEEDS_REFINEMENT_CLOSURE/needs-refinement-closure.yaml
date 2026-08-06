@@ -1,0 +1,27 @@
+metadata:
+  artifact_id: NEEDS-REFINEMENT-CLOSURE-1.4.1
+  version: 1.4.1-governance-cleanup
+  status: CLOSED_GOVERNANCE_CLEANUP
+  release_id: PDBR-2026.08.06-R4.1
+  parent_release_id: PDBR-2026.08.06-R4
+  last_modified_at: '2026-08-06T17:47:00+08:00'
+open_product_or_architecture_decisions: 0
+contract_refinement_items: []
+execution_evidence_gaps:
+- gap_id: GATE-MYSQL84-001
+  description: MySQL 8.4真实空库迁移、种子和约束拒绝测试尚未在本环境执行
+  status: NOT_EXECUTED_ENVIRONMENT_UNAVAILABLE
+  blocking_scope: DATABASE_MODULE_FORMAL_MERGE
+  blocks_code_initialization: false
+  blocks_non_database_module_development: false
+  blocks_database_module_formal_merge: true
+  blocks_production_release: true
+  owner: IMPLEMENTATION_VALIDATION_ENVIRONMENT
+- gap_id: GATE-EVIDENCE-001
+  description: 1691项验收规范已定义但平台尚未实现，真实证据尚未产生
+  status: NOT_EVALUATED_IMPLEMENTATION_NOT_PRESENT
+  blocking_scope: IMPLEMENTATION_RELEASE_READINESS
+  blocks_code_initialization: false
+  blocks_database_module_formal_merge: false
+  blocks_production_release: true
+  owner: IMPLEMENTATION_AND_ACCEPTANCE

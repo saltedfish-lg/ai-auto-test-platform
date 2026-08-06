@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ai-test-platform:event:prompt_revision.published:1.0.0",
+  "title": "prompt_revision.published",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "event_id",
+    "event_type",
+    "event_version",
+    "occurred_at",
+    "aggregate_id",
+    "sequence",
+    "correlation_id",
+    "causation_id",
+    "project_id",
+    "payload"
+  ],
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "minLength": 26,
+      "maxLength": 26
+    },
+    "event_type": {
+      "const": "prompt_revision.published"
+    },
+    "event_version": {
+      "const": "1.0.0"
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "aggregate_id": {
+      "type": "string",
+      "minLength": 26,
+      "maxLength": 26
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "correlation_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "causation_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "project_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 26,
+      "maxLength": 26
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "prompt_revision_id",
+        "to_state",
+        "expected_version",
+        "new_version",
+        "changed_by",
+        "change_summary"
+      ],
+      "properties": {
+        "prompt_revision_id": {
+          "type": "string",
+          "minLength": 26,
+          "maxLength": 26
+        },
+        "project_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 26,
+          "maxLength": 26
+        },
+        "from_state": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "to_state": {
+          "type": "string",
+          "const": "PUBLISHED"
+        },
+        "expected_version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "new_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "changed_by": {
+          "type": "string",
+          "minLength": 1
+        },
+        "change_summary": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    }
+  },
+  "x-forbidden-fields": [
+    "plaintext_password",
+    "secret_value",
+    "access_token",
+    "refresh_token",
+    "raw_credential"
+  ],
+  "x-aggregate-id-field": "prompt_revision_id"
+}

@@ -1,0 +1,15 @@
+{
+  "release_id": "PDBR-2026.08.06-R4.1",
+  "executed_at": "2026-08-06T17:50:46+08:00",
+  "status": "PASS",
+  "verification_method": "Generate final Skill Manifest, package inventory and root MANIFEST; then independently recompute every listed SHA-256 and compare the actual final file set.",
+  "package_file_count_including_root_manifest": 719,
+  "root_manifest_entry_count": 718,
+  "actual_file_count_excluding_root_manifest": 718,
+  "package_inventory_entry_count": 717,
+  "missing": 0,
+  "unlisted": 0,
+  "hash_mismatch": 0,
+  "skill_manifest_entry_count": 13,
+  "skill_manifest_status": "PASS"
+}

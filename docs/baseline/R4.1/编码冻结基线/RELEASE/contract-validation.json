@@ -1,0 +1,81 @@
+{
+  "release_id": "PDBR-2026.08.06-R4.1",
+  "artifact_id": "CONTRACT-VALIDATION-1.4.1",
+  "version": "1.4.1-governance-cleanup",
+  "executed_at": "2026-08-06T17:50:46+08:00",
+  "status": "PASS_STATIC_AND_GOVERNANCE_CONTRACTS",
+  "reproducible_entrypoint": "python 编码冻结基线/RELEASE/validation/run_all_validation.py",
+  "tools": {
+    "python": "3.13.5",
+    "pyyaml": "6.0.3",
+    "node": "v22.16.0",
+    "typescript": "Version 5.8.3"
+  },
+  "static_validation": {
+    "status": "PASS",
+    "error_count": 0,
+    "metrics": {
+      "state_dimensions": 127,
+      "ddl_tables": 82,
+      "ddl_foreign_keys": 171,
+      "permissions": 50,
+      "roles": 12,
+      "role_permission_mappings": 600,
+      "openapi_paths": 133,
+      "openapi_operations": 245,
+      "openapi_schemas": 455,
+      "openapi_example_fail": 0,
+      "events": 628,
+      "event_producers": 31,
+      "event_consumer_sets": 8,
+      "acceptance": 1691,
+      "acceptance_passed": 0
+    },
+    "evidence_path": "validation/evidence/static-validation.json",
+    "evidence_sha256": "9199f907259577f43e28ec4020625f0a35f614ec049ce8eb28ecccabdf5ddc50",
+    "validator_path": "validation/validate_all.py",
+    "validator_sha256": "8865d4e870c7a4041dc44af456eb1a8fe76a91e1b2eed8109631063093562dc4"
+  },
+  "governance_validation": {
+    "status": "PASS",
+    "error_count": 0,
+    "metrics": {
+      "ai_runner_closed": 994,
+      "permission_closed": 41,
+      "domain_stale_blockers_closed": 7,
+      "acceptance": 1691,
+      "specified": 1691,
+      "passed": 0,
+      "package_file_count_including_root_manifest": 719
+    },
+    "evidence_path": "validation/evidence/governance-validation.json",
+    "evidence_sha256": "5e25945461d04ae0c684f9d4eb076def9b62042570d7a3a363e58e617919ef23",
+    "validator_path": "validation/validate_governance.py",
+    "validator_sha256": "9bcf88644602d4ba4aec11c8ef5bc57a607b292f059ec7f247fd8f4330bd1963"
+  },
+  "typed_client_validation": {
+    "status": "PASS",
+    "evidence_path": "validation/evidence/typescript-validation.json",
+    "evidence_sha256": "262d57750643bdd791334c86e470ed3547f75d02ef1da2c6af87f07f0bafc65b"
+  },
+  "mysql84_runtime_validation": {
+    "status": "NOT_EXECUTED_ENVIRONMENT_UNAVAILABLE",
+    "blocking_scope": "DATABASE_MODULE_FORMAL_MERGE",
+    "blocks_code_initialization": false,
+    "blocks_non_database_module_development": false,
+    "evidence_path": "validation/evidence/mysql84-gate.json",
+    "evidence_sha256": "3abc7e60833245dfea106b112da3b9cb23125ebd0cdce4294b91961a69bd65ba"
+  },
+  "acceptance_execution": {
+    "status": "NOT_EVALUATED_IMPLEMENTATION_NOT_PRESENT",
+    "specified": 1691,
+    "not_started": 1691,
+    "passed": 0,
+    "blocking_scope": "IMPLEMENTATION_RELEASE_READINESS"
+  },
+  "unified_run": {
+    "status": "PASS_WITH_DECLARED_RUNTIME_DB_GATE_PENDING",
+    "evidence_path": "validation/evidence/validation-run.json",
+    "evidence_sha256": "4a18421120040a52ce019f541b838322e5b20db372158aaeb0f4f64937b92376"
+  }
+}
