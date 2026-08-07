@@ -1,0 +1,104 @@
+{
+  "release_id": "PDBR-2026.08.07-R4.2",
+  "validator": "validate_auth_contract.py",
+  "executed_at": "2026-08-07T03:57:53Z",
+  "status": "PASS",
+  "checks": [
+    {
+      "check_id": "AUTH-CONTRACT-METADATA",
+      "status": "PASS",
+      "detail": "release=PDBR-2026.08.07-R4.2; status=FROZEN_IMPLEMENTABLE"
+    },
+    {
+      "check_id": "AUTH-ARCHITECTURE-DECISION",
+      "status": "PASS",
+      "detail": "RS256 access=900s; refresh=604800s; rotation required; permissions excluded"
+    },
+    {
+      "check_id": "AUTH-PASSWORD-HASH",
+      "status": "PASS",
+      "detail": "Argon2id v19 m=65536 t=3 p=1 salt=16 hash=32"
+    },
+    {
+      "check_id": "AUTH-PASSWORD-POLICY",
+      "status": "PASS",
+      "detail": "password policy is complete and V1-bounded"
+    },
+    {
+      "check_id": "AUTH-ADMIN-BOOTSTRAP",
+      "status": "PASS",
+      "detail": "admin fixed; controlled secret input; force change; no overwrite"
+    },
+    {
+      "check_id": "AUTH-STATE-MAPPING",
+      "status": "PASS",
+      "detail": "ACTIVE is canonical; NORMAL derived; no duplicate security_status"
+    },
+    {
+      "check_id": "AUTH-OPENAPI-OPERATIONS",
+      "status": "PASS",
+      "detail": "errors=[]"
+    },
+    {
+      "check_id": "AUTH-OPENAPI-SCHEMAS",
+      "status": "PASS",
+      "detail": "missing=[]"
+    },
+    {
+      "check_id": "AUTH-ERROR-CODES",
+      "status": "PASS",
+      "detail": "401=6; 403=7"
+    },
+    {
+      "check_id": "AUTH-CREDENTIAL-PHYSICAL-MODEL",
+      "status": "PASS",
+      "detail": "credential table, user uniqueness and FK"
+    },
+    {
+      "check_id": "AUTH-SESSION-PHYSICAL-MODEL",
+      "status": "PASS",
+      "detail": "refresh session table, token uniqueness and FKs"
+    },
+    {
+      "check_id": "AUTH-MIGRATION-ORDER",
+      "status": "PASS",
+      "detail": "['V3__platform_contract_rebuild.sql', 'V4__rbac_seed_data.sql', 'V5__platform_authentication_contract.sql']"
+    },
+    {
+      "check_id": "AUTH-STATE-OWNER-UNIQUENESS",
+      "status": "PASS",
+      "detail": "owners=6; fields=12"
+    },
+    {
+      "check_id": "AUTH-RBAC-CLOSURE-UNCHANGED",
+      "status": "PASS",
+      "detail": "50/12/600; super_admin_allowed=50"
+    },
+    {
+      "check_id": "AUTH-ACCEPTANCE-SPECIFIED-NOT-STARTED",
+      "status": "PASS",
+      "detail": "p1_items=87; revised=87"
+    },
+    {
+      "check_id": "AUTH-RELEASE-CLOSED",
+      "status": "PASS",
+      "detail": "pending=0; readiness=READY_FOR_P1_IMPLEMENTATION"
+    },
+    {
+      "check_id": "AUTH-NO-BOOTSTRAP-SECRET-LITERAL",
+      "status": "PASS",
+      "detail": "[]"
+    }
+  ],
+  "error_count": 0,
+  "errors": [],
+  "metrics": {
+    "auth_operations": 5,
+    "auth_schemas": 9,
+    "authentication_state_owners": 6,
+    "p1_acceptance_items": 87,
+    "permissions": 50,
+    "roles": 12,
+    "mappings": 600
+  }
+}

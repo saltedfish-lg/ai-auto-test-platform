@@ -1,0 +1,13 @@
+{
+  "name": "ai-auto-test-platform-r4-2-auth-contract-validation",
+  "private": true,
+  "version": "1.4.2",
+  "type": "module",
+  "scripts": {
+    "generate": "python generate_ts_client.py",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

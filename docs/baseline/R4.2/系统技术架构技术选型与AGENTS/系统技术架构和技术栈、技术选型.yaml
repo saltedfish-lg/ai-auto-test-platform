@@ -1,0 +1,3101 @@
+metadata:
+  document_name: AI自动化测试执行平台系统技术架构和技术栈、技术选型
+  document_version: 1.3.0
+  document_status: FROZEN_TECHNICAL_DESIGN
+  generation_date: '2026-08-05'
+  canonical_format: YAML
+  projection_formats:
+  - Markdown
+  - DOCX
+  - XLSX
+  - Mermaid
+  source_scan_statistics:
+    physical_file_count: 174
+    logical_document_count: 9
+    format_counts:
+      docx: 8
+      md: 10
+      yaml: 5
+      json: 3
+      mmd: 1
+      xlsx: 3
+      svg: 10
+    fact_domain_count: 37
+    formal_object_count: 96
+    data_item_count: 623
+    enum_count: 70
+    enum_value_count: 168
+    term_count: 492
+    permission_code_count: 42
+    core_scenario_count: 43
+    business_rule_count: 1688
+    accepted_input_adr_count: 14
+    pending_external_decision_count: 12
+    active_semantic_conflict_count: 0
+    resolved_business_rule_conflict_count: 14
+    scope_note: 当前发布统计为174个物理文件、9份逻辑文档；历史建立扫描统计仅保留在historical_build_statistics。
+  release_id: PDBR-2026.08.07-R4.2
+  release_kind: CONTRACT_REPAIR_COMPLETED_CODE_BASELINE
+  current_package_role: FORMAL_CODE_BASELINE_WITH_RUNTIME_DB_GATE_PENDING
+  platform_code_readiness: READY_FOR_P1_IMPLEMENTATION
+  current_release_logical_document_count: 9
+  historical_sources: null
+  runtime_dependency_on_historical_sources: false
+  coding_readiness: READY_FOR_P1_IMPLEMENTATION
+  historical_build_statistics:
+    physical_files_scanned: 40
+    logical_documents_scanned: 11
+  repair_round: 3
+  effect_class_contract:
+  - IMMEDIATE_INVARIANT
+  - CANDIDATE
+  - FROZEN_ONLY
+  parent_release_id: PDBR-2026.08.06-R4.1
+  version: 1.4.2-auth-contract-completion
+  status: FORMAL_R4_CONTRACT
+  code_readiness: READY_FOR_P1_IMPLEMENTATION
+  last_modified_at: '2026-08-06T17:13:00+08:00'
+  pending_user_decisions: 0
+  package_file_count_including_root_manifest: 725
+  root_manifest_entry_count: 724
+  package_inventory_entry_count: 723
+independence_declaration:
+  self_contained: true
+  input_path_dependency: false
+  external_document_required: false
+  coding_readiness: FULL_CODE_READY
+architecture_drivers:
+- driver_id: DRV-001
+  name: 自然语言创建测试
+  description: 自然语言用例必须形成不可变修订并可进入两条独立后续路径。
+  type: BUSINESS
+  completion_status: DIRECTLY_SUPPORTED
+- driver_id: DRV-002
+  name: 无浏览器结构转换
+  description: 结构转换不打开浏览器、不占用Runner，只生成结构化候选。
+  type: BUSINESS
+  completion_status: DIRECTLY_SUPPORTED
+- driver_id: DRV-003
+  name: AI页面探索
+  description: AI探索占用Runner，通过受控浏览器工具产生候选步骤、定位器、断言和证据。
+  type: BUSINESS
+  completion_status: DIRECTLY_SUPPORTED
+- driver_id: DRV-004
+  name: 人工业务流程录制
+  description: 人工录制是独立正式能力，由测试人员操作受控浏览器，不能被AI探索替代。
+  type: BUSINESS
+  completion_status: DIRECTLY_SUPPORTED
+- driver_id: DRV-005
+  name: 确定性正式执行
+  description: 正式执行只消费已发布标准结构用例版本，不允许模型自由改写正式步骤。
+  type: BUSINESS
+  completion_status: DIRECTLY_SUPPORTED
+- driver_id: DRV-006
+  name: 单端与跨端流程
+  description: 管理端、客户端、PDA端均为Web；跨端在同一attempt和Runner内顺序执行。
+  type: BUSINESS
+  completion_status: SUPPORTED_BY_MULTIPLE_SOURCES
+- driver_id: DRV-007
+  name: Runner远程执行面
+  description: Runner Agent独立部署在可访问被测系统的机器或内网，平台远程调度。
+  type: BUSINESS
+  completion_status: DIRECTLY_SUPPORTED
+- driver_id: DRV-008
+  name: Runner项目独占
+  description: Runner登记对象绑定项目后不得同时绑定其他项目。
+  type: BUSINESS
+  completion_status: DIRECTLY_SUPPORTED
+- driver_id: DRV-009
+  name: 身份互斥
+  description: 正式执行按项目、环境和SSO身份租约互斥；不同身份可在容量允许时并行。
+  type: BUSINESS
+  completion_status: DIRECTLY_SUPPORTED
+- driver_id: DRV-010
+  name: 录制并发例外
+  description: 人工录制不绑定平台测试账号、账号映射或SSO租约，但仍占用Runner物理资源。
+  type: BUSINESS
+  completion_status: DIRECTLY_SUPPORTED
+- driver_id: DRV-011
+  name: 失败统一重试
+  description: 首轮结束后对Failed/Broken按资格统一重试，新增attempt且保留首轮历史。
+  type: BUSINESS
+  completion_status: DIRECTLY_SUPPORTED
+- driver_id: DRV-012
+  name: 证据闭环
+  description: 结果必须追溯到用例版本、快照、Runner、attempt、日志和制品。
+  type: BUSINESS
+  completion_status: DIRECTLY_SUPPORTED
+- driver_id: DRV-013
+  name: UI触发取数
+  description: 加密API场景优先由UI触发并使用Playwright监听响应提取业务数据。
+  type: TECHNICAL
+  completion_status: DIRECTLY_SUPPORTED
+- driver_id: DRV-014
+  name: 网络不稳定
+  description: 平台与Runner网络可能中断，控制协议必须支持重连、幂等、租约和旧结果拒绝。
+  type: TECHNICAL
+  completion_status: VALID_ARCHITECTURE_COMPLETION
+- driver_id: DRV-015
+  name: 长流程恢复
+  description: 探索、录制、执行、补传、报告和清理需要持久状态、恢复扫描和幂等副作用。
+  type: TECHNICAL
+  completion_status: SUPPORTED_BY_MULTIPLE_SOURCES
+- driver_id: DRV-016
+  name: 业务与制品分离
+  description: 业务元数据与截图、视频、Trace、日志等二进制制品生命周期不同。
+  type: TECHNICAL
+  completion_status: DIRECTLY_SUPPORTED
+- driver_id: DRV-017
+  name: 模型可替换
+  description: 模型供应商和网关可替换，业务授权、路由和状态不能下放给网关。
+  type: TECHNICAL
+  completion_status: DIRECTLY_SUPPORTED
+- driver_id: DRV-018
+  name: 状态权威单一
+  description: 平台数据库是唯一业务事实存储；Runner、AI、工作流和可观测组件均非状态Owner。
+  type: TECHNICAL
+  completion_status: DIRECTLY_SUPPORTED
+- driver_id: DRV-019
+  name: 版本化资产不可变
+  description: 正式资产发布后不可原地修改，变更必须创建新版本并保留历史。
+  type: TECHNICAL
+  completion_status: DIRECTLY_SUPPORTED
+- driver_id: DRV-020
+  name: 权限与数据范围闭包
+  description: 菜单、操作、接口、对象和数据范围必须在服务端形成授权闭包并审计。
+  type: SECURITY
+  completion_status: DIRECTLY_SUPPORTED
+- driver_id: DRV-021
+  name: 敏感数据最小化
+  description: 秘密、密码、Token、Cookie和录制敏感输入不得进入普通日志、模型输入或普通制品。
+  type: SECURITY
+  completion_status: DIRECTLY_SUPPORTED
+- driver_id: DRV-022
+  name: 可观测但不替代业务
+  description: 技术遥测可降级，不能替代执行报告、审计、业务告警和状态。
+  type: OPERATIONS
+  completion_status: DIRECTLY_SUPPORTED
+- driver_id: DRV-023
+  name: Codex全程编码
+  description: 仓库必须给Agent唯一架构、目录、契约、验证命令和完成定义，禁止自行猜测。
+  type: ENGINEERING
+  completion_status: DIRECTLY_SUPPORTED
+- driver_id: DRV-024
+  name: 第一版基础设施克制
+  description: 第一版不强制Temporal、LangGraph、Langfuse、独立消息队列、Redis或Kubernetes。
+  type: ENGINEERING
+  completion_status: SUPPORTED_BY_MULTIPLE_SOURCES
+quality_attributes:
+- quality_id: QA-001
+  name: 正确性
+  scenario: 状态转换、权限、并发和结果聚合必须由确定性规则驱动。
+  priority: P0
+- quality_id: QA-002
+  name: 可追溯性
+  scenario: 关键命令、事件、attempt、快照、制品和审计可通过关联标识回溯。
+  priority: P0
+- quality_id: QA-003
+  name: 安全性
+  scenario: 最小权限、秘密引用、脱敏、Runner零信任和下载授权。
+  priority: P0
+- quality_id: QA-004
+  name: 可靠性
+  scenario: 进程、Runner、浏览器、模型和存储故障不能产生虚假成功。
+  priority: P0
+- quality_id: QA-005
+  name: 可恢复性
+  scenario: 长流程可从持久状态恢复，副作用幂等，旧持有者被fencing拒绝。
+  priority: P0
+- quality_id: QA-006
+  name: 幂等性
+  scenario: 任务创建、领取、上报、上传、报告、通知和清理均有幂等键。
+  priority: P0
+- quality_id: QA-007
+  name: 可维护性
+  scenario: 模块边界清晰，业务规则不散落于Controller、ORM或前端。
+  priority: P1
+- quality_id: QA-008
+  name: 可扩展性
+  scenario: 先模块化单体，Runner和Worker独立扩展，保留按边界拆分能力。
+  priority: P1
+- quality_id: QA-009
+  name: 可测试性
+  scenario: 纯规则、应用服务、契约、并发、恢复和E2E均可用可控替身测试。
+  priority: P0
+- quality_id: QA-010
+  name: 可观测性
+  scenario: 结构化日志、指标、Trace和业务事件具备统一关联标识。
+  priority: P1
+- quality_id: QA-011
+  name: 可部署性
+  scenario: 平台组件容器化，Runner支持Windows服务、Linux服务和受控容器。
+  priority: P1
+- quality_id: QA-012
+  name: 技术可替换性
+  scenario: 模型网关、对象存储和可观测后端通过Adapter隔离。
+  priority: P1
+- quality_id: QA-013
+  name: Codex可编码性
+  scenario: 目录、依赖、命令、契约优先级和DoD均唯一且机器可执行。
+  priority: P0
+architecture_principles:
+- principle_id: PRN-001
+  name: 平台数据库是业务状态权威
+  rule: 任何外部组件状态必须经平台适配、校验和原子事务映射。
+  effect_class: IMMEDIATE_INVARIANT
+- principle_id: PRN-002
+  name: 控制面与执行面分离
+  rule: 平台决定，Runner执行；Runner不得直写平台数据库。
+  effect_class: IMMEDIATE_INVARIANT
+- principle_id: PRN-003
+  name: 候选与正式事实分离
+  rule: AI和录制结构化结果先成为候选，校验和人工确认后才能发布。
+  effect_class: IMMEDIATE_INVARIANT
+- principle_id: PRN-004
+  name: 同步短事务，异步长流程
+  rule: 远程Runner、模型和对象存储调用不得被数据库事务包围。
+  effect_class: FROZEN_ONLY
+- principle_id: PRN-005
+  name: 状态机显式化
+  rule: 正式状态、合法迁移、Owner和原因码必须定义并测试。
+  effect_class: IMMEDIATE_INVARIANT
+- principle_id: PRN-006
+  name: 租约带隔离令牌
+  rule: 所有跨进程资源控制使用到期、续期、强制释放和fencing token。
+  effect_class: IMMEDIATE_INVARIANT
+- principle_id: PRN-007
+  name: 不可变版本与快照
+  rule: 任务引用创建时快照，发布资产不可原地改写。
+  effect_class: IMMEDIATE_INVARIANT
+- principle_id: PRN-008
+  name: 历史不覆盖
+  rule: 首轮、重试和替换attempt分别保存，报告通过投影聚合。
+  effect_class: IMMEDIATE_INVARIANT
+- principle_id: PRN-009
+  name: 契约先于实现
+  rule: OpenAPI、Schema、枚举、事件和迁移先更新，再修改代码。
+  effect_class: FROZEN_ONLY
+- principle_id: PRN-010
+  name: 模块拥有数据
+  rule: 模块只能通过应用服务或正式端口修改其他模块拥有的数据。
+  effect_class: IMMEDIATE_INVARIANT
+- principle_id: PRN-011
+  name: 秘密只以引用流转
+  rule: 代码、普通日志、Trace、截图元数据和测试快照禁止保存明文秘密。
+  effect_class: FROZEN_ONLY
+- principle_id: PRN-012
+  name: 第三方组件非业务Owner
+  rule: Playwright、LiteLLM、Grafana等不得拥有平台业务状态。
+  effect_class: IMMEDIATE_INVARIANT
+- principle_id: PRN-013
+  name: 失败显式化
+  rule: 不得吞异常、伪造成功或使用无来源兜底。
+  effect_class: IMMEDIATE_INVARIANT
+- principle_id: PRN-014
+  name: 配置可验证
+  rule: 配置修订、组件版本和协议版本必须可追溯并通过兼容性验证。
+  effect_class: IMMEDIATE_INVARIANT
+- principle_id: PRN-015
+  name: 最小基础设施
+  rule: 当前版本只引入实现明确需求所必需的组件。
+  effect_class: IMMEDIATE_INVARIANT
+- principle_id: PRN-016
+  name: 可重放副作用
+  rule: Outbox、Worker和恢复动作均按幂等键与状态前置条件执行。
+  effect_class: IMMEDIATE_INVARIANT
+- principle_id: PRN-017
+  name: 观测降级不改变业务
+  rule: 遥测故障仅影响观测，不改变业务结果、权限和报告。
+  effect_class: IMMEDIATE_INVARIANT
+- principle_id: PRN-018
+  name: 跨平台开发命令统一
+  rule: 所有构建与验证通过仓库脚本封装，CI供应商不得改变质量门禁。
+  effect_class: IMMEDIATE_INVARIANT
+architecture_style:
+  style_id: STYLE-001
+  name: 平台后端模块化单体 + 独立异步Worker + 独立Runner Agent的混合架构
+  status: FROZEN
+  completion_status: FROZEN_SYSTEM_DESIGN
+  rationale: 平台核心对象、权限、状态机和事务高度耦合，模块化单体降低分布式一致性和Codex维护成本；Runner必须独立部署；耗时任务由独立Worker扩展。
+  current_process_boundaries:
+  - Web前端
+  - 平台API
+  - 通用后台Worker
+  - AI Worker
+  - 报告/制品Worker
+  - 调度/恢复Worker
+  - Runner Agent
+  future_split_points:
+  - AI任务与模型治理
+  - 报告与制品处理
+  - 通知与告警
+  - Runner控制面
+  rejected:
+  - 纯单体单进程
+  - 全量微服务
+  - 按菜单拆服务
+  effect_class: FROZEN_ONLY
+system_context:
+- participant_id: CTX-001
+  participant_name: 平台用户
+  participant_type: HUMAN
+  responsibility: 使用平台、审核候选、发起任务、查看报告。
+  data_owned: 无
+  interfaces: HTTPS Web
+  trust_boundary: USER_TRUST
+  deployment_boundary: 浏览器
+  failure_boundary: 用户离线不影响已提交任务
+  replaceable: false
+  effect_class: IMMEDIATE_INVARIANT
+- participant_id: CTX-002
+  participant_name: Codex/研发人员
+  participant_type: HUMAN_TOOL
+  responsibility: 按AGENTS规则修改仓库并执行验证。
+  data_owned: 代码变更
+  interfaces: Git/本地命令
+  trust_boundary: DEVELOPMENT_TRUST
+  deployment_boundary: 开发环境
+  failure_boundary: 错误变更由CI和审查阻断
+  replaceable: true
+  effect_class: IMMEDIATE_INVARIANT
+- participant_id: CTX-003
+  participant_name: 平台Web前端
+  participant_type: INTERNAL
+  responsibility: 页面路由、交互、权限提示、长任务进度展示。
+  data_owned: 仅临时UI状态
+  interfaces: REST/SSE
+  trust_boundary: DMZ_APP
+  deployment_boundary: 静态Web部署
+  failure_boundary: 可独立重启
+  replaceable: true
+  effect_class: FROZEN_ONLY
+- participant_id: CTX-004
+  participant_name: 平台API服务
+  participant_type: INTERNAL
+  responsibility: 认证授权、应用服务、事务、命令和查询入口。
+  data_owned: 业务命令边界
+  interfaces: REST/内部端口
+  trust_boundary: APP_TRUST
+  deployment_boundary: 平台服务
+  failure_boundary: 故障时停止写入
+  replaceable: false
+  effect_class: FROZEN_ONLY
+- participant_id: CTX-005
+  participant_name: 后台任务Worker
+  participant_type: INTERNAL
+  responsibility: 任务派发、恢复扫描、Outbox消费、定时清理。
+  data_owned: 技术执行状态
+  interfaces: 数据库任务表/Outbox
+  trust_boundary: APP_TRUST
+  deployment_boundary: 独立进程
+  failure_boundary: 可幂等重启
+  replaceable: true
+  effect_class: FROZEN_ONLY
+- participant_id: CTX-006
+  participant_name: AI Worker
+  participant_type: INTERNAL
+  responsibility: 执行结构转换、探索决策、验证和失败分析。
+  data_owned: AI技术checkpoint
+  interfaces: 内部任务/模型适配
+  trust_boundary: APP_TRUST
+  deployment_boundary: 独立进程
+  failure_boundary: 模型故障不阻断确定性执行
+  replaceable: true
+  effect_class: FROZEN_ONLY
+- participant_id: CTX-007
+  participant_name: 报告与制品Worker
+  participant_type: INTERNAL
+  responsibility: 生成报告、校验上传、补传、保留和清理。
+  data_owned: 报告生成技术状态
+  interfaces: 数据库/对象存储
+  trust_boundary: APP_TRUST
+  deployment_boundary: 独立进程
+  failure_boundary: 可按请求幂等恢复
+  replaceable: true
+  effect_class: FROZEN_ONLY
+- participant_id: CTX-008
+  participant_name: MySQL业务数据库
+  participant_type: INTERNAL_INFRA
+  responsibility: 保存业务主记录、事件、快照、租约、审计和Outbox。
+  data_owned: 全部业务权威数据
+  interfaces: SQL
+  trust_boundary: DATA_TRUST
+  deployment_boundary: 数据库部署
+  failure_boundary: 不可用时停止可靠写入
+  replaceable: false
+  effect_class: FROZEN_ONLY
+- participant_id: CTX-009
+  participant_name: S3兼容对象存储
+  participant_type: INTERNAL_INFRA
+  responsibility: 保存截图、视频、Trace、日志包和报告文件。
+  data_owned: 制品二进制
+  interfaces: S3 API/签名上传
+  trust_boundary: DATA_TRUST
+  deployment_boundary: 独立存储
+  failure_boundary: 不可用时制品流程等待或降级
+  replaceable: true
+  effect_class: FROZEN_ONLY
+- participant_id: CTX-010
+  participant_name: Runner登记对象
+  participant_type: INTERNAL_ENTITY
+  responsibility: 平台中的Runner身份、项目绑定、能力、健康和槽位事实。
+  data_owned: Runner平台事实
+  interfaces: 平台API
+  trust_boundary: APP_TRUST
+  deployment_boundary: 平台数据库对象
+  failure_boundary: 与Agent失联时进入离线/回收
+  replaceable: false
+  effect_class: FROZEN_ONLY
+- participant_id: CTX-011
+  participant_name: Runner Agent
+  participant_type: INTERNAL_EDGE
+  responsibility: 注册、心跳、领取任务、执行Playwright、录制、采集和上传。
+  data_owned: 临时执行状态和待上传副本
+  interfaces: Outbound HTTPS
+  trust_boundary: EDGE_ZERO_TRUST
+  deployment_boundary: 执行机独立服务
+  failure_boundary: 失联时租约到期并拒绝旧结果
+  replaceable: true
+  effect_class: FROZEN_ONLY
+- participant_id: CTX-012
+  participant_name: Runner执行机
+  participant_type: INFRA_EDGE
+  responsibility: 提供浏览器、网络、文件沙箱和可选设备能力。
+  data_owned: 本地临时文件
+  interfaces: OS/Browser
+  trust_boundary: EDGE_ZERO_TRUST
+  deployment_boundary: 物理机/虚拟机
+  failure_boundary: 节点故障由平台恢复收口
+  replaceable: true
+  effect_class: FROZEN_ONLY
+- participant_id: CTX-013
+  participant_name: 被测管理端Web
+  participant_type: EXTERNAL_TESTED
+  responsibility: 被Playwright访问的管理端页面。
+  data_owned: 被测系统业务数据
+  interfaces: HTTPS Web
+  trust_boundary: EXTERNAL
+  deployment_boundary: 外部环境
+  failure_boundary: 故障形成真实测试/环境结果
+  replaceable: false
+  effect_class: FROZEN_ONLY
+- participant_id: CTX-014
+  participant_name: 被测客户端Web
+  participant_type: EXTERNAL_TESTED
+  responsibility: 被Playwright访问的客户端页面。
+  data_owned: 被测系统业务数据
+  interfaces: HTTPS Web
+  trust_boundary: EXTERNAL
+  deployment_boundary: 外部环境
+  failure_boundary: 故障形成真实测试/环境结果
+  replaceable: false
+  effect_class: FROZEN_ONLY
+- participant_id: CTX-015
+  participant_name: 被测PDA端Web
+  participant_type: EXTERNAL_TESTED
+  responsibility: 被Playwright访问的PDA页面。
+  data_owned: 被测系统业务数据
+  interfaces: HTTPS Web
+  trust_boundary: EXTERNAL
+  deployment_boundary: 外部环境
+  failure_boundary: 故障形成真实测试/环境结果
+  replaceable: false
+  effect_class: FROZEN_ONLY
+- participant_id: CTX-016
+  participant_name: LiteLLM Proxy/模型网关
+  participant_type: EXTERNAL_TOOL
+  responsibility: 统一模型协议、技术错误归一和受限技术重试。
+  data_owned: 非权威调用技术数据
+  interfaces: HTTPS API
+  trust_boundary: EXTERNAL_TOOL
+  deployment_boundary: 独立服务
+  failure_boundary: 不可用时AI任务等待/失败
+  replaceable: true
+  effect_class: FROZEN_ONLY
+- participant_id: CTX-017
+  participant_name: AI模型供应方
+  participant_type: EXTERNAL
+  responsibility: 生成结构候选、页面决策和分析结果。
+  data_owned: 供应方侧调用数据
+  interfaces: 模型API
+  trust_boundary: EXTERNAL
+  deployment_boundary: 外部服务
+  failure_boundary: 超时、限流和输出错误由平台处理
+  replaceable: true
+  effect_class: FROZEN_ONLY
+- participant_id: CTX-018
+  participant_name: OpenTelemetry Collector
+  participant_type: INTERNAL_TOOL
+  responsibility: 接收脱敏Trace、Metric和Log并转发。
+  data_owned: 技术遥测
+  interfaces: OTLP
+  trust_boundary: OBSERVABILITY
+  deployment_boundary: 独立服务
+  failure_boundary: 故障不改变业务事实
+  replaceable: true
+  effect_class: FROZEN_ONLY
+- participant_id: CTX-019
+  participant_name: Prometheus/Loki/Tempo/Grafana
+  participant_type: INTERNAL_TOOL
+  responsibility: 技术遥测存储、查询、看板和技术告警。
+  data_owned: 技术遥测
+  interfaces: 标准遥测接口
+  trust_boundary: OBSERVABILITY
+  deployment_boundary: 独立服务
+  failure_boundary: 故障时观测降级
+  replaceable: true
+  effect_class: IMMEDIATE_INVARIANT
+- participant_id: CTX-020
+  participant_name: CI/CD系统
+  participant_type: EXTERNAL_TOOL
+  responsibility: 执行仓库统一验证、构建、制品发布和部署门禁。
+  data_owned: 构建结果
+  interfaces: Git/CLI/Registry
+  trust_boundary: DEVELOPMENT_TRUST
+  deployment_boundary: 外部或内部CI
+  failure_boundary: 供应商可替换
+  replaceable: true
+  effect_class: IMMEDIATE_INVARIANT
+- participant_id: CTX-021
+  participant_name: 通知渠道
+  participant_type: EXTERNAL_TOOL
+  responsibility: 接收平台经授权产生的通知。
+  data_owned: 通知副本
+  interfaces: Webhook/Email Adapter
+  trust_boundary: EXTERNAL_TOOL
+  deployment_boundary: 外部服务
+  failure_boundary: 失败由通知Outbox重试
+  replaceable: true
+  effect_class: IMMEDIATE_INVARIANT
+logical_modules:
+- module_id: MOD-001
+  name: 身份与访问控制
+  responsibility: 用户、角色、权限点、角色绑定、数据范围、登录和会话。
+  data_owned: 平台用户授权事实
+  not_responsible_for: 前端隐藏菜单、被测系统账号权限
+  interfaces_events: 同步授权校验；审计事件
+  future_split_potential: 高
+  effect_class: FROZEN_ONLY
+- module_id: MOD-002
+  name: 项目与测试资源
+  responsibility: 项目、成员、环境、业务模块、Web终端和访问配置修订。
+  data_owned: 项目与环境资源
+  not_responsible_for: Runner执行、用例内容
+  interfaces_events: 配置发布事件
+  future_split_potential: 中
+  effect_class: FROZEN_ONLY
+- module_id: MOD-003
+  name: 测试账号与秘密
+  responsibility: 测试账号、凭证版本、账号映射、SSO身份、登录资格和Secret引用。
+  data_owned: 身份与凭证引用
+  not_responsible_for: 平台用户认证
+  interfaces_events: 登录诊断任务
+  future_split_potential: 高
+  effect_class: FROZEN_ONLY
+- module_id: MOD-004
+  name: 测试数据
+  responsibility: 数据类型、资源、分配、操作任务、隔离和清理。
+  data_owned: 测试数据资源
+  not_responsible_for: 跨端运行时变量
+  interfaces_events: 数据准备任务事件
+  future_split_potential: 中
+  effect_class: FROZEN_ONLY
+- module_id: MOD-005
+  name: 测试资产与用例
+  responsibility: 自然语言用例、结构用例、版本、步骤、套件、模板、页面对象和断言资产。
+  data_owned: 用例与资产版本
+  not_responsible_for: 执行任务状态
+  interfaces_events: 发布/归档事件
+  future_split_potential: 高
+  effect_class: FROZEN_ONLY
+- module_id: MOD-006
+  name: 自然语言转换
+  responsibility: 不使用浏览器地生成结构化候选并进行Schema与业务校验。
+  data_owned: 转换任务和候选
+  not_responsible_for: 页面探索、正式发布
+  interfaces_events: AI任务接口
+  future_split_potential: 中
+  effect_class: FROZEN_ONLY
+- module_id: MOD-007
+  name: AI页面探索
+  responsibility: 受控Runner浏览器探索、候选步骤、证据、验证和人工决定。
+  data_owned: 探索任务与AI结果
+  not_responsible_for: 正式用例版本
+  interfaces_events: AI/Runner协作事件
+  future_split_potential: 高
+  effect_class: FROZEN_ONLY
+- module_id: MOD-008
+  name: 人工业务流程录制
+  responsibility: 录制任务、会话、控制租约、证据包、敏感占位符和结构化候选。
+  data_owned: 录制业务事实
+  not_responsible_for: 测试账号并发租约
+  interfaces_events: Runner会话事件
+  future_split_potential: 高
+  effect_class: FROZEN_ONLY
+- module_id: MOD-009
+  name: 套件、计划与触发
+  responsibility: 套件DAG、执行计划、触发规则、计划修订和触发幂等。
+  data_owned: 计划与触发事实
+  not_responsible_for: 具体Runner永久绑定
+  interfaces_events: 任务创建命令
+  future_split_potential: 中
+  effect_class: FROZEN_ONLY
+- module_id: MOD-010
+  name: 执行编排与结果
+  responsibility: run_task、批次、attempt、case_attempt、重试、取消、中止和最终化。
+  data_owned: 执行状态与结果
+  not_responsible_for: 浏览器内部状态
+  interfaces_events: 任务/attempt事件
+  future_split_potential: 高
+  effect_class: FROZEN_ONLY
+- module_id: MOD-011
+  name: 并发、锁与租约
+  responsibility: 环境锁、SSO租约、Runner槽位租约、任务所有权、fencing和强制释放。
+  data_owned: 锁租约事实
+  not_responsible_for: 进程内互斥替代
+  interfaces_events: 资源命令/事件
+  future_split_potential: 高
+  effect_class: FROZEN_ONLY
+- module_id: MOD-012
+  name: Runner管理
+  responsibility: Runner登记、项目独占绑定、能力、健康、Agent认证、版本兼容和升级。
+  data_owned: Runner平台事实
+  not_responsible_for: Runner本地执行细节
+  interfaces_events: Runner控制API
+  future_split_potential: 高
+  effect_class: FROZEN_ONLY
+- module_id: MOD-013
+  name: 跨端上下文
+  responsibility: 执行上下文、变量命名空间、受控提取、终端Context与数据传递。
+  data_owned: 运行时变量
+  not_responsible_for: 测试数据资源主数据
+  interfaces_events: attempt内事件
+  future_split_potential: 中
+  effect_class: FROZEN_ONLY
+- module_id: MOD-014
+  name: 报告与结果查询
+  responsibility: 报告请求、报告、任务结果、用例结果、初次/重试聚合和分享。
+  data_owned: 报告元数据
+  not_responsible_for: 制品二进制
+  interfaces_events: 报告事件
+  future_split_potential: 中
+  effect_class: FROZEN_ONLY
+- module_id: MOD-015
+  name: 日志与制品
+  responsibility: 制品元数据、上传会话、哈希、可用性、下载授权、Hold、保留和清理。
+  data_owned: 制品元数据
+  not_responsible_for: 业务报告规则
+  interfaces_events: 制品事件
+  future_split_potential: 高
+  effect_class: FROZEN_ONLY
+- module_id: MOD-016
+  name: 模型与AI治理
+  responsibility: 供应商、配置、路由、Prompt修订、调用attempt、额度、降级和审计。
+  data_owned: AI配置与调用事实
+  not_responsible_for: 模型网关内部路由自由决定
+  interfaces_events: AI调用事件
+  future_split_potential: 高
+  effect_class: FROZEN_ONLY
+- module_id: MOD-017
+  name: 集成组件治理
+  responsibility: Adapter、组件修订、release identity、健康策略、selector和技术流。
+  data_owned: 组件配置与选择事实
+  not_responsible_for: 第三方控制台状态
+  interfaces_events: 组件事件
+  future_split_potential: 中
+  effect_class: FROZEN_ONLY
+- module_id: MOD-018
+  name: 监控、告警与审计
+  responsibility: 业务审计、技术告警主记录、通知、遥测关联和历史追溯。
+  data_owned: 审计与业务告警
+  not_responsible_for: Grafana内部告警事实
+  interfaces_events: 告警/通知事件
+  future_split_potential: 中
+  effect_class: FROZEN_ONLY
+- module_id: MOD-019
+  name: 平台配置与发布治理
+  responsibility: 系统参数、数据字典、基线发布、ADR和编码准入。
+  data_owned: 平台治理事实
+  not_responsible_for: 具体业务对象状态
+  interfaces_events: 配置发布事件
+  future_split_potential: 中
+  effect_class: FROZEN_ONLY
+deployable_units:
+- unit_id: DU-001
+  name: Web静态应用
+  technology: Vue构建产物
+  deployment_zone: 平台网络区
+  mandatory: 必需
+  scaling: 水平扩展
+  statefulness: 无状态
+  baseline_effect: FROZEN_BY_SYSTEM_DESIGN
+  effect_class: FROZEN_ONLY
+- unit_id: DU-002
+  name: 反向代理/API入口
+  technology: Nginx或等价实现
+  deployment_zone: 平台边界区
+  mandatory: 必需
+  scaling: 水平扩展
+  statefulness: 无状态
+  baseline_effect: FROZEN_BY_SYSTEM_DESIGN
+  effect_class: FROZEN_ONLY
+- unit_id: DU-003
+  name: 平台API
+  technology: FastAPI应用
+  deployment_zone: 平台应用区
+  mandatory: 必需
+  scaling: 水平扩展
+  statefulness: 无状态
+  baseline_effect: FROZEN_BY_SYSTEM_DESIGN
+  effect_class: FROZEN_ONLY
+- unit_id: DU-004
+  name: 通用后台Worker
+  technology: Python Worker
+  deployment_zone: 平台应用区
+  mandatory: 必需
+  scaling: 水平扩展
+  statefulness: 无状态
+  baseline_effect: FROZEN_BY_SYSTEM_DESIGN
+  effect_class: FROZEN_ONLY
+- unit_id: DU-005
+  name: 调度与恢复Worker
+  technology: Python Worker
+  deployment_zone: 平台应用区
+  mandatory: 必需
+  scaling: 逻辑单活
+  statefulness: 无状态
+  baseline_effect: FROZEN_BY_SYSTEM_DESIGN
+  effect_class: FROZEN_ONLY
+- unit_id: DU-006
+  name: AI Worker
+  technology: Python Worker
+  deployment_zone: 平台应用区
+  mandatory: 条件必需
+  scaling: 水平扩展
+  statefulness: 无状态
+  baseline_effect: FROZEN_BY_SYSTEM_DESIGN
+  effect_class: FROZEN_ONLY
+- unit_id: DU-007
+  name: 报告与制品Worker
+  technology: Python Worker
+  deployment_zone: 平台应用区
+  mandatory: 必需
+  scaling: 水平扩展
+  statefulness: 无状态
+  baseline_effect: FROZEN_BY_SYSTEM_DESIGN
+  effect_class: FROZEN_ONLY
+- unit_id: DU-008
+  name: Runner Agent
+  technology: Python独立部署包
+  deployment_zone: Runner内网/执行机
+  mandatory: 必需
+  scaling: 按节点扩展
+  statefulness: 边缘临时状态
+  baseline_effect: FROZEN_BY_SYSTEM_DESIGN
+  effect_class: FROZEN_ONLY
+- unit_id: DU-009
+  name: MySQL 8.4 LTS
+  technology: 关系型数据库
+  deployment_zone: 数据区
+  mandatory: 必需
+  scaling: 按数据库拓扑
+  statefulness: 有状态
+  baseline_effect: FROZEN_BY_SYSTEM_DESIGN
+  effect_class: FROZEN_ONLY
+- unit_id: DU-010
+  name: S3兼容对象存储
+  technology: 对象存储服务
+  deployment_zone: 数据区
+  mandatory: 必需
+  scaling: 按存储拓扑
+  statefulness: 有状态
+  baseline_effect: FROZEN_BY_SYSTEM_DESIGN
+  effect_class: FROZEN_ONLY
+- unit_id: DU-011
+  name: LiteLLM Proxy
+  technology: 模型网关
+  deployment_zone: AI集成区
+  mandatory: 条件必需
+  scaling: 水平扩展
+  statefulness: 无状态
+  baseline_effect: FROZEN_BY_SYSTEM_DESIGN
+  effect_class: FROZEN_ONLY
+- unit_id: DU-012
+  name: OpenTelemetry Collector
+  technology: 遥测网关
+  deployment_zone: 观测区
+  mandatory: 必需
+  scaling: 水平扩展
+  statefulness: 缓冲状态
+  baseline_effect: FROZEN_BY_SYSTEM_DESIGN
+  effect_class: FROZEN_ONLY
+- unit_id: DU-013
+  name: Prometheus/Loki/Tempo/Grafana
+  technology: 观测后端
+  deployment_zone: 观测区
+  mandatory: 必需
+  scaling: 按组件拓扑
+  statefulness: 有状态
+  baseline_effect: FROZEN_BY_SYSTEM_DESIGN
+  effect_class: FROZEN_ONLY
+- unit_id: DU-014
+  name: CI/CD Runner
+  technology: 供应商中立流水线执行器
+  deployment_zone: 研发区
+  mandatory: 必需
+  scaling: 按流水线扩展
+  statefulness: 临时状态
+  baseline_effect: FROZEN_BY_SYSTEM_DESIGN
+  effect_class: FROZEN_ONLY
+processes:
+- process_id: PROC-001
+  name: web-frontend
+  deployment: 独立部署
+  horizontal_scaling: 是
+  stateless: 无状态
+  holds_task: 否
+  recovery: 浏览器重连和API重试
+  mandatory: 必需
+  baseline_effect: FROZEN_BY_SYSTEM_DESIGN
+  effect_class: FROZEN_ONLY
+- process_id: PROC-002
+  name: reverse-proxy
+  deployment: 独立部署
+  horizontal_scaling: 是
+  stateless: 无状态
+  holds_task: 否
+  recovery: 配置重载
+  mandatory: 必需
+  baseline_effect: FROZEN_BY_SYSTEM_DESIGN
+  effect_class: FROZEN_ONLY
+- process_id: PROC-003
+  name: platform-api
+  deployment: 独立部署
+  horizontal_scaling: 是
+  stateless: 无状态
+  holds_task: 否
+  recovery: 数据库状态恢复
+  mandatory: 必需
+  baseline_effect: FROZEN_BY_SYSTEM_DESIGN
+  effect_class: FROZEN_ONLY
+- process_id: PROC-004
+  name: platform-worker
+  deployment: 独立部署
+  horizontal_scaling: 是
+  stateless: 无状态
+  holds_task: 短任务租约
+  recovery: DB任务/Outbox重放
+  mandatory: 必需
+  baseline_effect: FROZEN_BY_SYSTEM_DESIGN
+  effect_class: FROZEN_ONLY
+- process_id: PROC-005
+  name: scheduler-recovery-worker
+  deployment: 独立部署或与worker同产物
+  horizontal_scaling: 单活逻辑+可故障转移
+  stateless: 无状态
+  holds_task: 调度租约
+  recovery: 租约到期接管
+  mandatory: 必需
+  baseline_effect: FROZEN_BY_SYSTEM_DESIGN
+  effect_class: FROZEN_ONLY
+- process_id: PROC-006
+  name: ai-worker
+  deployment: 独立部署
+  horizontal_scaling: 是
+  stateless: 无状态
+  holds_task: AI任务技术checkpoint
+  recovery: 持久checkpoint/幂等调用
+  mandatory: AI启用时必需
+  baseline_effect: FROZEN_BY_SYSTEM_DESIGN
+  effect_class: FROZEN_ONLY
+- process_id: PROC-007
+  name: report-artifact-worker
+  deployment: 独立部署
+  horizontal_scaling: 是
+  stateless: 无状态
+  holds_task: 报告/上传处理租约
+  recovery: 幂等请求恢复
+  mandatory: 必需
+  baseline_effect: FROZEN_BY_SYSTEM_DESIGN
+  effect_class: FROZEN_ONLY
+- process_id: PROC-008
+  name: runner-agent
+  deployment: 独立部署产物
+  horizontal_scaling: 按Runner节点扩展
+  stateless: 边缘有临时状态
+  holds_task: 执行租约
+  recovery: 重连、补传、旧结果拒绝
+  mandatory: 必需
+  baseline_effect: FROZEN_BY_SYSTEM_DESIGN
+  effect_class: FROZEN_ONLY
+- process_id: PROC-009
+  name: mysql
+  deployment: 独立部署
+  horizontal_scaling: 按数据库方案
+  stateless: 有状态
+  holds_task: 数据库事务
+  recovery: 备份恢复/故障转移
+  mandatory: 必需
+  baseline_effect: FROZEN_BY_SYSTEM_DESIGN
+  effect_class: FROZEN_ONLY
+- process_id: PROC-010
+  name: object-storage
+  deployment: 独立部署
+  horizontal_scaling: 按存储方案
+  stateless: 有状态
+  holds_task: 上传会话
+  recovery: 多副本/校验/补传
+  mandatory: 必需
+  baseline_effect: FROZEN_BY_SYSTEM_DESIGN
+  effect_class: FROZEN_ONLY
+- process_id: PROC-011
+  name: litellm-proxy
+  deployment: 独立部署
+  horizontal_scaling: 是
+  stateless: 技术无状态
+  holds_task: 技术调用
+  recovery: AI重试/平台候选切换
+  mandatory: AI启用时必需
+  baseline_effect: FROZEN_BY_SYSTEM_DESIGN
+  effect_class: FROZEN_ONLY
+- process_id: PROC-012
+  name: otel-collector
+  deployment: 独立部署
+  horizontal_scaling: 是
+  stateless: 缓冲可持久
+  holds_task: 遥测队列
+  recovery: 重试或丢弃策略
+  mandatory: 观测必需
+  baseline_effect: FROZEN_BY_SYSTEM_DESIGN
+  effect_class: FROZEN_ONLY
+- process_id: PROC-013
+  name: observability-stack
+  deployment: 独立部署
+  horizontal_scaling: 按组件
+  stateless: 有状态
+  holds_task: 技术遥测
+  recovery: 组件各自恢复
+  mandatory: 非业务强依赖
+  baseline_effect: FROZEN_BY_SYSTEM_DESIGN
+  effect_class: FROZEN_ONLY
+frontend_architecture:
+  stack:
+  - Vue 3
+  - TypeScript
+  - Vite
+  - Vue Router
+  - Pinia
+  - Element Plus
+  - Zod
+  - Vitest
+  - Vue Testing Library
+  - Playwright
+  rules:
+  - 路由守卫只做用户体验提示，服务端重复授权
+  - API客户端统一错误、重试、幂等和correlation id
+  - 长任务使用SSE并可回退轮询
+  - 敏感字段按权限脱敏
+  - 下载使用短期授权URL
+  effect_class: FROZEN_ONLY
+backend_architecture:
+  stack:
+  - Python 3.12
+  - FastAPI
+  - Pydantic v2
+  - SQLAlchemy 2
+  - Flyway
+  - MySQL 8.4 LTS
+  layers:
+  - interface
+  - application
+  - domain
+  - ports
+  - infrastructure
+  transaction_rule: 数据库事务不覆盖远程调用；状态、事件、Outbox和审计在同事务提交。
+  effect_class: FROZEN_ONLY
+runner_architecture:
+  independent_deployment: true
+  stack:
+  - Python 3.12
+  - Playwright Python
+  components:
+  - Agent启动器
+  - 注册认证客户端
+  - 心跳健康上报
+  - 任务长轮询
+  - 任务租约管理
+  - 本地调度器
+  - Playwright执行器
+  - AI探索会话执行器
+  - 人工录制会话管理器
+  - 浏览器管理器
+  - 上下文管理器
+  - 日志采集器
+  - 制品采集补传器
+  - 本地安全存储
+  - 本地清理器
+  - 版本兼容检查
+  rules:
+  - Runner Agent是独立部署单元和独立构建产物。
+  - Runner Agent不得直接访问平台数据库。
+  - Runner只能执行已领取且租约、fencing和协议版本仍有效的任务。
+  - Runner领取前必须校验项目绑定、能力、健康、浏览器矩阵、网络访问和槽位。
+  - Runner不得自行创建正式任务、重试、用例版本、权限或项目绑定。
+  - Runner必须区分FORMAL_EXECUTION、AI_EXPLORATION、AI_VALIDATION、MANUAL_RECORDING和诊断任务。
+  - Runner失联恢复后不得提交失效attempt的权威结果。
+  - Runner必须支持断线重连、幂等确认、进度续报和版本兼容。
+  - 每个正式attempt使用隔离BrowserContext；跨端逻辑终端可使用独立Context但保持同一attempt。
+  - AI探索每个attempt必须使用独立MCP进程或容器、isolated profile和唯一临时目录。
+  - 禁止共享用户浏览器、持久profile、任意CDP端点、no-sandbox和无限制文件访问。
+  - 人工录制输入必须先在Runner侧最小化和脱敏，再持久化或上传。
+  - 人工录制不得要求平台预知测试人员实际输入的账号身份。
+  - Runner日志不得包含秘密、完整响应敏感字段或录制明文输入。
+  - 制品上传确认和hash校验完成前不得删除本地唯一副本。
+  - Runner本地副本必须按任务终态、上传状态、保留和安全策略清理。
+  - Playwright网络监听必须先注册再触发UI动作。
+  - 静态资源完成不得作为业务成功等待条件。
+  - Runner版本变更必须更新协议兼容矩阵并通过平台—Runner契约测试。
+  - 修改Runner时必须覆盖注册、心跳、领取、租约续期、失联、旧结果拒绝、补传和清理测试。
+  business_effect_class: IMMEDIATE_INVARIANT
+  implementation_effect_class: FROZEN_ONLY
+ai_architecture:
+  orchestrator: 平台轻量AIOrchestrator
+  model_gateway: LiteLLM Proxy默认实现
+  langgraph: PLANNED_LATER
+  langfuse: NO_OP_FIRST_VERSION
+  rules:
+  - 所有模型调用必须经过ModelGatewayAdapter或批准的等价统一适配层。
+  - Prompt必须版本化集中管理，不得散落在Controller、Worker或前端。
+  - 模型输出必须先通过JSON Schema/Pydantic校验，再通过业务规则校验。
+  - AI结果必须保存模型配置、Prompt版本、输入指纹、调用attempt、成本/用量和脱敏审计。
+  - AI输出不得直接写入正式用例、正式资产或业务终态。
+  - 自然语言转换不得申请Runner或浏览器。
+  - AI页面探索必须使用Runner和受控Playwright/MCP沙箱。
+  - 人工录制动作和证据优先于AI推测；AI不得补造未录制业务事实。
+  - 正式执行不得由模型实时自由决策或动态改写正式步骤。
+  - 模型密钥不得写入代码、Prompt、日志、Trace或测试快照。
+  - 发送模型前必须按项目、字段分类和任务目的过滤敏感数据。
+  - 同一模型候选内只允许受限技术重试；跨候选fallback由平台创建新ai_call_attempt。
+  - 模型失败必须有明确超时、限流、Schema错误、内容安全和供应方错误处理。
+  - LiteLLM不得拥有模型授权、正式Prompt、业务额度、跨候选fallback或AI任务状态。
+  - 第一版AIOrchestrator由平台轻量实现，LangGraph不得成为强制运行依赖。
+  - 第一版Langfuse使用No-op Adapter，OTel可记录脱敏AI技术遥测。
+  - 修改AI流程必须新增确定性单元测试、Fake模型测试、Schema失败测试和敏感数据测试。
+  - 模型非确定性不得进入状态机、权限或计费等确定性核心规则。
+  effect_class: FROZEN_ONLY
+workflow_architecture:
+  selected: MySQL持久状态机 + durable job + Worker + Transactional Outbox
+  temporal: NOT_DEPLOYED_FIRST_VERSION
+  business_state_authority: MySQL平台业务表
+  replay_rule: 活动和副作用必须通过幂等键、前置状态和fencing校验。
+  effect_class: FROZEN_ONLY
+data_architecture:
+  database: MySQL 8.4 LTS
+  deployment_baseline: 8.4.10
+  migration: Flyway
+  utc: true
+  rules:
+  - 主键与业务唯一键分离
+  - 正式枚举
+  - 乐观锁
+  - 审计字段
+  - 软删除/归档/清理分离
+  - JSON受Schema约束
+  - 敏感字段分类保护
+  effect_class: FROZEN_ONLY
+artifact_storage_architecture:
+  metadata_store: MySQL
+  file_store: S3-compatible object storage
+  runner_local: temporary and retry copy only
+  retention:
+    default_days: 30
+    project_min_days: 7
+    project_max_days: 180
+    failed_extension_days: 90
+    long_term_excluded_from_cleanup: true
+  effect_class: FROZEN_ONLY
+cache_architecture:
+  mandatory: false
+  first_version: No distributed cache
+  authority_data_cached: false
+  future: Redis requires ADR and failure design
+  effect_class: FROZEN_ONLY
+event_architecture:
+  selected: Transactional Outbox + DB job consumers
+  independent_broker: false
+  event_version_required: true
+  consumer_idempotency_required: true
+  effect_class: FROZEN_ONLY
+api_architecture:
+  style: REST/JSON
+  contract: OpenAPI 3.1
+  frontend_progress: SSE with polling fallback
+  runner_control: Outbound HTTPS long polling + REST
+  database_models_exposed: false
+  contract_standard: OpenAPI 3.1系列；精确补丁版本由FROZEN SYSTEM_DESIGN和契约工具链锁定。
+  effect_class: FROZEN_ONLY
+runner_communication_architecture:
+  control_channel: Outbound HTTPS long polling
+  heartbeat: HTTPS POST
+  result_channel: HTTPS REST
+  artifact_channel: Presigned object upload with broker fallback
+  authentication: bootstrap token then revocable agent credential; TLS required
+  fencing_required: true
+  effect_class: FROZEN_ONLY
+security_architecture:
+  authorization: server-side RBAC + project data scope
+  password_hash: Argon2id
+  runner_trust: ZERO_TRUST_EDGE
+  secret_handling: reference and runtime injection
+  audit_required: true
+  business_effect_class: IMMEDIATE_INVARIANT
+  implementation_effect_class: FROZEN_ONLY
+concurrency_architecture:
+  store: MySQL
+  mechanisms:
+  - unique constraints
+  - row lock
+  - optimistic lock
+  - lease expiry
+  - fencing token
+  - idempotency key
+  resource_types:
+  - environment shared/exclusive lock
+  - SSO identity lease
+  - Runner slot lease
+  - task ownership lease
+  - recording control lease
+  business_effect_class: IMMEDIATE_INVARIANT
+  implementation_effect_class: FROZEN_ONLY
+runtime_views:
+- view_id: RV-001
+  name: 自然语言转换
+  flow: 用户提交修订→API鉴权与快照→AI任务入库→AI Worker经模型网关生成候选→Schema/业务校验→保存AI结果和候选→人工确认/发布。
+  critical_rules: 不占Runner；模型失败不改变源用例。
+  effect_class: IMMEDIATE_INVARIANT
+- view_id: RV-002
+  name: AI页面探索
+  flow: 创建AI任务→获取Runner/资源租约→固定Runner→Runner启动独立MCP沙箱→模型决策与Playwright动作循环→密封证据→上传制品→保存候选→释放资源。
+  critical_rules: AI结果不能直接发布；旧租约结果拒绝。
+  effect_class: FROZEN_ONLY
+- view_id: RV-003
+  name: 人工录制
+  flow: 创建录制任务→获取Runner槽位和控制租约→测试人员操作受控浏览器→Runner先脱敏再持久化动作/证据→密封包→结构化候选→人工确认。
+  critical_rules: 不取得测试账号/SSO租约；仍受Runner资源约束。
+  effect_class: IMMEDIATE_INVARIANT
+- view_id: RV-004
+  name: 正式执行
+  flow: 创建任务快照→环境锁/SSO租约/Runner槽位→领取attempt并发fencing→Playwright执行已发布步骤→确定结果→最终化→释放资源→报告请求。
+  critical_rules: 任务内部串行；数据库事务不跨Runner调用。
+  effect_class: IMMEDIATE_INVARIANT
+- view_id: RV-005
+  name: 跨端正式执行
+  flow: 同一attempt和Runner创建终端独立BrowserContext→按步骤顺序切换管理端/客户端/PDA→监听响应提取变量→上下文命名空间传递→聚合证据。
+  critical_rules: 不得按终端拆Runner。
+  effect_class: FROZEN_ONLY
+- view_id: RV-006
+  name: 失败统一重试
+  flow: 首轮全部结束→筛选Failed/Broken且有额度的case item→创建新attempt→继承快照和业务轮次→再次执行→报告同时展示首轮和重试。
+  critical_rules: 不得覆盖首次结果；Skipped/Cancelled/Not Run不重试。
+  effect_class: FROZEN_ONLY
+- view_id: RV-007
+  name: Runner注册
+  flow: 一次性注册Token→Agent提交机器指纹和能力→平台验证→签发可撤销Agent凭证→建立Runner登记对象→项目独占绑定后可调度。
+  critical_rules: Runner不直接创建任务。
+  effect_class: FROZEN_ONLY
+- view_id: RV-008
+  name: Runner调度
+  flow: Worker读取READY任务→原子选择满足项目绑定/能力/健康/槽位的Runner→创建资源租约和fencing→Runner长轮询领取→确认所有权。
+  critical_rules: 指定Runner不可用时按策略等待或阻断。
+  effect_class: FROZEN_ONLY
+- view_id: RV-009
+  name: Runner失联恢复
+  flow: 心跳超时→标记离线→停止续租→租约到期并生成更高fencing→旧Agent上报被拒绝→按是否已产生不可确认副作用收口或创建替换attempt。
+  critical_rules: 不能让旧结果覆盖新attempt。
+  effect_class: FROZEN_ONLY
+- view_id: RV-010
+  name: 报告生成
+  flow: 根任务终态事务创建唯一报告请求/Outbox→报告Worker锁定请求→冻结输入快照→生成元数据和文件→上传对象存储→标记可用或降级。
+  critical_rules: 报告生成失败不改写执行结果。
+  effect_class: FROZEN_ONLY
+- view_id: RV-011
+  name: 制品上传与补传
+  flow: Runner申请上传会话→按artifact id和hash上传→服务端校验大小/hash/owner→确认可用→Runner删除本地副本；失败保留本地唯一副本并补传。
+  critical_rules: 确认前不得删除唯一副本。
+  effect_class: FROZEN_ONLY
+- view_id: RV-012
+  name: 自动清理
+  flow: 定时Worker查询retention_deadline→排除Hold/长期保留/归档保护→生成受控清理请求→删除对象→更新元数据→写审计；失败可重放。
+  critical_rules: 项目删除先归档；报告元数据不随普通制品清理。
+  effect_class: FROZEN_ONLY
+deployment_views:
+- environment: development
+  topology: Docker Compose for platform dependencies; local API/Web/Workers; local Runner
+  effect_class: FROZEN_ONLY
+- environment: integration
+  topology: containerized platform + isolated MySQL/object store + test Runner
+  effect_class: FROZEN_ONLY
+- environment: preproduction
+  topology: production-like platform + dedicated Runner network
+  effect_class: FROZEN_ONLY
+- environment: production
+  topology: containerized platform services; managed/HA data services according to open decision; native Runner services
+  effect_class: FROZEN_ONLY
+observability_architecture:
+  stack:
+  - OpenTelemetry SDK
+  - OpenTelemetry Collector
+  - Prometheus
+  - Loki
+  - Tempo
+  - Grafana
+  correlation_ids:
+  - trace_id
+  - request_id
+  - correlation_id
+  - task_id
+  - attempt_id
+  - runner_id
+  - ai_task_id
+  - artifact_id
+  not_business_sources:
+  - Grafana
+  - Tempo
+  - Loki
+  - Prometheus
+  effect_class: FROZEN_ONLY
+reliability_rules:
+- rule_id: REL-001
+  failure: 平台API重启
+  handling: 所有业务状态在MySQL；客户端重试必须携带幂等键。
+  effect_class: FROZEN_ONLY
+- rule_id: REL-002
+  failure: Worker重启
+  handling: 任务领取使用租约；过期后可由其他Worker接管。
+  effect_class: FROZEN_ONLY
+- rule_id: REL-003
+  failure: MySQL短暂故障
+  handling: 停止写入并返回可重试错误，不缓存虚假成功。
+  effect_class: FROZEN_ONLY
+- rule_id: REL-004
+  failure: 对象存储故障
+  handling: 制品保持PENDING_UPLOAD/PENDING_RECOVERY，必要制品缺失时报告不得AVAILABLE。
+  effect_class: FROZEN_ONLY
+- rule_id: REL-005
+  failure: Runner失联
+  handling: 停止续租、回收资源、提高fencing并拒绝旧上报。
+  effect_class: FROZEN_ONLY
+- rule_id: REL-006
+  failure: Runner恢复
+  handling: 重新认证和健康校验；不得自动恢复已失效attempt所有权。
+  effect_class: FROZEN_ONLY
+- rule_id: REL-007
+  failure: 浏览器崩溃
+  handling: 按动作是否开始和结果可确认性进入BROKEN或ABORTED，并继续finalization。
+  effect_class: FROZEN_ONLY
+- rule_id: REL-008
+  failure: 模型超时/限流
+  handling: 同一候选内受限技术重试；跨候选切换由平台创建新ai_call_attempt。
+  effect_class: FROZEN_ONLY
+- rule_id: REL-009
+  failure: 模型Schema错误
+  handling: 保存真实错误和脱敏响应摘要，不发布候选。
+  effect_class: FROZEN_ONLY
+- rule_id: REL-010
+  failure: 报告生成失败
+  handling: 报告请求可幂等重放；执行结果保持不变。
+  effect_class: FROZEN_ONLY
+- rule_id: REL-011
+  failure: 重复任务创建
+  handling: 业务幂等键和唯一约束返回既有任务。
+  effect_class: FROZEN_ONLY
+- rule_id: REL-012
+  failure: 重复结果上报
+  handling: attempt id、lease id、fencing和result id共同去重。
+  effect_class: FROZEN_ONLY
+- rule_id: REL-013
+  failure: 锁租约残留
+  handling: 按expires_at扫描，强制释放生成新fencing并审计。
+  effect_class: FROZEN_ONLY
+- rule_id: REL-014
+  failure: 网络分区
+  handling: Runner本地只继续已确认所有权且租约仍有效的工作；无法续租停止新动作并受控收口。
+  effect_class: FROZEN_ONLY
+- rule_id: REL-015
+  failure: 版本升级中任务
+  handling: 任务固定协议、配置和资产版本；旧Worker/Runner保留到运行中任务终态。
+  effect_class: FROZEN_ONLY
+- rule_id: REL-016
+  failure: 可观测组件故障
+  handling: 业务继续；遥测缓冲、限量丢弃或降级并产生平台技术告警。
+  effect_class: FROZEN_ONLY
+technology_candidates:
+- domain: 架构风格
+  candidate_a: 模块化单体
+  candidate_b: 微服务
+  candidate_c: 纯单体
+  conclusion: 候选建议：模块化单体+独立执行面
+  conclusion_status: FROZEN_SELECTION
+- domain: 后端
+  candidate_a: Python/FastAPI
+  candidate_b: Java/Spring Boot
+  candidate_c: Node/NestJS
+  conclusion: 候选建议：Python/FastAPI
+  conclusion_status: FROZEN_SELECTION
+- domain: 前端
+  candidate_a: Vue 3
+  candidate_b: React
+  candidate_c: Angular
+  conclusion: 候选建议：Vue 3
+  conclusion_status: FROZEN_SELECTION
+- domain: 数据库
+  candidate_a: MySQL 8.4 LTS
+  candidate_b: PostgreSQL
+  candidate_c: 商业数据库
+  conclusion: 候选建议：MySQL
+  conclusion_status: FROZEN_SELECTION
+- domain: 长流程
+  candidate_a: DB状态机+Worker
+  candidate_b: Temporal
+  candidate_c: 同步HTTP
+  conclusion: 候选建议：DB状态机+Worker
+  conclusion_status: FROZEN_SELECTION
+- domain: AI编排
+  candidate_a: 平台轻量实现
+  candidate_b: LangGraph
+  candidate_c: 模型自由Agent
+  conclusion: 候选建议：平台轻量实现
+  conclusion_status: FROZEN_SELECTION
+- domain: 消息
+  candidate_a: Outbox+DB任务
+  candidate_b: RabbitMQ
+  candidate_c: Kafka
+  conclusion: 候选建议：Outbox+DB任务
+  conclusion_status: FROZEN_SELECTION
+- domain: 缓存
+  candidate_a: 不强制缓存
+  candidate_b: Redis
+  candidate_c: 数据库外状态缓存
+  conclusion: 第一版不部署Redis
+  conclusion_status: FROZEN_SELECTION
+- domain: 对象存储
+  candidate_a: S3兼容
+  candidate_b: 本地文件系统
+  candidate_c: MySQL BLOB
+  conclusion: 候选建议：S3兼容
+  conclusion_status: FROZEN_SELECTION
+- domain: Runner协议
+  candidate_a: HTTPS长轮询+REST
+  candidate_b: WebSocket
+  candidate_c: gRPC
+  conclusion: 候选建议：HTTPS长轮询+REST
+  conclusion_status: FROZEN_SELECTION
+- domain: 前端进度
+  candidate_a: SSE
+  candidate_b: WebSocket
+  candidate_c: 纯轮询
+  conclusion: 候选建议：SSE+轮询回退
+  conclusion_status: FROZEN_SELECTION
+- domain: Runner语言
+  candidate_a: Python
+  candidate_b: Node.js
+  candidate_c: Java
+  conclusion: 候选建议：Python
+  conclusion_status: FROZEN_SELECTION
+- domain: 仓库
+  candidate_a: Monorepo独立产物
+  candidate_b: 多仓库
+  candidate_c: 单目录无边界
+  conclusion: 候选建议：Monorepo
+  conclusion_status: FROZEN_SELECTION
+- domain: 部署
+  candidate_a: Docker/Compose+Runner服务
+  candidate_b: Kubernetes强制
+  candidate_c: 全部裸机
+  conclusion: 候选建议：混合部署
+  conclusion_status: FROZEN_SELECTION
+- domain: AI可观测
+  candidate_a: OTel+No-op Langfuse
+  candidate_b: Langfuse首期
+  candidate_c: 不观测
+  conclusion: 候选建议：OTel
+  conclusion_status: FROZEN_SELECTION
+technology_selections:
+- selection_id: SEL-001
+  technology_domain: 架构风格
+  selected_option: 模块化单体控制面 + 独立Worker + 独立Runner Agent
+  selected_version: 当前版本
+  purpose: 统一业务事务与独立执行面
+  mandatory: 强制
+  replaceable: 部分可演进
+  completion_status: VALID_ARCHITECTURE_COMPLETION
+  selection_status: FROZEN_SELECTION
+  mandatory_effect: MANDATORY_IN_R3
+  evidence_status: SUPPORTED_BY_MULTIPLE_SOURCES
+  previous_completion_status: VALID_ARCHITECTURE_COMPLETION
+  effect_class: FROZEN_ONLY
+  frozen_effect: MANDATORY_IN_R3
+- selection_id: SEL-002
+  technology_domain: 前端框架
+  selected_option: Vue 3
+  selected_version: 锁定兼容主版本
+  purpose: 平台管理UI
+  mandatory: 强制
+  replaceable: 可替换需ADR
+  completion_status: VALID_TECH_SELECTION_COMPLETION
+  selection_status: FROZEN_SELECTION
+  mandatory_effect: MANDATORY_IN_R3
+  evidence_status: FROZEN_TECH_SELECTION_EVIDENCE
+  previous_completion_status: VALID_TECH_SELECTION_COMPLETION
+  effect_class: FROZEN_ONLY
+  frozen_effect: MANDATORY_IN_R3
+- selection_id: SEL-003
+  technology_domain: 前端语言
+  selected_option: TypeScript
+  selected_version: strict模式
+  purpose: 类型安全
+  mandatory: 强制
+  replaceable: 否
+  completion_status: VALID_TECH_SELECTION_COMPLETION
+  selection_status: FROZEN_SELECTION
+  mandatory_effect: MANDATORY_IN_R3
+  evidence_status: FROZEN_TECH_SELECTION_EVIDENCE
+  previous_completion_status: VALID_TECH_SELECTION_COMPLETION
+  effect_class: FROZEN_ONLY
+  frozen_effect: MANDATORY_IN_R3
+- selection_id: SEL-004
+  technology_domain: 前端构建
+  selected_option: Vite
+  selected_version: 锁定版本
+  purpose: 开发与构建
+  mandatory: 强制
+  replaceable: 可替换需验证
+  completion_status: VALID_TECH_SELECTION_COMPLETION
+  selection_status: FROZEN_SELECTION
+  mandatory_effect: MANDATORY_IN_R3
+  evidence_status: FROZEN_TECH_SELECTION_EVIDENCE
+  previous_completion_status: VALID_TECH_SELECTION_COMPLETION
+  effect_class: FROZEN_ONLY
+  frozen_effect: MANDATORY_IN_R3
+- selection_id: SEL-005
+  technology_domain: 前端路由
+  selected_option: Vue Router
+  selected_version: 与Vue主版本兼容
+  purpose: 路由与前端守卫
+  mandatory: 强制
+  replaceable: 否
+  completion_status: VALID_TECH_SELECTION_COMPLETION
+  selection_status: FROZEN_SELECTION
+  mandatory_effect: MANDATORY_IN_R3
+  evidence_status: FROZEN_TECH_SELECTION_EVIDENCE
+  previous_completion_status: VALID_TECH_SELECTION_COMPLETION
+  effect_class: FROZEN_ONLY
+  frozen_effect: MANDATORY_IN_R3
+- selection_id: SEL-006
+  technology_domain: 前端状态
+  selected_option: Pinia
+  selected_version: 与Vue主版本兼容
+  purpose: 会话、项目上下文和查询状态
+  mandatory: 强制
+  replaceable: 可替换需ADR
+  completion_status: VALID_TECH_SELECTION_COMPLETION
+  selection_status: FROZEN_SELECTION
+  mandatory_effect: MANDATORY_IN_R3
+  evidence_status: FROZEN_TECH_SELECTION_EVIDENCE
+  previous_completion_status: VALID_TECH_SELECTION_COMPLETION
+  effect_class: FROZEN_ONLY
+  frozen_effect: MANDATORY_IN_R3
+- selection_id: SEL-007
+  technology_domain: UI组件库
+  selected_option: Element Plus
+  selected_version: 锁定版本
+  purpose: 表单、表格和管理界面
+  mandatory: 强制
+  replaceable: 可替换
+  completion_status: VALID_TECH_SELECTION_COMPLETION
+  selection_status: FROZEN_SELECTION
+  mandatory_effect: MANDATORY_IN_R3
+  evidence_status: FROZEN_TECH_SELECTION_EVIDENCE
+  previous_completion_status: VALID_TECH_SELECTION_COMPLETION
+  effect_class: FROZEN_ONLY
+  frozen_effect: MANDATORY_IN_R3
+- selection_id: SEL-008
+  technology_domain: 前端校验
+  selected_option: Zod
+  selected_version: 锁定版本
+  purpose: 表单和API边界运行时校验
+  mandatory: 强制
+  replaceable: 可替换
+  completion_status: VALID_TECH_SELECTION_COMPLETION
+  selection_status: FROZEN_SELECTION
+  mandatory_effect: MANDATORY_IN_R3
+  evidence_status: FROZEN_TECH_SELECTION_EVIDENCE
+  previous_completion_status: VALID_TECH_SELECTION_COMPLETION
+  effect_class: FROZEN_ONLY
+  frozen_effect: MANDATORY_IN_R3
+- selection_id: SEL-009
+  technology_domain: 前端测试
+  selected_option: Vitest + Vue Testing Library + Playwright
+  selected_version: 锁定版本
+  purpose: 单元、组件和E2E
+  mandatory: 强制
+  replaceable: 否
+  completion_status: VALID_TECH_SELECTION_COMPLETION
+  selection_status: FROZEN_SELECTION
+  mandatory_effect: MANDATORY_IN_R3
+  evidence_status: SUPPORTED_BY_MULTIPLE_SOURCES
+  previous_completion_status: VALID_TECH_SELECTION_COMPLETION
+  effect_class: FROZEN_ONLY
+  frozen_effect: MANDATORY_IN_R3
+- selection_id: SEL-010
+  technology_domain: 后端语言
+  selected_option: Python 3.12
+  selected_version: 3.12.x锁定
+  purpose: 平台API、Worker和Runner共享语言
+  mandatory: 强制
+  replaceable: 否
+  completion_status: VALID_TECH_SELECTION_COMPLETION
+  selection_status: FROZEN_SELECTION
+  mandatory_effect: MANDATORY_IN_R3
+  evidence_status: FROZEN_TECH_SELECTION_EVIDENCE
+  previous_completion_status: VALID_TECH_SELECTION_COMPLETION
+  effect_class: FROZEN_ONLY
+  frozen_effect: MANDATORY_IN_R3
+- selection_id: SEL-011
+  technology_domain: 后端框架
+  selected_option: FastAPI
+  selected_version: 锁定兼容版本
+  purpose: REST API与依赖注入入口
+  mandatory: 强制
+  replaceable: 可替换需重大ADR
+  completion_status: VALID_TECH_SELECTION_COMPLETION
+  selection_status: FROZEN_SELECTION
+  mandatory_effect: MANDATORY_IN_R3
+  evidence_status: FROZEN_TECH_SELECTION_EVIDENCE
+  previous_completion_status: VALID_TECH_SELECTION_COMPLETION
+  effect_class: FROZEN_ONLY
+  frozen_effect: MANDATORY_IN_R3
+- selection_id: SEL-012
+  technology_domain: 数据模型与校验
+  selected_option: Pydantic v2
+  selected_version: 锁定兼容版本
+  purpose: DTO、配置与Schema校验
+  mandatory: 强制
+  replaceable: 否
+  completion_status: VALID_TECH_SELECTION_COMPLETION
+  selection_status: FROZEN_SELECTION
+  mandatory_effect: MANDATORY_IN_R3
+  evidence_status: FROZEN_TECH_SELECTION_EVIDENCE
+  previous_completion_status: VALID_TECH_SELECTION_COMPLETION
+  effect_class: FROZEN_ONLY
+  frozen_effect: MANDATORY_IN_R3
+- selection_id: SEL-013
+  technology_domain: ORM与数据访问
+  selected_option: SQLAlchemy 2
+  selected_version: 2.x锁定
+  purpose: 仓储和事务
+  mandatory: 强制
+  replaceable: 可替换需迁移
+  completion_status: VALID_TECH_SELECTION_COMPLETION
+  selection_status: FROZEN_SELECTION
+  mandatory_effect: MANDATORY_IN_R3
+  evidence_status: FROZEN_TECH_SELECTION_EVIDENCE
+  previous_completion_status: VALID_TECH_SELECTION_COMPLETION
+  effect_class: FROZEN_ONLY
+  frozen_effect: MANDATORY_IN_R3
+- selection_id: SEL-014
+  technology_domain: 数据库
+  selected_option: MySQL 8.4 LTS
+  selected_version: 部署基线固定8.4.10；升级需验证
+  purpose: 唯一业务事实数据库
+  mandatory: 强制
+  replaceable: 否
+  completion_status: DIRECTLY_SUPPORTED
+  selection_status: FROZEN_SELECTION
+  mandatory_effect: MANDATORY_IN_R3
+  evidence_status: FROZEN_TECH_SELECTION_EVIDENCE
+  previous_completion_status: DIRECTLY_SUPPORTED
+  effect_class: FROZEN_ONLY
+  frozen_effect: MANDATORY_IN_R3
+- selection_id: SEL-015
+  technology_domain: 数据库迁移
+  selected_option: Flyway
+  selected_version: 锁定版本
+  purpose: 前向迁移、校验和受控回滚脚本
+  mandatory: 强制
+  replaceable: 可替换需ADR
+  completion_status: DIRECTLY_SUPPORTED
+  selection_status: FROZEN_SELECTION
+  mandatory_effect: MANDATORY_IN_R3
+  evidence_status: FROZEN_TECH_SELECTION_EVIDENCE
+  previous_completion_status: DIRECTLY_SUPPORTED
+  effect_class: FROZEN_ONLY
+  frozen_effect: MANDATORY_IN_R3
+- selection_id: SEL-016
+  technology_domain: 异步编排
+  selected_option: MySQL持久状态机 + durable job表 + Worker
+  selected_version: 第一版
+  purpose: 长流程、等待、恢复和取消
+  mandatory: 强制
+  replaceable: 未来可迁移Temporal
+  completion_status: DIRECTLY_SUPPORTED
+  selection_status: FROZEN_SELECTION
+  mandatory_effect: MANDATORY_IN_R3
+  evidence_status: FROZEN_TECH_SELECTION_EVIDENCE
+  previous_completion_status: DIRECTLY_SUPPORTED
+  effect_class: FROZEN_ONLY
+  frozen_effect: MANDATORY_IN_R3
+- selection_id: SEL-017
+  technology_domain: 可靠事件
+  selected_option: Transactional Outbox + 幂等消费者
+  selected_version: 第一版
+  purpose: 跨事务后置副作用和内部事件
+  mandatory: 强制
+  replaceable: 未来可桥接消息总线
+  completion_status: VALID_TECH_SELECTION_COMPLETION
+  selection_status: FROZEN_SELECTION
+  mandatory_effect: MANDATORY_IN_R3
+  evidence_status: FROZEN_TECH_SELECTION_EVIDENCE
+  previous_completion_status: VALID_TECH_SELECTION_COMPLETION
+  effect_class: FROZEN_ONLY
+  frozen_effect: MANDATORY_IN_R3
+- selection_id: SEL-018
+  technology_domain: 缓存
+  selected_option: 不部署强制分布式缓存
+  selected_version: 第一版
+  purpose: 仅允许可重建进程内缓存
+  mandatory: 强制边界
+  replaceable: 未来可引入Redis
+  completion_status: VALID_TECH_SELECTION_COMPLETION
+  selection_status: FROZEN_SELECTION
+  mandatory_effect: MANDATORY_IN_R3
+  evidence_status: FROZEN_TECH_SELECTION_EVIDENCE
+  previous_completion_status: VALID_TECH_SELECTION_COMPLETION
+  effect_class: FROZEN_ONLY
+  frozen_effect: MANDATORY_IN_R3
+- selection_id: SEL-019
+  technology_domain: 消息队列
+  selected_option: 不部署独立MQ；DB任务和Outbox替代
+  selected_version: 第一版
+  purpose: 降低运维复杂度
+  mandatory: 强制边界
+  replaceable: 未来按容量ADR引入
+  completion_status: VALID_TECH_SELECTION_COMPLETION
+  selection_status: FROZEN_SELECTION
+  mandatory_effect: MANDATORY_IN_R3
+  evidence_status: FROZEN_TECH_SELECTION_EVIDENCE
+  previous_completion_status: VALID_TECH_SELECTION_COMPLETION
+  effect_class: FROZEN_ONLY
+  frozen_effect: MANDATORY_IN_R3
+- selection_id: SEL-020
+  technology_domain: 浏览器自动化
+  selected_option: Playwright Library
+  selected_version: 锁定版本和浏览器矩阵
+  purpose: 正式执行、探索和录制技术底座
+  mandatory: 强制
+  replaceable: 否
+  completion_status: DIRECTLY_SUPPORTED
+  selection_status: FROZEN_SELECTION
+  mandatory_effect: MANDATORY_IN_R3
+  evidence_status: SUPPORTED_BY_MULTIPLE_SOURCES
+  previous_completion_status: DIRECTLY_SUPPORTED
+  effect_class: IMMEDIATE_INVARIANT
+  frozen_effect: MANDATORY_IN_R3
+- selection_id: SEL-021
+  technology_domain: AI浏览器通道
+  selected_option: Playwright MCP独立沙箱
+  selected_version: AI探索启用时
+  purpose: 每attempt受控工具通道
+  mandatory: 条件强制
+  replaceable: 可替换为等价受控Adapter
+  completion_status: DIRECTLY_SUPPORTED
+  selection_status: FROZEN_SELECTION
+  mandatory_effect: MANDATORY_IN_R3
+  evidence_status: SUPPORTED_BY_MULTIPLE_SOURCES
+  previous_completion_status: DIRECTLY_SUPPORTED
+  effect_class: FROZEN_ONLY
+  frozen_effect: MANDATORY_IN_R3
+- selection_id: SEL-022
+  technology_domain: Runner Agent
+  selected_option: Python 3.12 + Playwright Python
+  selected_version: 与平台协议兼容
+  purpose: 独立边缘执行服务
+  mandatory: 强制
+  replaceable: 否
+  completion_status: VALID_TECH_SELECTION_COMPLETION
+  selection_status: FROZEN_SELECTION
+  mandatory_effect: MANDATORY_IN_R3
+  evidence_status: SUPPORTED_BY_MULTIPLE_SOURCES
+  previous_completion_status: VALID_TECH_SELECTION_COMPLETION
+  effect_class: FROZEN_ONLY
+  frozen_effect: MANDATORY_IN_R3
+- selection_id: SEL-023
+  technology_domain: 模型网关
+  selected_option: LiteLLM Proxy
+  selected_version: 首期默认，可替换
+  purpose: 统一模型协议和技术错误归一
+  mandatory: 条件强制
+  replaceable: 是
+  completion_status: DIRECTLY_SUPPORTED
+  selection_status: FROZEN_SELECTION
+  mandatory_effect: MANDATORY_IN_R3
+  evidence_status: FROZEN_TECH_SELECTION_EVIDENCE
+  previous_completion_status: DIRECTLY_SUPPORTED
+  effect_class: FROZEN_ONLY
+  frozen_effect: MANDATORY_IN_R3
+- selection_id: SEL-024
+  technology_domain: AI编排
+  selected_option: 平台轻量AIOrchestrator
+  selected_version: 第一版
+  purpose: 节点、checkpoint和业务命令协调
+  mandatory: 强制
+  replaceable: 未来可迁移LangGraph
+  completion_status: DIRECTLY_SUPPORTED
+  selection_status: FROZEN_SELECTION
+  mandatory_effect: MANDATORY_IN_R3
+  evidence_status: FROZEN_TECH_SELECTION_EVIDENCE
+  previous_completion_status: DIRECTLY_SUPPORTED
+  effect_class: FROZEN_ONLY
+  frozen_effect: MANDATORY_IN_R3
+- selection_id: SEL-025
+  technology_domain: AI可观测
+  selected_option: OpenTelemetry脱敏AI遥测；Langfuse No-op
+  selected_version: 第一版
+  purpose: 调用关联、时延和错误观测
+  mandatory: 强制边界
+  replaceable: 后续可引入Langfuse
+  completion_status: DIRECTLY_SUPPORTED
+  selection_status: FROZEN_SELECTION
+  mandatory_effect: MANDATORY_IN_R3
+  evidence_status: FROZEN_TECH_SELECTION_EVIDENCE
+  previous_completion_status: DIRECTLY_SUPPORTED
+  effect_class: FROZEN_ONLY
+  frozen_effect: MANDATORY_IN_R3
+- selection_id: SEL-026
+  technology_domain: 对象存储
+  selected_option: S3兼容对象存储接口
+  selected_version: 实现产品可配置
+  purpose: 制品文件
+  mandatory: 强制
+  replaceable: 可替换
+  completion_status: VALID_TECH_SELECTION_COMPLETION
+  selection_status: FROZEN_SELECTION
+  mandatory_effect: MANDATORY_IN_R3
+  evidence_status: FROZEN_TECH_SELECTION_EVIDENCE
+  previous_completion_status: VALID_TECH_SELECTION_COMPLETION
+  effect_class: FROZEN_ONLY
+  frozen_effect: MANDATORY_IN_R3
+- selection_id: SEL-027
+  technology_domain: API契约
+  selected_option: OpenAPI 3.1系列（精确补丁版本由FROZEN SYSTEM_DESIGN锁定）
+  selected_version: 3.1.x，待冻结
+  purpose: 前端与内部控制API
+  mandatory: 强制
+  replaceable: 否
+  completion_status: VALID_TECH_SELECTION_COMPLETION
+  selection_status: FROZEN_SELECTION
+  mandatory_effect: MANDATORY_IN_R3
+  evidence_status: FROZEN_TECH_SELECTION_EVIDENCE
+  previous_completion_status: VALID_TECH_SELECTION_COMPLETION
+  effect_class: FROZEN_ONLY
+  frozen_effect: MANDATORY_IN_R3
+- selection_id: SEL-028
+  technology_domain: 前端进度通道
+  selected_option: SSE + 查询轮询回退
+  selected_version: 第一版
+  purpose: 长任务进度和事件展示
+  mandatory: 强制
+  replaceable: 可替换为WebSocket需ADR
+  completion_status: VALID_TECH_SELECTION_COMPLETION
+  selection_status: FROZEN_SELECTION
+  mandatory_effect: MANDATORY_IN_R3
+  evidence_status: FROZEN_TECH_SELECTION_EVIDENCE
+  previous_completion_status: VALID_TECH_SELECTION_COMPLETION
+  effect_class: FROZEN_ONLY
+  frozen_effect: MANDATORY_IN_R3
+- selection_id: SEL-029
+  technology_domain: Runner控制通道
+  selected_option: Outbound HTTPS长轮询 + REST确认
+  selected_version: 版本化协议
+  purpose: 内网Runner任务领取、心跳和结果上报
+  mandatory: 强制
+  replaceable: 未来可评估WebSocket/gRPC
+  completion_status: VALID_TECH_SELECTION_COMPLETION
+  selection_status: FROZEN_SELECTION
+  mandatory_effect: MANDATORY_IN_R3
+  evidence_status: FROZEN_TECH_SELECTION_EVIDENCE
+  previous_completion_status: VALID_TECH_SELECTION_COMPLETION
+  effect_class: FROZEN_ONLY
+  frozen_effect: MANDATORY_IN_R3
+- selection_id: SEL-030
+  technology_domain: 制品上传
+  selected_option: 平台签发上传会话；预签名对象存储上传，Artifact Broker代理回退
+  selected_version: 第一版
+  purpose: 大文件幂等上传与补传
+  mandatory: 强制
+  replaceable: 是
+  completion_status: VALID_TECH_SELECTION_COMPLETION
+  selection_status: FROZEN_SELECTION
+  mandatory_effect: MANDATORY_IN_R3
+  evidence_status: FROZEN_TECH_SELECTION_EVIDENCE
+  previous_completion_status: VALID_TECH_SELECTION_COMPLETION
+  effect_class: FROZEN_ONLY
+  frozen_effect: MANDATORY_IN_R3
+- selection_id: SEL-031
+  technology_domain: 系统可观测
+  selected_option: OpenTelemetry SDK/Collector + Prometheus + Loki + Tempo + Grafana
+  selected_version: OTEL_GRAFANA_STANDARD_V1
+  purpose: 日志、指标、Trace和技术告警
+  mandatory: 强制
+  replaceable: 后端可替换但协议固定
+  completion_status: DIRECTLY_SUPPORTED
+  selection_status: FROZEN_SELECTION
+  mandatory_effect: MANDATORY_IN_R3
+  evidence_status: FROZEN_TECH_SELECTION_EVIDENCE
+  previous_completion_status: DIRECTLY_SUPPORTED
+  effect_class: FROZEN_ONLY
+  frozen_effect: MANDATORY_IN_R3
+- selection_id: SEL-032
+  technology_domain: 反向代理
+  selected_option: Nginx或兼容实现
+  selected_version: 锁定镜像/包
+  purpose: TLS终止、静态资源和API转发
+  mandatory: 强制
+  replaceable: 是
+  completion_status: VALID_TECH_SELECTION_COMPLETION
+  selection_status: FROZEN_SELECTION
+  mandatory_effect: MANDATORY_IN_R3
+  evidence_status: FROZEN_TECH_SELECTION_EVIDENCE
+  previous_completion_status: VALID_TECH_SELECTION_COMPLETION
+  effect_class: FROZEN_ONLY
+  frozen_effect: MANDATORY_IN_R3
+- selection_id: SEL-033
+  technology_domain: 容器化
+  selected_option: Docker镜像 + Compose基线
+  selected_version: 第一版
+  purpose: 平台开发、集成和正式部署模板
+  mandatory: 强制
+  replaceable: 不强制Kubernetes
+  completion_status: VALID_TECH_SELECTION_COMPLETION
+  selection_status: FROZEN_SELECTION
+  mandatory_effect: MANDATORY_IN_R3
+  evidence_status: FROZEN_TECH_SELECTION_EVIDENCE
+  previous_completion_status: VALID_TECH_SELECTION_COMPLETION
+  effect_class: FROZEN_ONLY
+  frozen_effect: MANDATORY_IN_R3
+- selection_id: SEL-034
+  technology_domain: Runner部署
+  selected_option: Windows服务优先，Linux systemd/受控容器可选
+  selected_version: 按节点能力
+  purpose: 接近被测内网和浏览器
+  mandatory: 强制
+  replaceable: 是
+  completion_status: VALID_TECH_SELECTION_COMPLETION
+  selection_status: FROZEN_SELECTION
+  mandatory_effect: MANDATORY_IN_R3
+  evidence_status: FROZEN_TECH_SELECTION_EVIDENCE
+  previous_completion_status: VALID_TECH_SELECTION_COMPLETION
+  effect_class: FROZEN_ONLY
+  frozen_effect: MANDATORY_IN_R3
+- selection_id: SEL-035
+  technology_domain: 仓库结构
+  selected_option: Monorepo，多应用独立构建与部署
+  selected_version: 第一版
+  purpose: 统一契约、迁移和跨组件变更
+  mandatory: 强制
+  replaceable: 未来可拆分Runner仓库
+  completion_status: VALID_TECH_SELECTION_COMPLETION
+  selection_status: FROZEN_SELECTION
+  mandatory_effect: MANDATORY_IN_R3
+  evidence_status: FROZEN_TECH_SELECTION_EVIDENCE
+  previous_completion_status: VALID_TECH_SELECTION_COMPLETION
+  effect_class: FROZEN_ONLY
+  frozen_effect: MANDATORY_IN_R3
+- selection_id: SEL-036
+  technology_domain: 统一工程命令
+  selected_option: Python tools/dev.py封装所有语言命令
+  selected_version: 第一版
+  purpose: 跨平台开发和CI质量门禁
+  mandatory: 强制
+  replaceable: 内部实现可替换
+  completion_status: VALID_ENGINEERING_COMPLETION
+  selection_status: FROZEN_SELECTION
+  mandatory_effect: MANDATORY_IN_R3
+  evidence_status: FROZEN_TECH_SELECTION_EVIDENCE
+  previous_completion_status: VALID_ENGINEERING_COMPLETION
+  effect_class: FROZEN_ONLY
+  frozen_effect: MANDATORY_IN_R3
+- selection_id: SEL-037
+  technology_domain: CI/CD
+  selected_option: 供应商中立流水线，唯一入口tools/dev.py verify
+  selected_version: 第一版
+  purpose: 格式、Lint、类型、测试、构建和契约门禁
+  mandatory: 强制
+  replaceable: CI供应商可替换
+  completion_status: VALID_ENGINEERING_COMPLETION
+  selection_status: FROZEN_SELECTION
+  mandatory_effect: MANDATORY_IN_R3
+  evidence_status: FROZEN_TECH_SELECTION_EVIDENCE
+  previous_completion_status: VALID_ENGINEERING_COMPLETION
+  effect_class: FROZEN_ONLY
+  frozen_effect: MANDATORY_IN_R3
+- selection_id: SEL-038
+  technology_domain: 密码哈希
+  selected_option: Argon2id
+  selected_version: 参数由安全配置锁定
+  purpose: 平台本地密码保护
+  mandatory: 强制
+  replaceable: 可替换需安全迁移
+  completion_status: VALID_TECH_SELECTION_COMPLETION
+  selection_status: FROZEN_SELECTION
+  mandatory_effect: MANDATORY_IN_R3
+  evidence_status: FROZEN_TECH_SELECTION_EVIDENCE
+  previous_completion_status: VALID_TECH_SELECTION_COMPLETION
+  effect_class: FROZEN_ONLY
+  frozen_effect: MANDATORY_IN_R3
+- selection_id: SEL-039
+  technology_domain: 时间语义
+  selected_option: UTC持久化 + ISO 8601 API
+  selected_version: 固定规则
+  purpose: 跨节点一致时间
+  mandatory: 强制
+  replaceable: 否
+  completion_status: VALID_ENGINEERING_COMPLETION
+  selection_status: FROZEN_SELECTION
+  mandatory_effect: MANDATORY_IN_R3
+  evidence_status: SUPPORTED_BY_MULTIPLE_SOURCES
+  previous_completion_status: VALID_ENGINEERING_COMPLETION
+  effect_class: FROZEN_ONLY
+  frozen_effect: MANDATORY_IN_R3
+rejected_options:
+- rejection_id: REJ-001
+  option: 全量微服务
+  reason: 当前业务强一致性高、团队与Codex复杂度显著增加，第一版无独立伸缩证据。
+- rejection_id: REJ-002
+  option: 单进程大单体
+  reason: 无法满足Runner独立部署、长任务隔离和Worker恢复。
+- rejection_id: REJ-003
+  option: 按菜单拆服务
+  reason: 菜单不是领域边界，会造成数据所有权和事务碎片化。
+- rejection_id: REJ-004
+  option: Java/Spring作为首选后端
+  reason: 可行但与AI/Runner共享语言和当前工程简化目标相比成本更高。
+- rejection_id: REJ-005
+  option: Node/NestJS作为统一后端
+  reason: 可行但AI处理和既有Python自动化生态整合不如Python单语言方案直接。
+- rejection_id: REJ-006
+  option: React作为前端首选
+  reason: 可行但当前选择Vue以降低管理型界面模板和表单实现成本。
+- rejection_id: REJ-007
+  option: PostgreSQL替换MySQL
+  reason: 关系型数据库方向已确认，但具体产品仍需FROZEN SYSTEM_DESIGN裁决；MySQL 8.4 LTS为候选。
+- rejection_id: REJ-008
+  option: Temporal第一版强制部署
+  reason: 输入明确第一版不部署；当前用DB状态机满足持久编排。
+- rejection_id: REJ-009
+  option: LangGraph第一版强制部署
+  reason: 输入明确仅后续可选；平台业务状态不能由图状态拥有。
+- rejection_id: REJ-010
+  option: Langfuse第一版部署
+  reason: 输入明确第一版No-op；先使用OTel并保持业务审计独立。
+- rejection_id: REJ-011
+  option: Redis作为锁和状态权威
+  reason: 增加第二权威和故障模式；MySQL可承接当前锁、租约和CAS。
+- rejection_id: REJ-012
+  option: Kafka/RabbitMQ第一版强制部署
+  reason: 当前吞吐未形成决定性基线，DB Outbox和任务表更简单。
+- rejection_id: REJ-013
+  option: 制品直接存MySQL BLOB
+  reason: 破坏业务库容量、备份和生命周期边界。
+- rejection_id: REJ-014
+  option: Runner主动WebSocket常连接作为唯一控制通道
+  reason: 内网代理和断线恢复复杂；第一版采用出站长轮询。
+- rejection_id: REJ-015
+  option: gRPC作为Runner唯一协议
+  reason: 浏览器/运维可见性和边缘兼容成本高，当前无必要。
+- rejection_id: REJ-016
+  option: Appium/WinAppDriver/UiAutomator2
+  reason: 三类被测终端均为Web，原生自动化不在当前范围。
+- rejection_id: REJ-017
+  option: Kubernetes强制依赖
+  reason: 当前规模和运维证据不足，Docker/Compose与主机服务已满足。
+- rejection_id: REJ-018
+  option: Runner直接访问平台数据库
+  reason: 破坏零信任、权限、协议兼容和状态Owner边界。
+- rejection_id: REJ-019
+  option: AI输出直接写正式用例
+  reason: 违反候选、校验、审核和不可变发布规则。
+- rejection_id: REJ-020
+  option: Grafana替代业务报告或审计
+  reason: 技术遥测不具备业务状态、权限和生命周期语义。
+- rejection_id: REJ-021
+  option: 共享浏览器profile/MCP上下文
+  reason: 会造成数据泄露、状态串扰和证据不可追溯。
+- rejection_id: REJ-022
+  option: 多仓库立即拆分
+  reason: 跨组件契约和原子变更成本较高；先Monorepo独立产物。
+repository_structure:
+  type: MONOREPO
+  runner_independent_artifact: true
+  shared_contracts: packages/contracts
+  effect_class: FROZEN_ONLY
+directory_structure:
+- path: apps/web
+  responsibility: Vue前端应用
+  forbidden: 不得包含权威业务状态机或后端权限决定。
+  effect_class: FROZEN_ONLY
+- path: services/platform_api
+  responsibility: FastAPI入口、应用服务装配、查询和命令API
+  forbidden: 不得直接跨模块写表。
+  effect_class: FROZEN_ONLY
+- path: workers/platform_worker
+  responsibility: 通用任务、Outbox、通知和恢复Worker
+  forbidden: 不得绕过应用服务更新业务状态。
+  effect_class: FROZEN_ONLY
+- path: workers/ai_worker
+  responsibility: AI任务执行、Prompt适配和模型调用
+  forbidden: 不得直接发布正式用例。
+  effect_class: FROZEN_ONLY
+- path: workers/report_artifact_worker
+  responsibility: 报告、制品、保留和清理处理
+  forbidden: 不得修改执行结果。
+  effect_class: FROZEN_ONLY
+- path: agents/runner_agent
+  responsibility: 独立Runner Agent、Playwright执行器和本地补传
+  forbidden: 不得导入平台ORM或直连平台DB。
+  effect_class: FROZEN_ONLY
+- path: modules/identity_access
+  responsibility: 身份、角色、权限和数据范围领域模块
+  forbidden: 只通过公共端口被其他模块调用。
+  effect_class: FROZEN_ONLY
+- path: modules/project_resources
+  responsibility: 项目、环境、终端和配置模块
+  forbidden: 不包含执行引擎。
+  effect_class: FROZEN_ONLY
+- path: modules/test_assets
+  responsibility: 用例、版本、套件和自动化资产模块
+  forbidden: 已发布版本不可原地修改。
+  effect_class: FROZEN_ONLY
+- path: modules/execution
+  responsibility: 任务、attempt、结果、重试和最终化模块
+  forbidden: 唯一执行状态Owner。
+  effect_class: FROZEN_ONLY
+- path: modules/runner_control
+  responsibility: Runner登记、能力、健康和调度模块
+  forbidden: 不包含Runner本地浏览器实现。
+  effect_class: FROZEN_ONLY
+- path: modules/ai_governance
+  responsibility: 模型、Prompt、AI任务、结果和候选模块
+  forbidden: 模型网关通过端口适配。
+  effect_class: FROZEN_ONLY
+- path: modules/reporting_artifacts
+  responsibility: 报告元数据、制品元数据和保留模块
+  forbidden: 文件通过对象存储端口。
+  effect_class: FROZEN_ONLY
+- path: modules/audit_alerting
+  responsibility: 审计、技术告警和通知模块
+  forbidden: Grafana仅作为输入技术源。
+  effect_class: FROZEN_ONLY
+- path: packages/contracts
+  responsibility: OpenAPI、Runner协议、事件、JSON Schema和生成代码
+  forbidden: 契约是跨进程唯一共享边界。
+  effect_class: FROZEN_ONLY
+- path: packages/shared_kernel
+  responsibility: ID、时间、错误、审计上下文等极小共享内核
+  forbidden: 禁止放业务模块特有规则。
+  effect_class: FROZEN_ONLY
+- path: db/migrations
+  responsibility: Flyway迁移、校验、回填和回滚说明
+  forbidden: 禁止手工改库不留迁移。
+  effect_class: FROZEN_ONLY
+- path: tests/unit
+  responsibility: 纯规则与模块单元测试
+  forbidden: 不得依赖外部服务。
+  effect_class: FROZEN_ONLY
+- path: tests/integration
+  responsibility: 数据库、对象存储、Worker和模块集成测试
+  forbidden: 使用隔离环境。
+  effect_class: FROZEN_ONLY
+- path: tests/contracts
+  responsibility: OpenAPI、事件、Runner和Schema契约测试
+  forbidden: 协议变更必须更新。
+  effect_class: FROZEN_ONLY
+- path: tests/e2e
+  responsibility: 平台与Runner端到端验收
+  forbidden: 不得使用真实生产秘密。
+  effect_class: FROZEN_ONLY
+- path: deploy
+  responsibility: Docker、Compose、主机服务和环境模板
+  forbidden: 不得包含明文秘密。
+  effect_class: FROZEN_ONLY
+- path: docs/architecture
+  responsibility: 当前技术架构、ADR和图形源
+  forbidden: 架构变更同步更新。
+  effect_class: FROZEN_ONLY
+- path: tools
+  responsibility: 跨平台开发、生成、校验和发布脚本
+  forbidden: 所有CI命令从此统一入口。
+  effect_class: FROZEN_ONLY
+testing_architecture:
+  levels:
+  - unit
+  - domain
+  - application
+  - api
+  - migration
+  - contract
+  - event
+  - runner protocol
+  - runner integration
+  - AI schema
+  - workflow recovery
+  - authorization
+  - concurrency
+  - artifact lifecycle
+  - E2E
+  - regression
+  minimum_rules:
+  - 所有领域不变量和状态迁移必须有单元测试。
+  - 应用服务必须测试事务、权限、前置条件、幂等和审计。
+  - API必须测试认证、授权、数据范围、错误码、并发版本和幂等。
+  - 每次迁移必须测试空库安装、基线升级、回填和兼容期读写。
+  - OpenAPI、JSON Schema、事件和Runner协议必须有契约测试。
+  - Runner必须有注册、心跳、领取、租约、fencing、失联和版本兼容测试。
+  - Runner集成测试必须使用可控被测Web应用和临时浏览器环境。
+  - AI输出必须有合法、缺字段、类型错误、恶意内容和敏感泄露Schema测试。
+  - 长流程必须测试Worker重启、租约过期、重复消息、取消和恢复重放。
+  - 权限测试必须覆盖菜单、接口、对象、项目范围和历史范围的交集。
+  - 并发测试必须覆盖双领取、双发布、强制释放后旧写入和重复上报。
+  - 制品测试必须覆盖hash不匹配、重复上传、存储故障、补传、Hold和清理。
+  - E2E必须覆盖结构转换、AI探索、人工录制、正式执行、跨端、重试和报告。
+  - Bug修复必须新增回归测试。
+  - 不得通过删除测试、跳过测试或放宽断言隐藏缺陷。
+  - 不得只运行修改文件测试；必须运行受影响模块、契约和必要回归。
+  - 测试等待必须基于状态、事件或Playwright自动等待，不得使用不稳定固定sleep。
+  - 外部模型、通知和对象存储测试必须使用Fake、Mock或隔离测试服务。
+  - 所有测试必须可重复、可并行隔离或明确声明串行资源。
+  effect_class: FROZEN_ONLY
+delivery_architecture:
+  ci_provider: REPLACEABLE
+  canonical_command: python tools/dev.py verify
+  commands:
+  - category: 依赖安装
+    command: python tools/dev.py bootstrap
+  - category: 格式化
+    command: python tools/dev.py format
+  - category: Lint
+    command: python tools/dev.py lint
+  - category: 类型检查
+    command: python tools/dev.py typecheck
+  - category: 单元测试
+    command: python tools/dev.py test-unit
+  - category: 契约测试
+    command: python tools/dev.py test-contract
+  - category: 集成测试
+    command: python tools/dev.py test-integration
+  - category: 迁移验证
+    command: python tools/dev.py verify-migrations
+  - category: 构建
+    command: python tools/dev.py build
+  - category: 全量验证
+    command: python tools/dev.py verify
+  effect_class: FROZEN_ONLY
+architecture_decisions:
+- adr_id: TADR-001
+  title: 架构风格
+  decision: 候选建议：选择模块化单体控制面、独立Worker和独立Runner Agent。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+- adr_id: TADR-002
+  title: 业务状态权威
+  decision: 候选建议：MySQL业务库是唯一权威，所有外部状态必须经平台映射。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+- adr_id: TADR-003
+  title: 仓库组织
+  decision: 候选建议：使用Monorepo并保持每个部署单元独立构建。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+- adr_id: TADR-004
+  title: 前端技术
+  decision: 候选建议：Vue 3 + TypeScript + Vite + Element Plus。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+- adr_id: TADR-005
+  title: 后端技术
+  decision: 候选建议：Python 3.12 + FastAPI + SQLAlchemy 2 + Pydantic v2。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+- adr_id: TADR-006
+  title: 数据库与迁移
+  decision: 候选建议：MySQL 8.4 LTS和Flyway。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+- adr_id: TADR-007
+  title: Runner工程
+  decision: 候选建议：Runner Agent为独立部署产物，使用Python和Playwright。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+- adr_id: TADR-008
+  title: 浏览器技术
+  decision: 候选建议：管理端、客户端、PDA端统一使用Playwright Web。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+- adr_id: TADR-009
+  title: 长流程
+  decision: 候选建议：第一版使用MySQL持久状态机、任务表和Worker，不部署Temporal。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+- adr_id: TADR-010
+  title: 内部事件
+  decision: 候选建议：使用Transactional Outbox和幂等消费者，不部署独立MQ。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+- adr_id: TADR-011
+  title: 缓存
+  decision: 候选建议：第一版不部署强制Redis，权威数据不得进入仅缓存存储。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+- adr_id: TADR-012
+  title: 对象存储
+  decision: 候选建议：制品文件进入S3兼容对象存储，元数据留在MySQL。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+- adr_id: TADR-013
+  title: Runner通信
+  decision: 候选建议：使用Runner主动出站HTTPS长轮询和REST确认/上报。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+- adr_id: TADR-014
+  title: 前端实时进度
+  decision: 候选建议：使用SSE，失败时回退状态轮询。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+- adr_id: TADR-015
+  title: AI编排
+  decision: 候选建议：第一版使用平台轻量AIOrchestrator，不部署LangGraph。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+- adr_id: TADR-016
+  title: 模型网关
+  decision: 候选建议：LiteLLM Proxy作为默认可替换实现，业务路由仍由平台拥有。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+- adr_id: TADR-017
+  title: AI可观测
+  decision: 候选建议：第一版使用脱敏OTel，Langfuse为No-op后续项。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+- adr_id: TADR-018
+  title: 系统可观测
+  decision: 候选建议：采用OTel Collector、Prometheus、Loki、Tempo和Grafana。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+- adr_id: TADR-019
+  title: 锁与租约
+  decision: 候选建议：使用MySQL原子事务、唯一约束、CAS和fencing token。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+- adr_id: TADR-020
+  title: API契约
+  decision: 候选建议：REST/JSON与OpenAPI 3.1，数据库实体不得直接暴露。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+- adr_id: TADR-021
+  title: 制品上传
+  decision: 候选建议：上传会话、幂等键、哈希校验和预签名直传/代理回退。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+- adr_id: TADR-022
+  title: 部署
+  decision: 候选建议：平台使用Docker镜像；不强制Kubernetes；Runner支持原生服务。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+- adr_id: TADR-023
+  title: CI质量门禁
+  decision: 候选建议：通过跨平台tools/dev.py命令统一，CI供应商可替换。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+- adr_id: TADR-024
+  title: 版本与兼容
+  decision: 候选建议：API、Runner协议、事件和Schema均显式版本化并保持兼容窗口。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+- adr_id: TADR-025
+  title: 安全边界
+  decision: 候选建议：Runner按零信任边缘节点处理，秘密只通过短期引用/注入流转。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+risks:
+- risk_id: RISK-001
+  risk: 历史12项外部产品/安全决策已关闭
+  mitigation: 保持最小权限和可配置接口，禁止提前编码为固定业务规则。
+- risk_id: RISK-002
+  risk: MySQL任务表在未来高吞吐下可能成为瓶颈
+  mitigation: 统一Outbox接口和任务端口，达到容量阈值后评估MQ/Temporal。
+- risk_id: RISK-003
+  risk: Runner边缘网络和本地制品可能丢失
+  mitigation: 租约/fencing、补传、hash、本地唯一副本保护和清理审计。
+- risk_id: RISK-004
+  risk: AI供应商非确定性和敏感数据风险
+  mitigation: 网关、Schema、业务校验、脱敏、人工确认和确定性测试。
+- risk_id: RISK-005
+  risk: Monorepo边界被直接导入破坏
+  mitigation: 依赖规则、静态检查、契约包和架构测试。
+evolution_plan:
+- phase: V1
+  items:
+  - 模块化单体控制面
+  - DB状态机/Outbox
+  - 独立Runner
+  - LiteLLM
+  - OTel/Grafana栈
+- phase: V1.x
+  items:
+  - 基于容量数据优化Worker和数据库
+  - 完善对象存储灾备
+  - 可选拆分报告/AI Worker
+- phase: Future
+  items:
+  - 有明确阈值和ADR后评估Temporal、LangGraph、Langfuse、Redis或消息总线
+conflicts: []
+decisions:
+- decision_id: TADR-001
+  title: 架构风格
+  decision: 候选建议：选择模块化单体控制面、独立Worker和独立Runner Agent。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+- decision_id: TADR-002
+  title: 业务状态权威
+  decision: 候选建议：MySQL业务库是唯一权威，所有外部状态必须经平台映射。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+- decision_id: TADR-003
+  title: 仓库组织
+  decision: 候选建议：使用Monorepo并保持每个部署单元独立构建。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+- decision_id: TADR-004
+  title: 前端技术
+  decision: 候选建议：Vue 3 + TypeScript + Vite + Element Plus。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+- decision_id: TADR-005
+  title: 后端技术
+  decision: 候选建议：Python 3.12 + FastAPI + SQLAlchemy 2 + Pydantic v2。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+- decision_id: TADR-006
+  title: 数据库与迁移
+  decision: 候选建议：MySQL 8.4 LTS和Flyway。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+- decision_id: TADR-007
+  title: Runner工程
+  decision: 候选建议：Runner Agent为独立部署产物，使用Python和Playwright。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+- decision_id: TADR-008
+  title: 浏览器技术
+  decision: 候选建议：管理端、客户端、PDA端统一使用Playwright Web。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+- decision_id: TADR-009
+  title: 长流程
+  decision: 候选建议：第一版使用MySQL持久状态机、任务表和Worker，不部署Temporal。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+- decision_id: TADR-010
+  title: 内部事件
+  decision: 候选建议：使用Transactional Outbox和幂等消费者，不部署独立MQ。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+- decision_id: TADR-011
+  title: 缓存
+  decision: 候选建议：第一版不部署强制Redis，权威数据不得进入仅缓存存储。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+- decision_id: TADR-012
+  title: 对象存储
+  decision: 候选建议：制品文件进入S3兼容对象存储，元数据留在MySQL。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+- decision_id: TADR-013
+  title: Runner通信
+  decision: 候选建议：使用Runner主动出站HTTPS长轮询和REST确认/上报。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+- decision_id: TADR-014
+  title: 前端实时进度
+  decision: 候选建议：使用SSE，失败时回退状态轮询。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+- decision_id: TADR-015
+  title: AI编排
+  decision: 候选建议：第一版使用平台轻量AIOrchestrator，不部署LangGraph。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+- decision_id: TADR-016
+  title: 模型网关
+  decision: 候选建议：LiteLLM Proxy作为默认可替换实现，业务路由仍由平台拥有。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+- decision_id: TADR-017
+  title: AI可观测
+  decision: 候选建议：第一版使用脱敏OTel，Langfuse为No-op后续项。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+- decision_id: TADR-018
+  title: 系统可观测
+  decision: 候选建议：采用OTel Collector、Prometheus、Loki、Tempo和Grafana。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+- decision_id: TADR-019
+  title: 锁与租约
+  decision: 候选建议：使用MySQL原子事务、唯一约束、CAS和fencing token。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+- decision_id: TADR-020
+  title: API契约
+  decision: 候选建议：REST/JSON与OpenAPI 3.1，数据库实体不得直接暴露。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+- decision_id: TADR-021
+  title: 制品上传
+  decision: 候选建议：上传会话、幂等键、哈希校验和预签名直传/代理回退。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+- decision_id: TADR-022
+  title: 部署
+  decision: 候选建议：平台使用Docker镜像；不强制Kubernetes；Runner支持原生服务。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+- decision_id: TADR-023
+  title: CI质量门禁
+  decision: 候选建议：通过跨平台tools/dev.py命令统一，CI供应商可替换。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+- decision_id: TADR-024
+  title: 版本与兼容
+  decision: 候选建议：API、Runner协议、事件和Schema均显式版本化并保持兼容窗口。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+- decision_id: TADR-025
+  title: 安全边界
+  decision: 候选建议：Runner按零信任边缘节点处理，秘密只通过短期引用/注入流转。
+  status: ACCEPTED_IN_R3
+  current_effect: NORMATIVE_IN_R3
+  effect_class: FROZEN_ONLY
+open_questions:
+- open_decision_id: PEND-R3-001
+  decision_type: PRODUCT_CAPACITY_DECISION
+  blocker_class: CODEX_BLOCKER
+  owner: PRODUCT_AND_ARCHITECTURE
+  question: 容量等级、并发用户和吞吐验收基线
+  status: INCORPORATED
+  safe_behavior_before_decision: 决策已关闭，按对应ADR及PDBR-2026.08.06-R4.1冻结契约实施。
+  blocks_full_code_ready: false
+  effective_release_id: PDBR-2026.08.06-R2
+- open_decision_id: PEND-R3-002
+  decision_type: ARCHITECTURE_DECISION
+  blocker_class: CODEX_BLOCKER
+  owner: ARCHITECTURE_AND_OPERATIONS
+  question: 对象存储实现、冗余、RPO/RTO与灾备责任
+  status: INCORPORATED
+  safe_behavior_before_decision: 决策已关闭，按对应ADR及PDBR-2026.08.06-R4.1冻结契约实施。
+  blocks_full_code_ready: false
+  effective_release_id: PDBR-2026.08.06-R2
+- open_decision_id: PEND-R3-003
+  decision_type: PRODUCT_SCOPE_DECISION
+  blocker_class: NON_BLOCKING_BACKLOG
+  owner: PRODUCT
+  question: CI/CD结果是否进入平台UI
+  status: INCORPORATED
+  safe_behavior_before_decision: 决策已关闭，按对应ADR及PDBR-2026.08.06-R4.1冻结契约实施。
+  blocks_full_code_ready: false
+  effective_release_id: PDBR-2026.08.06-R2
+- open_decision_id: PEND-R3-004
+  decision_type: PRODUCT_CONFIGURATION_DECISION
+  blocker_class: NON_BLOCKING_BACKLOG
+  owner: PRODUCT_AND_AI_GOVERNANCE
+  question: 模型供应商白名单与默认模型
+  status: INCORPORATED
+  safe_behavior_before_decision: 决策已关闭，按对应ADR及PDBR-2026.08.06-R4.1冻结契约实施。
+  blocks_full_code_ready: false
+  effective_release_id: PDBR-2026.08.06-R2
+- open_decision_id: PEND-R3-005
+  decision_type: SECURITY_DECISION
+  blocker_class: CODEX_BLOCKER
+  owner: SECURITY_ARCHITECTURE
+  question: 加密传输协议版本下限
+  status: INCORPORATED
+  safe_behavior_before_decision: 决策已关闭，按对应ADR及PDBR-2026.08.06-R4.1冻结契约实施。
+  blocks_full_code_ready: false
+  effective_release_id: PDBR-2026.08.06-R2
+- open_decision_id: PEND-R3-006
+  decision_type: PERMISSION_TEMPLATE_DECISION
+  blocker_class: CODEX_BLOCKER
+  owner: PRODUCT_AND_SECURITY
+  question: 11个预置系统角色默认权限模板
+  status: INCORPORATED
+  safe_behavior_before_decision: 决策已关闭，按对应ADR及PDBR-2026.08.06-R4.1冻结契约实施。
+  blocks_full_code_ready: false
+  effective_release_id: PDBR-2026.08.06-R2
+- open_decision_id: PEND-R3-007
+  decision_type: PERSONA_ASSIGNMENT_DECISION
+  blocker_class: NON_BLOCKING_BACKLOG
+  owner: PRODUCT
+  question: 平台运维人员画像默认角色组合
+  status: INCORPORATED
+  safe_behavior_before_decision: 决策已关闭，按对应ADR及PDBR-2026.08.06-R4.1冻结契约实施。
+  blocks_full_code_ready: false
+  effective_release_id: PDBR-2026.08.06-R2
+- open_decision_id: PEND-R3-008
+  decision_type: REVIEW_POLICY_DECISION
+  blocker_class: CODEX_BLOCKER
+  owner: PRODUCT_AND_SECURITY
+  question: 用例与资产版本审核是否双人复核
+  status: INCORPORATED
+  safe_behavior_before_decision: 决策已关闭，按对应ADR及PDBR-2026.08.06-R4.1冻结契约实施。
+  blocks_full_code_ready: false
+  effective_release_id: PDBR-2026.08.06-R2
+- open_decision_id: PEND-R3-009
+  decision_type: PERMISSION_TEMPLATE_DECISION
+  blocker_class: CODEX_BLOCKER
+  owner: PRODUCT_AND_SECURITY
+  question: 报告查看角色默认下载/分享权限
+  status: INCORPORATED
+  safe_behavior_before_decision: 决策已关闭，按对应ADR及PDBR-2026.08.06-R4.1冻结契约实施。
+  blocks_full_code_ready: false
+  effective_release_id: PDBR-2026.08.06-R2
+- open_decision_id: PEND-R3-010
+  decision_type: SECURITY_RUNTIME_DECISION
+  blocker_class: CODEX_BLOCKER
+  owner: SECURITY_AND_ARCHITECTURE
+  question: 人工录制中途撤权生效策略
+  status: INCORPORATED
+  safe_behavior_before_decision: 决策已关闭，按对应ADR及PDBR-2026.08.06-R4.1冻结契约实施。
+  blocks_full_code_ready: false
+  effective_release_id: PDBR-2026.08.06-R2
+- open_decision_id: PEND-R3-011
+  decision_type: PRODUCT_NAVIGATION_DECISION
+  blocker_class: NON_BLOCKING_BACKLOG
+  owner: PRODUCT
+  question: 任务/报告/制品/AI恢复统一入口
+  status: INCORPORATED
+  safe_behavior_before_decision: 决策已关闭，按对应ADR及PDBR-2026.08.06-R4.1冻结契约实施。
+  blocks_full_code_ready: false
+  effective_release_id: PDBR-2026.08.06-R2
+- open_decision_id: PEND-R3-012
+  decision_type: PACKAGE_EVIDENCE
+  blocker_class: DOMAIN_APPROVAL_BLOCKER
+  owner: DOCUMENT_GOVERNANCE
+  question: TERM-TOL-011当前包正式采用范围与来源证据
+  status: INCORPORATED_REMOVED_AS_RESIDUE
+  safe_behavior_before_decision: 决策已关闭，按对应ADR及PDBR-2026.08.06-R4.1冻结契约实施。
+  blocks_full_code_ready: false
+  effective_release_id: PDBR-2026.08.06-R2
+traceability_index:
+- architecture_item: Web终端统一Playwright
+  source_fact_ids:
+  - ADR-006
+  - PRD-CON-001
+- architecture_item: Runner分层和项目独占
+  source_fact_ids:
+  - ADR-007
+  - PRD-CAP-027
+  - PRD-CAP-028
+- architecture_item: 执行attempt与重试分层
+  source_fact_ids:
+  - ADR-008
+  - PRD-CAP-023
+- architecture_item: 正式身份互斥和录制例外
+  source_fact_ids:
+  - ADR-009
+  - PRD-CON-006
+  - PRD-CON-009
+- architecture_item: 跨端顺序与变量
+  source_fact_ids:
+  - ADR-010
+  - PRD-CAP-025
+  - PRD-CAP-026
+- architecture_item: 平台状态权威
+  source_fact_ids:
+  - ADR-011
+  - PRD-BND-001
+- architecture_item: 报告制品保留
+  source_fact_ids:
+  - ADR-013
+  - PRD-CAP-036
+- architecture_item: 不可变版本
+  source_fact_ids:
+  - ADR-014
+  - PRD-CON-014
+- architecture_item: UI监听取数
+  source_fact_ids:
+  - ADR-015
+  - PRD-CON-002
+cross_document_consistency:
+- item: 架构风格
+  architecture_document: 平台后端模块化单体 + 独立异步Worker + 独立Runner Agent的混合架构
+  agents_md: AGENTS Architecture Summary
+  consistent: true
+  effect_class: FROZEN_ONLY
+  consistency_status: FROZEN_CONSISTENT
+- item: 平台与Runner边界
+  architecture_document: 控制面/执行面分离
+  agents_md: Runner Rules
+  consistent: true
+  effect_class: IMMEDIATE_INVARIANT
+  consistency_status: IMMEDIATE_INVARIANT_CONSISTENT
+- item: Runner项目拆分
+  architecture_document: Monorepo独立部署产物
+  agents_md: Repository Layout/Runner Rules
+  consistent: true
+  effect_class: FROZEN_ONLY
+  consistency_status: FROZEN_CONSISTENT
+- item: 前端技术栈
+  architecture_document: Vue 3+TypeScript+Vite
+  agents_md: Validation Commands/Repository Layout
+  consistent: true
+  effect_class: FROZEN_ONLY
+  consistency_status: FROZEN_CONSISTENT
+- item: 后端技术栈
+  architecture_document: Python 3.12+FastAPI
+  agents_md: Coding Standards
+  consistent: true
+  effect_class: FROZEN_ONLY
+  consistency_status: FROZEN_CONSISTENT
+- item: Runner技术栈
+  architecture_document: Python+Playwright
+  agents_md: Runner Rules
+  consistent: true
+  effect_class: FROZEN_ONLY
+  consistency_status: FROZEN_CONSISTENT
+- item: 数据库
+  architecture_document: MySQL 8.4 LTS+Flyway
+  agents_md: Database Rules
+  consistent: true
+  effect_class: FROZEN_ONLY
+  consistency_status: FROZEN_CONSISTENT
+- item: 工作流
+  architecture_document: DB状态机+Worker
+  agents_md: Concurrency/State Rules
+  consistent: true
+  effect_class: FROZEN_ONLY
+  consistency_status: FROZEN_CONSISTENT
+- item: AI编排
+  architecture_document: 平台轻量实现
+  agents_md: AI Rules
+  consistent: true
+  effect_class: FROZEN_ONLY
+  consistency_status: FROZEN_CONSISTENT
+- item: 模型网关
+  architecture_document: LiteLLM可替换
+  agents_md: AI Rules
+  consistent: true
+  effect_class: FROZEN_ONLY
+  consistency_status: FROZEN_CONSISTENT
+- item: 对象存储
+  architecture_document: S3兼容
+  agents_md: Report and Artifact Rules
+  consistent: true
+  effect_class: FROZEN_ONLY
+  consistency_status: FROZEN_CONSISTENT
+- item: API
+  architecture_document: REST/OpenAPI 3.1
+  agents_md: API and Event Rules
+  consistent: true
+  effect_class: FROZEN_ONLY
+  consistency_status: FROZEN_CONSISTENT
+- item: 事件
+  architecture_document: Outbox+版本化事件
+  agents_md: API and Event Rules
+  consistent: true
+  effect_class: FROZEN_ONLY
+  consistency_status: FROZEN_CONSISTENT
+- item: 权限
+  architecture_document: 服务端RBAC+数据范围
+  agents_md: Authorization Rules
+  consistent: true
+  effect_class: FROZEN_ONLY
+  consistency_status: FROZEN_CONSISTENT
+- item: 锁租约
+  architecture_document: MySQL+fencing
+  agents_md: Concurrency Rules
+  consistent: true
+  effect_class: FROZEN_ONLY
+  consistency_status: FROZEN_CONSISTENT
+- item: 制品
+  architecture_document: 元数据/文件分离
+  agents_md: Artifact Rules
+  consistent: true
+  effect_class: FROZEN_ONLY
+  consistency_status: FROZEN_CONSISTENT
+- item: 可观测
+  architecture_document: OTel+Grafana栈
+  agents_md: Security/Logging Rules
+  consistent: true
+  effect_class: FROZEN_ONLY
+  consistency_status: FROZEN_CONSISTENT
+- item: 仓库结构
+  architecture_document: Monorepo
+  agents_md: Repository Layout
+  consistent: true
+  effect_class: FROZEN_ONLY
+  consistency_status: FROZEN_CONSISTENT
+- item: 测试
+  architecture_document: 分层测试+契约/并发/恢复
+  agents_md: Testing Requirements
+  consistent: true
+  effect_class: FROZEN_ONLY
+  consistency_status: FROZEN_CONSISTENT
+- item: CI/CD
+  architecture_document: provider-neutral tools/dev.py
+  agents_md: Validation Commands
+  consistent: true
+  effect_class: FROZEN_ONLY
+  consistency_status: FROZEN_CONSISTENT
+- item: 文档同步
+  architecture_document: 契约与架构同步
+  agents_md: Documentation Synchronization
+  consistent: true
+  effect_class: FROZEN_ONLY
+  consistency_status: FROZEN_CONSISTENT
+- item: 完成定义
+  architecture_document: 验证通过且风险透明
+  agents_md: Definition of Done
+  consistent: true
+  effect_class: FROZEN_ONLY
+  consistency_status: FROZEN_CONSISTENT
+independence_validation:
+  checks_performed:
+  - input_archive_name_absent
+  - local_runtime_path_absent
+  - source_dependency_field_absent
+  - external_jump_phrase_absent
+  - invalid_link_absent
+  violations: {}
+  passed: true
+  answers_without_input: 16
+coding_readiness:
+  status: READY_WITH_RUNTIME_DB_VALIDATION_PENDING
+  core_scaffold_blocked: false
+  pending_user_decisions: 0
+  database_module_formal_merge_blocked: true
+  implementation_release_evaluation_pending: true
+  allowed_scaffolds:
+  - MONOREPO
+  - FRONTEND
+  - API
+  - WORKER
+  - RUNNER
+  - TESTS
+  - CI
+  reason: PDBR-2026.08.06-R4.1完成编码准入治理清理；MySQL 8.4门禁仅阻断数据库模块正式合并。
+format_governance:
+  logical_document: 系统技术架构和技术栈、技术选型
+  canonical_format: YAML
+  format_roles:
+    YAML: MACHINE_CANONICAL
+    Markdown: HUMAN_NORMATIVE_PROJECTION
+    DOCX: HUMAN_READING_PROJECTION
+    XLSX: TABULAR_PROJECTION
+    Mermaid: DIAGRAM_SOURCE
+    SVG: DIAGRAM_DISPLAY_PROJECTION
+  projection_scope: 人工版完整承载责任范围内的规范语义；机器版承载全量原子记录。机器版中的明细ID可以不逐条复制到人工表格，但不得缺失定义、聚合规则、例外、阻断语义和可追溯索引。
+  generator: consistency-repair-generator
+  generator_version: 1.1.0
+  upstream_release_id: BSL-CONSISTENCY-REPAIR-1.0.0
+  upstream_hash: null
+  output_hash: null
+  id_coverage_report: 基础文档发布清单.yaml
+  version: 1.2.0
+  release_id: BSL-CONSISTENCY-REPAIR-1.0.0
+technology_acceptance_mapping:
+- selection_id: SEL-001
+  acceptance_id: TAC-SEL-001
+  current_status: APPROVED_FOR_IMPLEMENTATION
+  effect_class: FROZEN_ONLY
+  current_applicability: BLOCKED_UNTIL_FROZEN_SYSTEM_DESIGN
+- selection_id: SEL-002
+  acceptance_id: TAC-SEL-002
+  current_status: APPROVED_FOR_IMPLEMENTATION
+  effect_class: FROZEN_ONLY
+  current_applicability: BLOCKED_UNTIL_FROZEN_SYSTEM_DESIGN
+- selection_id: SEL-003
+  acceptance_id: TAC-SEL-003
+  current_status: APPROVED_FOR_IMPLEMENTATION
+  effect_class: FROZEN_ONLY
+  current_applicability: BLOCKED_UNTIL_FROZEN_SYSTEM_DESIGN
+- selection_id: SEL-004
+  acceptance_id: TAC-SEL-004
+  current_status: APPROVED_FOR_IMPLEMENTATION
+  effect_class: FROZEN_ONLY
+  current_applicability: BLOCKED_UNTIL_FROZEN_SYSTEM_DESIGN
+- selection_id: SEL-005
+  acceptance_id: TAC-SEL-005
+  current_status: APPROVED_FOR_IMPLEMENTATION
+  effect_class: FROZEN_ONLY
+  current_applicability: BLOCKED_UNTIL_FROZEN_SYSTEM_DESIGN
+- selection_id: SEL-006
+  acceptance_id: TAC-SEL-006
+  current_status: APPROVED_FOR_IMPLEMENTATION
+  effect_class: FROZEN_ONLY
+  current_applicability: BLOCKED_UNTIL_FROZEN_SYSTEM_DESIGN
+- selection_id: SEL-007
+  acceptance_id: TAC-SEL-007
+  current_status: APPROVED_FOR_IMPLEMENTATION
+  effect_class: FROZEN_ONLY
+  current_applicability: BLOCKED_UNTIL_FROZEN_SYSTEM_DESIGN
+- selection_id: SEL-008
+  acceptance_id: TAC-SEL-008
+  current_status: APPROVED_FOR_IMPLEMENTATION
+  effect_class: FROZEN_ONLY
+  current_applicability: BLOCKED_UNTIL_FROZEN_SYSTEM_DESIGN
+- selection_id: SEL-009
+  acceptance_id: TAC-SEL-009
+  current_status: APPROVED_FOR_IMPLEMENTATION
+  effect_class: FROZEN_ONLY
+  current_applicability: BLOCKED_UNTIL_FROZEN_SYSTEM_DESIGN
+- selection_id: SEL-010
+  acceptance_id: TAC-SEL-010
+  current_status: APPROVED_FOR_IMPLEMENTATION
+  effect_class: FROZEN_ONLY
+  current_applicability: BLOCKED_UNTIL_FROZEN_SYSTEM_DESIGN
+- selection_id: SEL-011
+  acceptance_id: TAC-SEL-011
+  current_status: APPROVED_FOR_IMPLEMENTATION
+  effect_class: FROZEN_ONLY
+  current_applicability: BLOCKED_UNTIL_FROZEN_SYSTEM_DESIGN
+- selection_id: SEL-012
+  acceptance_id: TAC-SEL-012
+  current_status: APPROVED_FOR_IMPLEMENTATION
+  effect_class: FROZEN_ONLY
+  current_applicability: BLOCKED_UNTIL_FROZEN_SYSTEM_DESIGN
+- selection_id: SEL-013
+  acceptance_id: TAC-SEL-013
+  current_status: APPROVED_FOR_IMPLEMENTATION
+  effect_class: FROZEN_ONLY
+  current_applicability: BLOCKED_UNTIL_FROZEN_SYSTEM_DESIGN
+- selection_id: SEL-014
+  acceptance_id: TAC-SEL-014
+  current_status: APPROVED_FOR_IMPLEMENTATION
+  effect_class: FROZEN_ONLY
+  current_applicability: BLOCKED_UNTIL_FROZEN_SYSTEM_DESIGN
+- selection_id: SEL-015
+  acceptance_id: TAC-SEL-015
+  current_status: APPROVED_FOR_IMPLEMENTATION
+  effect_class: FROZEN_ONLY
+  current_applicability: BLOCKED_UNTIL_FROZEN_SYSTEM_DESIGN
+- selection_id: SEL-016
+  acceptance_id: TAC-SEL-016
+  current_status: APPROVED_FOR_IMPLEMENTATION
+  effect_class: FROZEN_ONLY
+  current_applicability: BLOCKED_UNTIL_FROZEN_SYSTEM_DESIGN
+- selection_id: SEL-017
+  acceptance_id: TAC-SEL-017
+  current_status: APPROVED_FOR_IMPLEMENTATION
+  effect_class: FROZEN_ONLY
+  current_applicability: BLOCKED_UNTIL_FROZEN_SYSTEM_DESIGN
+- selection_id: SEL-018
+  acceptance_id: TAC-SEL-018
+  current_status: APPROVED_FOR_IMPLEMENTATION
+  effect_class: FROZEN_ONLY
+  current_applicability: BLOCKED_UNTIL_FROZEN_SYSTEM_DESIGN
+- selection_id: SEL-019
+  acceptance_id: TAC-SEL-019
+  current_status: APPROVED_FOR_IMPLEMENTATION
+  effect_class: FROZEN_ONLY
+  current_applicability: BLOCKED_UNTIL_FROZEN_SYSTEM_DESIGN
+- selection_id: SEL-020
+  acceptance_id: TAC-SEL-020
+  current_status: APPROVED_FOR_IMPLEMENTATION
+  effect_class: IMMEDIATE_INVARIANT
+  current_applicability: APPLICABLE_NOW
+- selection_id: SEL-021
+  acceptance_id: TAC-SEL-021
+  current_status: APPROVED_FOR_IMPLEMENTATION
+  effect_class: FROZEN_ONLY
+  current_applicability: BLOCKED_UNTIL_FROZEN_SYSTEM_DESIGN
+- selection_id: SEL-022
+  acceptance_id: TAC-SEL-022
+  current_status: APPROVED_FOR_IMPLEMENTATION
+  effect_class: FROZEN_ONLY
+  current_applicability: BLOCKED_UNTIL_FROZEN_SYSTEM_DESIGN
+- selection_id: SEL-023
+  acceptance_id: TAC-SEL-023
+  current_status: APPROVED_FOR_IMPLEMENTATION
+  effect_class: FROZEN_ONLY
+  current_applicability: BLOCKED_UNTIL_FROZEN_SYSTEM_DESIGN
+- selection_id: SEL-024
+  acceptance_id: TAC-SEL-024
+  current_status: APPROVED_FOR_IMPLEMENTATION
+  effect_class: FROZEN_ONLY
+  current_applicability: BLOCKED_UNTIL_FROZEN_SYSTEM_DESIGN
+- selection_id: SEL-025
+  acceptance_id: TAC-SEL-025
+  current_status: APPROVED_FOR_IMPLEMENTATION
+  effect_class: FROZEN_ONLY
+  current_applicability: BLOCKED_UNTIL_FROZEN_SYSTEM_DESIGN
+- selection_id: SEL-026
+  acceptance_id: TAC-SEL-026
+  current_status: APPROVED_FOR_IMPLEMENTATION
+  effect_class: FROZEN_ONLY
+  current_applicability: BLOCKED_UNTIL_FROZEN_SYSTEM_DESIGN
+- selection_id: SEL-027
+  acceptance_id: TAC-SEL-027
+  current_status: APPROVED_FOR_IMPLEMENTATION
+  effect_class: FROZEN_ONLY
+  current_applicability: BLOCKED_UNTIL_FROZEN_SYSTEM_DESIGN
+- selection_id: SEL-028
+  acceptance_id: TAC-SEL-028
+  current_status: APPROVED_FOR_IMPLEMENTATION
+  effect_class: FROZEN_ONLY
+  current_applicability: BLOCKED_UNTIL_FROZEN_SYSTEM_DESIGN
+- selection_id: SEL-029
+  acceptance_id: TAC-SEL-029
+  current_status: APPROVED_FOR_IMPLEMENTATION
+  effect_class: FROZEN_ONLY
+  current_applicability: BLOCKED_UNTIL_FROZEN_SYSTEM_DESIGN
+- selection_id: SEL-030
+  acceptance_id: TAC-SEL-030
+  current_status: APPROVED_FOR_IMPLEMENTATION
+  effect_class: FROZEN_ONLY
+  current_applicability: BLOCKED_UNTIL_FROZEN_SYSTEM_DESIGN
+- selection_id: SEL-031
+  acceptance_id: TAC-SEL-031
+  current_status: APPROVED_FOR_IMPLEMENTATION
+  effect_class: FROZEN_ONLY
+  current_applicability: BLOCKED_UNTIL_FROZEN_SYSTEM_DESIGN
+- selection_id: SEL-032
+  acceptance_id: TAC-SEL-032
+  current_status: APPROVED_FOR_IMPLEMENTATION
+  effect_class: FROZEN_ONLY
+  current_applicability: BLOCKED_UNTIL_FROZEN_SYSTEM_DESIGN
+- selection_id: SEL-033
+  acceptance_id: TAC-SEL-033
+  current_status: APPROVED_FOR_IMPLEMENTATION
+  effect_class: FROZEN_ONLY
+  current_applicability: BLOCKED_UNTIL_FROZEN_SYSTEM_DESIGN
+- selection_id: SEL-034
+  acceptance_id: TAC-SEL-034
+  current_status: APPROVED_FOR_IMPLEMENTATION
+  effect_class: FROZEN_ONLY
+  current_applicability: BLOCKED_UNTIL_FROZEN_SYSTEM_DESIGN
+- selection_id: SEL-035
+  acceptance_id: TAC-SEL-035
+  current_status: APPROVED_FOR_IMPLEMENTATION
+  effect_class: FROZEN_ONLY
+  current_applicability: BLOCKED_UNTIL_FROZEN_SYSTEM_DESIGN
+- selection_id: SEL-036
+  acceptance_id: TAC-SEL-036
+  current_status: APPROVED_FOR_IMPLEMENTATION
+  effect_class: FROZEN_ONLY
+  current_applicability: BLOCKED_UNTIL_FROZEN_SYSTEM_DESIGN
+- selection_id: SEL-037
+  acceptance_id: TAC-SEL-037
+  current_status: APPROVED_FOR_IMPLEMENTATION
+  effect_class: FROZEN_ONLY
+  current_applicability: BLOCKED_UNTIL_FROZEN_SYSTEM_DESIGN
+- selection_id: SEL-038
+  acceptance_id: TAC-SEL-038
+  current_status: APPROVED_FOR_IMPLEMENTATION
+  effect_class: FROZEN_ONLY
+  current_applicability: BLOCKED_UNTIL_FROZEN_SYSTEM_DESIGN
+- selection_id: SEL-039
+  acceptance_id: TAC-SEL-039
+  current_status: APPROVED_FOR_IMPLEMENTATION
+  effect_class: FROZEN_ONLY
+  current_applicability: BLOCKED_UNTIL_FROZEN_SYSTEM_DESIGN
+effect_classification:
+  IMMEDIATE_INVARIANT: 直接来自产品/业务基线的当前约束，例如Playwright Web、平台状态权威、Runner Agent独立部署、AI候选不得直接成为正式事实。
+  CANDIDATE: 设计建议，无FROZEN SYSTEM_DESIGN时不得用于工程初始化、目录创建、进程拆分、数据库产品、队列、Outbox或Adapter集合。
+  FROZEN_ONLY: 仅在被FROZEN SYSTEM_DESIGN/DDL/契约吸收并通过验收后，才升级为MUST实现约束。
+open_decision_projection_fields:
+- open_decision_id
+- decision_type
+- blocker_class
+- owner
+- question
+- status
+- safe_behavior_before_decision
+statistics:
+  source_file_count: 725
+  source_file_count_scope: PACKAGE_FILES_INCLUDING_ROOT_MANIFEST
+historical_provenance:
+  r3_freeze_authority:
+    release_id: PDBR-2026.08.06-R3
+    system_design_authority: 编码冻结基线/SYSTEM_DESIGN.yaml
+    consistency_rule: 同一技术选择只能具有一个当前状态；R3正式成员中禁止通过末尾覆盖前文。
+    authority: NON_CURRENT_PROVENANCE
+p1_authentication_architecture:
+  contract_id: P1-AUTH-ARCH-001
+  status: FROZEN_IMPLEMENTABLE
+  auth_service: FastAPI应用层服务；协调Credential Repository、Session Repository、Token Service、审计与RBAC Authorization Service。
+  token_service: RS256签发和验证，密钥仅由部署秘密文件注入，Access Token有效15分钟且不携带权限。
+  credential_repository: MySQL atp_platform_user_credential；Argon2id验证、版本、强制改密和失败临时锁的唯一物理Owner。
+  session_repository: MySQL atp_auth_refresh_session；Refresh Token只存SHA-256，7天绝对到期、每次轮换、可撤销和重放检测。
+  browser: Access Token仅内存，Refresh Token仅HttpOnly Cookie；刷新和登出执行同源校验。
+  request_middleware: 每个受保护请求校验JWT、用户ACTIVE、凭据ACTIVE/版本、Session ACTIVE，再实时计算RBAC和数据范围。
+  transaction_boundaries:
+  - 登录成功原子更新失败状态、创建Session并写审计。
+  - 改密或重置原子递增credential_version、撤销Session并写审计。
+  - 用户锁定或禁用原子变更用户状态、撤销Session并写审计/既有状态事件。
+  decision_ids: [ADR-032]
+current_governance_release:
+  current_release_id: PDBR-2026.08.07-R4.2
+  current_authority: CURRENT_FORMAL_CODE_INPUT_BASELINE
+  release_status: P1_AUTHENTICATION_CONTRACT_COMPLETED
+  code_readiness: READY_FOR_P1_IMPLEMENTATION
+  implementation_release_readiness: NOT_EVALUATED_IMPLEMENTATION_NOT_PRESENT
+  pending_user_decisions: 0

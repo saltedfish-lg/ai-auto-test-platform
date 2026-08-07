@@ -1,0 +1,9 @@
+{
+  "release_id": "PDBR-2026.08.07-R4.2",
+  "status": "PASS",
+  "schema_types": 464,
+  "client_methods": 250,
+  "generation_returncode": 0,
+  "strict_compile_returncode": 0,
+  "compiler": "G:\\Job\\ai-auto-test-platform\\node_modules\\.bin\\tsc.cmd"
+}

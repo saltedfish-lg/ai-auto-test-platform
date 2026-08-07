@@ -1,0 +1,185 @@
+metadata:
+  artifact_id: SYSTEM-DESIGN-1.4.2
+  version: 1.4.2-auth-contract-completion
+  status: P1_AUTHENTICATION_CONTRACT_COMPLETED
+  release_id: PDBR-2026.08.07-R4.2
+  parent_release_id: PDBR-2026.08.06-R4.1
+  code_readiness: READY_FOR_P1_IMPLEMENTATION
+  generated_at: '2026-08-06T14:46:00+08:00'
+  last_modified_at: '2026-08-07T00:00:00+08:00'
+  implementation_release_readiness: NOT_EVALUATED_IMPLEMENTATION_NOT_PRESENT
+  pending_user_decisions: 0
+architecture_style: 模块化单体控制面 + 独立Runner Agent + 异步Worker + Outbox事件
+frozen_stack:
+  frontend: Vue 3 + TypeScript
+  api: Python 3.12 + FastAPI
+  persistence: MySQL 8.4 LTS + Flyway
+  runner: Python 3.12 + Playwright Web
+  object_storage: S3兼容；内网默认MinIO
+  observability: OpenTelemetry + Prometheus/Loki/Tempo/Grafana
+  model_gateway: LiteLLM Proxy（AI能力启用时）
+repository_topology:
+  apps:
+  - web
+  - api
+  - worker
+  - scheduler
+  - ai-worker
+  - report-worker
+  packages:
+  - domain
+  - application
+  - infrastructure
+  - contracts
+  - testing
+  runner: runner-agent
+  migrations: database/migrations
+  openapi: contracts/openapi.yaml
+  events: contracts/events
+slo:
+  PRD-NFR-001:
+    statement: V1生产环境控制面月度可用率不得低于99.5%；提前公告的计划维护窗口不计入可用率；开发环境和测试环境不作为正式SLA考核对象。
+    acceptance_direction: 按自然月统计生产控制面可用分钟数；以外部探针和服务端健康指标双源取证；剔除已公告维护窗口；月度可用率必须≥99.5%。
+    slo_contract:
+      metric: control_plane_monthly_availability
+      target: 0.995
+      window: CALENDAR_MONTH
+      environment: PRODUCTION
+      exclusions:
+      - ANNOUNCED_PLANNED_MAINTENANCE
+      evidence:
+      - synthetic_probe_timeseries
+      - service_health_timeseries
+      - maintenance_window_registry
+  PRD-NFR-002:
+    statement: 在标准V1容量和正常网络条件下，普通查询P95≤500ms、P99≤1000ms；普通写入P95≤800ms、P99≤1500ms；异步命令受理P95≤300ms、P99≤800ms。文件上传下载、AI模型调用和浏览器执行不适用普通API指标，必须使用各自专用超时与性能验收规则。
+    acceptance_direction: 在标准V1容量、正常网络、稳定预热后分别对普通查询、普通写入和异步命令受理采集不少于10000个有效样本；按服务端端到端时延计算P95/P99；专用长任务不得混入普通API统计。
+    slo_contract:
+      conditions:
+      - STANDARD_V1_CAPACITY
+      - NORMAL_NETWORK
+      - WARMED_UP
+      sample_minimum: 10000
+      metrics:
+        ordinary_query_ms:
+          p95: 500
+          p99: 1000
+        ordinary_write_ms:
+          p95: 800
+          p99: 1500
+        async_command_accept_ms:
+          p95: 300
+          p99: 800
+      excluded_categories:
+      - FILE_TRANSFER
+      - AI_MODEL_CALL
+      - BROWSER_EXECUTION
+  PRD-NFR-003:
+    statement: 当存在健康、已绑定、能力匹配的空闲Runner，且无环境锁、账号租约和资源冲突时，任务从进入可调度状态到Runner成功领取的时延必须满足P95≤3秒、P99≤10秒。
+    acceptance_direction: 构造健康且能力匹配的空闲Runner、无锁租约冲突的标准调度场景，采集不少于5000次从SCHEDULABLE到CLAIMED的服务端时钟差；P95≤3秒且P99≤10秒。
+    slo_contract:
+      metric: schedulable_to_runner_claim_ms
+      sample_minimum: 5000
+      p95_ms: 3000
+      p99_ms: 10000
+      preconditions:
+      - HEALTHY_BOUND_CAPABILITY_MATCHED_IDLE_RUNNER
+      - NO_ENVIRONMENT_LOCK
+      - NO_ACCOUNT_LEASE
+      - NO_RESOURCE_CONFLICT
+state_contract:
+  dimension_count: 127
+  owner_rule: 每个状态维度唯一聚合Owner；生命周期与正交状态分列持久化
+  optimistic_lock: 所有可变聚合写入必须提交expected_version并原子递增row_version
+  state_dimension_count: 127
+  authentication_state_owner_count: 6
+database_contract:
+  engine: MySQL 8.4 LTS
+  id_type: CHAR(26) ULID
+  json_rule: extension_json仅保存非契约扩展；状态、关系、权限和唯一键必须物理化
+  migration_release: V3__platform_contract_rebuild.sql + V4__rbac_seed_data.sql + V5__platform_authentication_contract.sql
+  table_count: 84
+  object_table_count: 79
+  technical_table_count: 5
+  mysql84_runtime_gate: PASS
+  credential_revision_identity: credential_revision_id; UNIQUE(test_account_id, revision_no)
+  technical_alert_endpoint_identity: technical_alert_endpoint_id; UNIQUE(endpoint_code)
+  run_task_initial_final_result: UNKNOWN
+  rbac_model: permission_code/role/role_permission/user_role_binding/data_scope_grant relational closure
+  technical_alert_ingestion_batch_unique: UNIQUE(technical_alert_endpoint_id, batch_key)
+  platform_user_credential: atp_platform_user_credential; UNIQUE(user_id); Argon2id PHC only; credential_version and force_password_change owned by CredentialService
+  auth_refresh_session: atp_auth_refresh_session; UNIQUE(token_hash); opaque token SHA-256 only; SessionService owns rotation/revoke lifecycle
+api_contract:
+  version: OpenAPI 3.1.2
+  typed_dto: true
+  idempotency: 所有写操作要求Idempotency-Key
+  optimistic_lock: 更新和状态命令要求expected_version
+  error_statuses:
+  - 400
+  - 401
+  - 403
+  - 404
+  - 409
+  - 422
+  - 429
+  - 500
+  - 503
+  authentication_operations:
+  - login_platform_user
+  - refresh_platform_session
+  - logout_platform_user
+  - get_current_user
+  - change_current_user_password
+authentication_contract:
+  authority: 编码冻结基线/AUTHENTICATION_CONTRACT/authentication-contract.yaml
+  mechanism: RS256 Bearer Access JWT + server-side revocable rotating Refresh Session
+  access_token_ttl_seconds: 900
+  refresh_session_ttl_seconds: 604800
+  browser_access_storage: MEMORY_ONLY
+  browser_refresh_storage: HTTP_ONLY_SECURE_SAME_SITE_STRICT_COOKIE
+  password_hash: Argon2id v19; m=65536KiB; t=3; p=1; salt=16 bytes; hash=32 bytes
+  password_policy: 12..128; LETTER+DIGIT; no periodic expiry in V1; common-password and username checks required
+  admin_bootstrap: explicit no-echo TTY or ATP_BOOTSTRAP_ADMIN_PASSWORD_FILE; force_password_change=true; repeated execution never overwrites credentials
+  identity_state_check: user ACTIVE + credential ACTIVE/unlocked + credential_version match + Session ACTIVE
+  authorization: permissions are not in JWT; resolve current relational RBAC and data scope for every protected request
+  audit: login success/failure, logout, password change/reset, Session revoke and permission denial; authentication secrets forbidden
+event_contract:
+  delivery: AT_LEAST_ONCE_OUTBOX
+  required_envelope:
+  - event_id
+  - event_type
+  - event_version
+  - occurred_at
+  - aggregate_id
+  - sequence
+  - correlation_id
+  - causation_id
+  - project_id
+  - payload
+  ordering: PER_AGGREGATE
+  compatibility: BACKWARD_COMPATIBLE_WITHIN_MAJOR
+permission_contract:
+  model: 关系型RBAC + 数据范围 + 状态守卫 + 职责分离
+  review_separation: 提交人不得批准本人提交；批准/驳回/发布独立权限
+  permission_count: 50
+  role_count: 12
+  mapping_count: 600
+  super_admin_cross_project_grant_all: ALLOWED_WITH_SECONDARY_CONFIRMATION_REASON_IMMUTABLE_AUDIT
+validation_commands:
+- python 编码冻结基线/RELEASE/validation/validate_all.py
+- python 编码冻结基线/RELEASE/validation/validate_auth_contract.py
+- python 编码冻结基线/RELEASE/validation/run_mysql84_gate.py --compose 编码冻结基线/RELEASE/validation/mysql84-compose.yml
+pending_decisions: []
+release_gate:
+  code_baseline_readiness:
+    status: READY_FOR_P1_IMPLEMENTATION
+    blocking_pending: []
+    does_not_require:
+    - REAL_ACCEPTANCE_EVIDENCE
+  implementation_release_readiness:
+    status: NOT_EVALUATED_IMPLEMENTATION_NOT_PRESENT
+    blocking_when_implemented:
+    - REAL_ACCEPTANCE_EVIDENCE
+    - SECURITY_PERFORMANCE_RECOVERY_DEPLOYMENT_VALIDATION
+  release_status: P1_AUTHENTICATION_CONTRACT_COMPLETED
+  current_release_id: PDBR-2026.08.07-R4.2

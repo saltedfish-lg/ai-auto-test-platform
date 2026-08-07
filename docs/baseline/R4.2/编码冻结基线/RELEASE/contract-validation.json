@@ -1,0 +1,20 @@
+{
+  "release_id": "PDBR-2026.08.07-R4.2",
+  "status": "PASS",
+  "authentication_contract": "PASS",
+  "typescript": "PASS",
+  "mysql84": "PASS",
+  "counts": {
+    "ddl_tables": 84,
+    "ddl_foreign_keys": 174,
+    "permissions": 50,
+    "roles": 12,
+    "role_permission_mappings": 600,
+    "openapi_paths": 138,
+    "openapi_operations": 250,
+    "openapi_schemas": 464,
+    "events": 628,
+    "acceptance": 1691,
+    "acceptance_passed": 0
+  }
+}

@@ -1,0 +1,90 @@
+{
+  "release_id": "PDBR-2026.08.07-R4.2",
+  "executed_at": "2026-08-07T03:59:32Z",
+  "steps": [
+    {
+      "name": "STATIC_CONTRACT_VALIDATION",
+      "command": [
+        "G:\\Job\\ai-auto-test-platform\\.venv\\Scripts\\python.exe",
+        "G:\\Job\\ai-auto-test-platform\\docs\\baseline\\R4.2\\编码冻结基线\\RELEASE\\validation\\validate_all.py",
+        "--root",
+        "G:\\Job\\ai-auto-test-platform\\docs\\baseline\\R4.2",
+        "--output",
+        "G:\\Job\\ai-auto-test-platform\\docs\\baseline\\R4.2\\编码冻结基线\\RELEASE\\validation\\evidence\\static-validation.json"
+      ],
+      "returncode": 0,
+      "stdout_tail": "{\n  \"release_id\": \"PDBR-2026.08.07-R4.2\",\n  \"executed_at\": \"2026-08-07T03:57:48Z\",\n  \"validator\": \"validate_all.py\",\n  \"python\": \"3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]\",\n  \"status\": \"PASS\",\n  \"metrics\": {\n    \"state_dimensions\": 127,\n    \"ddl_tables\": 84,\n    \"ddl_foreign_keys\": 174,\n    \"permissions\": 50,\n    \"roles\": 12,\n    \"role_permission_mappings\": 600,\n    \"openapi_paths\": 138,\n    \"openapi_operations\": 250,\n    \"openapi_schemas\": 464,\n    \"openapi_example_fail\": 0,\n    \"events\": 628,\n    \"event_producers\": 31,\n    \"event_consumer_sets\": 8,\n    \"acceptance\": 1691,\n    \"acceptance_passed\": 0\n  },\n  \"checks\": [\n    {\n      \"check\": \"FORMAL_PARSE\",\n      \"status\": \"PASS\",\n      \"detail\": \"parse errors=0\",\n      \"errors\": []\n    },\n    {\n      \"check\": \"GOVERNANCE_AND_ARCHITECTURE\",\n      \"status\": \"PASS\",\n      \"detail\": \"R4.2 metadata and frozen architecture\",\n      \"errors\": []\n    },\n    {\n      \"check\": \"CORE_IDENTITY_STATE_LIFECYCLE\",\n      \"status\": \"PASS\",\n      \"detail\": \"objects=96, dimensions=127\",\n      \"errors\": []\n    },\n    {\n      \"check\": \"STATE_OWNER_REGISTRY\",\n      \"status\": \"PASS\",\n      \"detail\": \"registry dimensions=127\",\n      \"errors\": []\n    },\n    {\n      \"check\": \"DDL_STATIC_AND_SCHEMA\",\n      \"status\": \"PASS\",\n      \"detail\": \"tables=84, fks=174\",\n      \"errors\": []\n    },\n    {\n      \"check\": \"OBJECT_TABLE_IDENTITY_MAPPING\",\n      \"status\": \"PASS\",\n      \"detail\": \"target identities aligned\",\n      \"errors\": []\n    },\n    {\n      \"check\": \"RBAC_CLOSURE_AND_SEED\",\n      \"status\": \"PASS\",\n      \"detail\": \"counts=(50, 12, 600); seed=(50, 12, 600)\",\n      \"errors\": []\n    },\n    {\n      \"check\": \"OPENAPI_3_1_2\",\n      \"status\": \"PASS\",\n      \"detail\": \"paths=138, ops=250, schemas=464\",\n      \"errors\": []\n    },\n    {\n      \"check\": \"EVENT_CONTRACTS\",\n      \"status\": \"PASS\",\n      \"detail\": \"events=628, schemas=628\",\n      \"errors\": []\n    },\n    {\n      \"check\": \"ACCEPTANCE_SPECIFICATION\",\n      \"status\": \"PASS\",\n      \"detail\": \"specified=1691, passed=0\",\n      \"errors\": []\n    },\n    {\n      \"check\": \"AGENTS_SKILL_GATE_CONSISTENCY\",\n      \"status\": \"PASS\",\n      \"detail\": \"two-level gate model aligned\",\n      \"errors\": []\n    }\n  ],\n  \"error_count\": 0,\n  \"errors\": []\n}\n\n",
+      "stderr_tail": ""
+    },
+    {
+      "name": "AUTHENTICATION_CONTRACT_VALIDATION",
+      "command": [
+        "G:\\Job\\ai-auto-test-platform\\.venv\\Scripts\\python.exe",
+        "G:\\Job\\ai-auto-test-platform\\docs\\baseline\\R4.2\\编码冻结基线\\RELEASE\\validation\\validate_auth_contract.py",
+        "--root",
+        "G:\\Job\\ai-auto-test-platform\\docs\\baseline\\R4.2",
+        "--output",
+        "G:\\Job\\ai-auto-test-platform\\docs\\baseline\\R4.2\\编码冻结基线\\RELEASE\\validation\\evidence\\authentication-contract-validation.json"
+      ],
+      "returncode": 0,
+      "stdout_tail": "{\n  \"release_id\": \"PDBR-2026.08.07-R4.2\",\n  \"validator\": \"validate_auth_contract.py\",\n  \"executed_at\": \"2026-08-07T03:57:53Z\",\n  \"status\": \"PASS\",\n  \"checks\": [\n    {\n      \"check_id\": \"AUTH-CONTRACT-METADATA\",\n      \"status\": \"PASS\",\n      \"detail\": \"release=PDBR-2026.08.07-R4.2; status=FROZEN_IMPLEMENTABLE\"\n    },\n    {\n      \"check_id\": \"AUTH-ARCHITECTURE-DECISION\",\n      \"status\": \"PASS\",\n      \"detail\": \"RS256 access=900s; refresh=604800s; rotation required; permissions excluded\"\n    },\n    {\n      \"check_id\": \"AUTH-PASSWORD-HASH\",\n      \"status\": \"PASS\",\n      \"detail\": \"Argon2id v19 m=65536 t=3 p=1 salt=16 hash=32\"\n    },\n    {\n      \"check_id\": \"AUTH-PASSWORD-POLICY\",\n      \"status\": \"PASS\",\n      \"detail\": \"password policy is complete and V1-bounded\"\n    },\n    {\n      \"check_id\": \"AUTH-ADMIN-BOOTSTRAP\",\n      \"status\": \"PASS\",\n      \"detail\": \"admin fixed; controlled secret input; force change; no overwrite\"\n    },\n    {\n      \"check_id\": \"AUTH-STATE-MAPPING\",\n      \"status\": \"PASS\",\n      \"detail\": \"ACTIVE is canonical; NORMAL derived; no duplicate security_status\"\n    },\n    {\n      \"check_id\": \"AUTH-OPENAPI-OPERATIONS\",\n      \"status\": \"PASS\",\n      \"detail\": \"errors=[]\"\n    },\n    {\n      \"check_id\": \"AUTH-OPENAPI-SCHEMAS\",\n      \"status\": \"PASS\",\n      \"detail\": \"missing=[]\"\n    },\n    {\n      \"check_id\": \"AUTH-ERROR-CODES\",\n      \"status\": \"PASS\",\n      \"detail\": \"401=6; 403=7\"\n    },\n    {\n      \"check_id\": \"AUTH-CREDENTIAL-PHYSICAL-MODEL\",\n      \"status\": \"PASS\",\n      \"detail\": \"credential table, user uniqueness and FK\"\n    },\n    {\n      \"check_id\": \"AUTH-SESSION-PHYSICAL-MODEL\",\n      \"status\": \"PASS\",\n      \"detail\": \"refresh session table, token uniqueness and FKs\"\n    },\n    {\n      \"check_id\": \"AUTH-MIGRATION-ORDER\",\n      \"status\": \"PASS\",\n      \"detail\": \"['V3__platform_contract_rebuild.sql', 'V4__rbac_seed_data.sql', 'V5__platform_authentication_contract.sql']\"\n    },\n    {\n      \"check_id\": \"AUTH-STATE-OWNER-UNIQUENESS\",\n      \"status\": \"PASS\",\n      \"detail\": \"owners=6; fields=12\"\n    },\n    {\n      \"check_id\": \"AUTH-RBAC-CLOSURE-UNCHANGED\",\n      \"status\": \"PASS\",\n      \"detail\": \"50/12/600; super_admin_allowed=50\"\n    },\n    {\n      \"check_id\": \"AUTH-ACCEPTANCE-SPECIFIED-NOT-STARTED\",\n      \"status\": \"PASS\",\n      \"detail\": \"p1_items=87; revised=87\"\n    },\n    {\n      \"check_id\": \"AUTH-RELEASE-CLOSED\",\n      \"status\": \"PASS\",\n      \"detail\": \"pending=0; readiness=READY_FOR_P1_IMPLEMENTATION\"\n    },\n    {\n      \"check_id\": \"AUTH-NO-BOOTSTRAP-SECRET-LITERAL\",\n      \"status\": \"PASS\",\n      \"detail\": \"[]\"\n    }\n  ],\n  \"error_count\": 0,\n  \"errors\": [],\n  \"metrics\": {\n    \"auth_operations\": 5,\n    \"auth_schemas\": 9,\n    \"authentication_state_owners\": 6,\n    \"p1_acceptance_items\": 87,\n    \"permissions\": 50,\n    \"roles\": 12,\n    \"mappings\": 600\n  }\n}\n\n",
+      "stderr_tail": ""
+    },
+    {
+      "name": "GOVERNANCE_VALIDATION",
+      "command": [
+        "G:\\Job\\ai-auto-test-platform\\.venv\\Scripts\\python.exe",
+        "G:\\Job\\ai-auto-test-platform\\docs\\baseline\\R4.2\\编码冻结基线\\RELEASE\\validation\\validate_governance.py",
+        "--root",
+        "G:\\Job\\ai-auto-test-platform\\docs\\baseline\\R4.2",
+        "--output",
+        "G:\\Job\\ai-auto-test-platform\\docs\\baseline\\R4.2\\编码冻结基线\\RELEASE\\validation\\evidence\\governance-validation.json"
+      ],
+      "returncode": 0,
+      "stdout_tail": "{\n  \"release_id\": \"PDBR-2026.08.07-R4.2\",\n  \"validator\": \"validate_governance.py\",\n  \"executed_at\": \"2026-08-07T03:57:54Z\",\n  \"status\": \"PASS\",\n  \"metrics\": {\n    \"ai_runner_closed\": 994,\n    \"permission_closed\": 41,\n    \"domain_stale_blockers_closed\": 7,\n    \"acceptance\": 1691,\n    \"specified\": 1691,\n    \"passed\": 0,\n    \"package_file_count_including_root_manifest\": 725\n  },\n  \"checks\": [\n    {\n      \"check_id\": \"GOV-YAML-PARSE-EVIDENCE\",\n      \"status\": \"PASS\",\n      \"scanned_file_count\": 7,\n      \"hit_count\": 0,\n      \"failure_locations\": []\n    },\n    {\n      \"check_id\": \"GOV-FORBIDDEN-CODING_STATUS_NEEDS_REFINEMENT\",\n      \"status\": \"PASS\",\n      \"scanned_file_count\": 7,\n      \"hit_count\": 0,\n      \"failure_locations\": []\n    },\n    {\n      \"check_id\": \"GOV-FORBIDDEN-DIRECT_CODE_INPUT_FALSE\",\n      \"status\": \"PASS\",\n      \"scanned_file_count\": 7,\n      \"hit_count\": 0,\n      \"failure_locations\": []\n    },\n    {\n      \"check_id\": \"GOV-FORBIDDEN-CORE_SCAFFOLD_BLOCKED_TRUE\",\n      \"status\": \"PASS\",\n      \"scanned_file_count\": 7,\n      \"hit_count\": 0,\n      \"failure_locations\": []\n    },\n    {\n      \"check_id\": \"GOV-AI-RUNNER-CLOSURE\",\n      \"status\": \"PASS\",\n      \"scanned_file_count\": 1,\n      \"hit_count\": 0,\n      \"failure_locations\": []\n    },\n    {\n      \"check_id\": \"GOV-PERMISSION-CLOSURE\",\n      \"status\": \"PASS\",\n      \"scanned_file_count\": 1,\n      \"hit_count\": 0,\n      \"failure_locations\": []\n    },\n    {\n      \"check_id\": \"GOV-DOMAIN-STALE-BLOCKERS\",\n      \"status\": \"PASS\",\n      \"scanned_file_count\": 1,\n      \"hit_count\": 0,\n      \"failure_locations\": []\n    },\n    {\n      \"check_id\": \"GOV-CURRENT-STATUS-SUMMARIES\",\n      \"status\": \"PASS\",\n      \"scanned_file_count\": 7,\n      \"hit_count\": 0,\n      \"failure_locations\": []\n    },\n    {\n      \"check_id\": \"GOV-CURRENT-AUTHORITY-NOT-SUPERSEDED\",\n      \"status\": \"PASS\",\n      \"scanned_file_count\": 7,\n      \"hit_count\": 0,\n      \"failure_locations\": []\n    },\n    {\n      \"check_id\": \"GOV-CURRENT-RELEASE-METADATA\",\n      \"status\": \"PASS\",\n      \"scanned_file_count\": 10,\n      \"hit_count\": 0,\n      \"failure_locations\": []\n    },\n    {\n      \"check_id\": \"GOV-AUTHORITY-MODEL-CONSISTENCY\",\n      \"status\": \"PASS\",\n      \"scanned_file_count\": 6,\n      \"hit_count\": 0,\n      \"failure_locations\": []\n    },\n    {\n      \"check_id\": \"GOV-GATE-BLOCKING-SCOPE\",\n      \"status\": \"PASS\",\n      \"scanned_file_count\": 1,\n      \"hit_count\": 0,\n      \"failure_locations\": []\n    },\n    {\n      \"check_id\": \"GOV-ACCEPTANCE-HONEST-STATUS\",\n      \"status\": \"PASS\",\n      \"scanned_file_count\": 1,\n      \"hit_count\": 0,\n      \"failure_locations\": []\n    },\n    {\n      \"check_id\": \"GOV-DYNAMIC-FILE-COUNTS\",\n      \"status\": \"PASS\",\n      \"scanned_file_count\": 7,\n      \"hit_count\": 0,\n      \"failure_locations\": []\n    }\n  ],\n  \"error_count\": 0,\n  \"errors\": []\n}\n\n",
+      "stderr_tail": ""
+    },
+    {
+      "name": "TYPESCRIPT_GENERATION",
+      "command": [
+        "G:\\Job\\ai-auto-test-platform\\.venv\\Scripts\\python.exe",
+        "G:\\Job\\ai-auto-test-platform\\docs\\baseline\\R4.2\\编码冻结基线\\RELEASE\\validation\\generate_ts_client.py",
+        "--root",
+        "G:\\Job\\ai-auto-test-platform\\docs\\baseline\\R4.2",
+        "--out",
+        "G:\\Job\\ai-auto-test-platform\\docs\\baseline\\R4.2\\编码冻结基线\\RELEASE\\validation\\generated"
+      ],
+      "returncode": 0,
+      "stdout_tail": "{\"release_id\": \"PDBR-2026.08.07-R4.2\", \"schema_types\": 464, \"client_methods\": 250, \"outputs\": [\"types.ts\", \"client.ts\"]}\n",
+      "stderr_tail": ""
+    },
+    {
+      "name": "TYPESCRIPT_STRICT_COMPILE",
+      "command": [
+        "G:\\Job\\ai-auto-test-platform\\node_modules\\.bin\\tsc.cmd",
+        "-p",
+        "G:\\Job\\ai-auto-test-platform\\docs\\baseline\\R4.2\\编码冻结基线\\RELEASE\\validation\\tsconfig.json"
+      ],
+      "returncode": 0,
+      "stdout_tail": "",
+      "stderr_tail": ""
+    },
+    {
+      "name": "MYSQL84_RUNTIME_GATE",
+      "command": [
+        "G:\\Job\\ai-auto-test-platform\\.venv\\Scripts\\python.exe",
+        "G:\\Job\\ai-auto-test-platform\\docs\\baseline\\R4.2\\编码冻结基线\\RELEASE\\validation\\run_mysql84_gate.py",
+        "--root",
+        "G:\\Job\\ai-auto-test-platform\\docs\\baseline\\R4.2",
+        "--output",
+        "G:\\Job\\ai-auto-test-platform\\docs\\baseline\\R4.2\\编码冻结基线\\RELEASE\\validation\\evidence\\mysql84-gate.json"
+      ],
+      "returncode": 0,
+      "stdout_tail": "{\n  \"release_id\": \"PDBR-2026.08.07-R4.2\",\n  \"gate\": \"MYSQL84_EMPTY_DATABASE_AND_R41_UPGRADE\",\n  \"blocking_scope\": \"DATABASE_MODULE_FORMAL_MERGE\",\n  \"executed_at\": \"2026-08-07T03:58:00Z\",\n  \"details\": {\n    \"docker\": null,\n    \"podman\": null,\n    \"mysql_client\": \"C:\\\\Program Files\\\\MySQL\\\\MySQL Server 8.4\\\\bin\\\\mysql.exe\"\n  },\n  \"required_steps\": [\n    \"empty database: V3 -> V4 -> V5 -> V4 again\",\n    \"R4.1 upgrade: V3 -> V4 -> V5\",\n    \"permission/role/mapping counts remain 50/12/600\",\n    \"credential user FK rejection\",\n    \"username and credential uniqueness rejection\",\n    \"refresh token hash uniqueness rejection\",\n    \"credential version and refresh lifecycle CHECK rejection\"\n  ],\n  \"execution_mode\": \"LOCAL_MYSQL\",\n  \"server_version\": \"8.4.11\",\n  \"status\": \"PASS\",\n  \"returncode\": 0,\n  \"databases\": {\n    \"empty\": \"TEMPORARY_CREATED_AND_REMOVED\",\n    \"upgrade\": \"TEMPORARY_CREATED_AND_REMOVED\"\n  },\n  \"steps\": [\n    {\n      \"name\": \"MYSQL_VERSION\",\n      \"database\": null,\n      \"returncode\": 0,\n      \"stdout_tail\": \"8.4.11\\n\",\n      \"stderr_tail\": \"\"\n    },\n    {\n      \"name\": \"CREATE_atp_r42_empty_1786075080_3712\",\n      \"database\": null,\n      \"returncode\": 0,\n      \"stdout_tail\": \"\",\n      \"stderr_tail\": \"\"\n    },\n    {\n      \"name\": \"CREATE_atp_r42_upgrade_1786075080_3712\",\n      \"database\": null,\n      \"returncode\": 0,\n      \"stdout_tail\": \"\",\n      \"stderr_tail\": \"\"\n    },\n    {\n      \"name\": \"EMPTY_V3\",\n      \"database\": \"atp_r42_empty_1786075080_3712\",\n      \"returncode\": 0,\n      \"stdout_tail\": \"\",\n      \"stderr_tail\": \"\"\n    },\n    {\n      \"name\": \"EMPTY_V4_FIRST\",\n      \"database\": \"atp_r42_empty_1786075080_3712\",\n      \"returncode\": 0,\n      \"stdout_tail\": \"\",\n      \"stderr_tail\": \"\"\n    },\n    {\n      \"name\": \"EMPTY_V5\",\n      \"database\": \"atp_r42_empty_1786075080_3712\",\n      \"returncode\": 0,\n      \"stdout_tail\": \"\",\n      \"stderr_tail\": \"\"\n    },\n    {\n      \"name\": \"EMPTY_V4_SECOND\",\n      \"database\": \"atp_r42_empty_1786075080_3712\",\n      \"returncode\": 0,\n      \"stdout_tail\": \"\",\n      \"stderr_tail\": \"\"\n    },\n    {\n      \"name\": \"EMPTY_ASSERTIONS\",\n      \"database\": \"atp_r42_empty_1786075080_3712\",\n      \"returncode\": 0,\n      \"stdout_tail\": \"R4_2_MYSQL84_GATE_PASS\\n\",\n      \"stderr_tail\": \"\"\n    },\n    {\n      \"name\": \"UPGRADE_R41_V3\",\n      \"database\": \"atp_r42_upgrade_1786075080_3712\",\n      \"returncode\": 0,\n      \"stdout_tail\": \"\",\n      \"stderr_tail\": \"\"\n    },\n    {\n      \"name\": \"UPGRADE_R41_V4\",\n      \"database\": \"atp_r42_upgrade_1786075080_3712\",\n      \"returncode\": 0,\n      \"stdout_tail\": \"\",\n      \"stderr_tail\": \"\"\n    },\n    {\n      \"name\": \"UPGRADE_R42_V5\",\n      \"database\": \"atp_r42_upgrade_1786075080_3712\",\n      \"returncode\": 0,\n      \"stdout_tail\": \"\",\n      \"stderr_tail\": \"\"\n    },\n    {\n      \"name\": \"UPGRADE_ASSERTIONS\",\n      \"database\": \"atp_r42_upgrade_1786075080_3712\",\n      \"returncode\": 0,\n      \"stdout_tail\": \"R4_2_MYSQL84_GATE_PASS\\n\",\n      \"stderr_tail\": \"\"\n    },\n    {\n      \"name\": \"DROP_atp_r42_empty_1786075080_3712\",\n      \"returncode\": 0\n    },\n    {\n      \"name\": \"DROP_atp_r42_upgrade_1786075080_3712\",\n      \"returncode\": 0\n    }\n  ],\n  \"secrets_in_evidence\": false\n}\n\n",
+      "stderr_tail": ""
+    }
+  ],
+  "static_status": "PASS",
+  "mysql84_status": "PASS",
+  "implementation_release_readiness": "NOT_EVALUATED_IMPLEMENTATION_NOT_PRESENT"
+}

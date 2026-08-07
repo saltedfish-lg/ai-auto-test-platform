@@ -1,0 +1,37 @@
+metadata:
+  artifact_id: NEEDS-REFINEMENT-CLOSURE-1.4.2
+  version: 1.4.2-auth-contract-completion
+  status: CLOSED_P1_AUTHENTICATION_CONTRACT_COMPLETION
+  release_id: PDBR-2026.08.07-R4.2
+  parent_release_id: PDBR-2026.08.06-R4.1
+  last_modified_at: '2026-08-07T00:00:00+08:00'
+open_product_or_architecture_decisions: 0
+contract_refinement_items: []
+execution_evidence_gaps:
+- gap_id: GATE-EVIDENCE-001
+  description: 1691项验收规范已定义但平台尚未实现，真实证据尚未产生
+  status: NOT_EVALUATED_IMPLEMENTATION_NOT_PRESENT
+  blocking_scope: IMPLEMENTATION_RELEASE_READINESS
+  blocks_code_initialization: false
+  blocks_database_module_formal_merge: false
+  blocks_production_release: true
+  owner: IMPLEMENTATION_AND_ACCEPTANCE
+closed_execution_evidence:
+- gap_id: GATE-MYSQL84-001
+  description: MySQL 8.4真实空库迁移、R4.1升级、Seed和认证约束拒绝测试
+  status: PASS
+  blocking_scope: DATABASE_MODULE_FORMAL_MERGE
+  blocks_code_initialization: false
+  blocks_non_database_module_development: false
+  blocks_database_module_formal_merge: false
+  blocks_production_release: true
+  owner: IMPLEMENTATION_VALIDATION_ENVIRONMENT
+p1_authentication_contract_closure:
+  status: CLOSED
+  authentication_api: FROZEN
+  credential_model: FROZEN
+  refresh_session: FROZEN
+  admin_initial_secret: FROZEN
+  password_policy_and_hash: FROZEN
+  state_owner_mapping: FROZEN
+  pending_user_decisions: 0
