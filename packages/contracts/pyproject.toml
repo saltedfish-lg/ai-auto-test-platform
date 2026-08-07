@@ -1,0 +1,13 @@
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "platform-contracts"
+version = "0.1.0"
+description = "Boundaries for consuming frozen R4.1 contracts"
+requires-python = ">=3.12,<3.13"
+dependencies = ["jsonschema==4.26.0"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/platform_contracts"]

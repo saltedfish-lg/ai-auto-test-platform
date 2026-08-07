@@ -1,0 +1,13 @@
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "platform-domain"
+version = "0.1.0"
+description = "Minimal shared domain kernel for the AI test platform"
+requires-python = ">=3.12,<3.13"
+dependencies = []
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/platform_domain"]

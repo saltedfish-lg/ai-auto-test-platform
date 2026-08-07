@@ -1,0 +1,20 @@
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "platform-worker"
+version = "0.1.0"
+description = "P0 background worker process foundation"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "platform-observability==0.1.0",
+  "pydantic==2.11.7",
+  "pydantic-settings==2.10.1",
+]
+
+[project.scripts]
+platform-worker = "platform_worker.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/platform_worker"]

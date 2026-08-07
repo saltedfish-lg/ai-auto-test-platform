@@ -1,0 +1,20 @@
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "platform-scheduler"
+version = "0.1.0"
+description = "P0 scheduler process foundation"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "platform-observability==0.1.0",
+  "pydantic==2.11.7",
+  "pydantic-settings==2.10.1",
+]
+
+[project.scripts]
+platform-scheduler = "platform_scheduler.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/platform_scheduler"]

@@ -1,0 +1,36 @@
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = ["docs/baseline/R4.1", ".venv", "node_modules"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+
+[tool.ruff.format]
+quote-style = "double"
+line-ending = "lf"
+
+[tool.pytest.ini_options]
+addopts = "-ra --strict-config --strict-markers -p no:cacheprovider"
+testpaths = [
+  "packages/domain-kernel/tests",
+  "packages/contracts/tests",
+  "packages/observability/tests",
+  "services/api/tests",
+  "workers/scheduler/tests",
+  "workers/background/tests",
+  "runner/agent/tests",
+  "tests",
+]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unused_configs = true
+show_error_codes = true
+exclude = ["docs/baseline/R4.1", "apps/web", ".venv"]
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["jsonschema", "jsonschema.*"]
+ignore_missing_imports = true

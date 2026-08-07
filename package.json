@@ -1,0 +1,24 @@
+{
+  "name": "ai-auto-test-platform",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/web"
+  ],
+  "engines": {
+    "node": ">=22 <25",
+    "npm": ">=10 <12"
+  },
+  "packageManager": "npm@11.12.1",
+  "scripts": {
+    "dev:web": "npm --workspace @platform/web run dev",
+    "format:web": "npm --workspace @platform/web run format",
+    "format:check:web": "npm --workspace @platform/web run format:check",
+    "lint:web": "npm --workspace @platform/web run lint",
+    "typecheck:web": "npm --workspace @platform/web run typecheck",
+    "test:web": "npm --workspace @platform/web run test",
+    "build:web": "npm --workspace @platform/web run build",
+    "generate:api": "npm --workspace @platform/web run generate:api",
+    "check:api": "npm --workspace @platform/web run check:api"
+  }
+}
