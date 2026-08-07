@@ -1,6 +1,51 @@
-/* Generated from PDBR-2026.08.06-R4.1 OpenAPI. DO NOT EDIT. */
+/* Generated from PDBR-2026.08.07-R4.2 OpenAPI. DO NOT EDIT. */
 
 
+
+export type LoginRequest = {
+  username: string;
+  password: string;
+};
+
+export type AuthCookieActionRequest = Record<string, unknown>;
+
+export type ChangePasswordRequest = {
+  current_password: string;
+  new_password: string;
+};
+
+export type CurrentUserResource = {
+  user_id: string;
+  username: string;
+  display_name?: string | null;
+  lifecycle_status: "ACTIVE";
+  roles: Array<string>;
+  permissions: Array<string>;
+  force_password_change: boolean;
+};
+
+export type AuthenticationTokenResource = {
+  access_token: string;
+  token_type: "Bearer";
+  expires_in: number;
+  current_user: CurrentUserResource;
+};
+
+export type AuthenticationResponse = {
+  data: AuthenticationTokenResource;
+  correlation_id: string;
+};
+
+export type CurrentUserResponse = {
+  data: CurrentUserResource;
+  correlation_id: string;
+};
+
+export type AuthenticationErrorCode = "AUTH_REQUIRED" | "AUTH_INVALID_CREDENTIALS" | "AUTH_TOKEN_INVALID" | "AUTH_TOKEN_EXPIRED" | "AUTH_SESSION_REVOKED" | "AUTH_IDENTITY_NOT_FOUND" | "AUTH_PERMISSION_DENIED" | "AUTH_ACCOUNT_LOCKED" | "AUTH_ACCOUNT_DISABLED" | "AUTH_ACCOUNT_ARCHIVED" | "AUTH_ACCOUNT_TEMPORARILY_LOCKED" | "AUTH_PASSWORD_CHANGE_REQUIRED" | "AUTH_OPERATION_FORBIDDEN_FOR_STATE";
+
+export type AuthenticationProblemDetails = ProblemDetails & {
+  code?: AuthenticationErrorCode;
+};
 
 export type ProblemDetails = {
   type: string;

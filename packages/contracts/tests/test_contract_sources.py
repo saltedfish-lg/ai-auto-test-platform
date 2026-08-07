@@ -4,10 +4,11 @@ import pytest
 from platform_contracts import BaselineSources, ContractViolation, JsonSchemaValidator
 
 ROOT = Path(__file__).resolve().parents[3]
-BASELINE = ROOT / "docs" / "baseline" / "R4.1"
+CURRENT = (ROOT / "docs" / "baseline" / "CURRENT").read_text(encoding="utf-8").strip()
+BASELINE = ROOT / "docs" / "baseline" / CURRENT
 
 
-def test_official_contract_sources_are_loaded_from_r4_1() -> None:
+def test_official_contract_sources_are_loaded_from_current_baseline() -> None:
     sources = BaselineSources(BASELINE)
 
     assert sources.openapi.is_file()

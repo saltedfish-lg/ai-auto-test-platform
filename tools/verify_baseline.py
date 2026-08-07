@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only verification for the frozen R4.1 package Manifest."""
+"""Read-only verification for the CURRENT frozen baseline package Manifest."""
 
 from __future__ import annotations
 
@@ -9,9 +9,9 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-BASELINE = ROOT / "docs" / "baseline" / "R4.1"
+CURRENT_BASELINE = (ROOT / "docs" / "baseline" / "CURRENT").read_text(encoding="utf-8").strip()
+BASELINE = ROOT / "docs" / "baseline" / CURRENT_BASELINE
 MANIFEST = BASELINE / "MANIFEST.sha256"
-EXPECTED_RELEASE = "PDBR-2026.08.06-R4.1"
 MANIFEST_LINE = re.compile(r"^([0-9a-f]{64})  (.+)$")
 
 
@@ -52,10 +52,13 @@ def verify() -> dict[str, object]:
     release_text = (
         BASELINE / "编码冻结基线" / "RELEASE" / "platform_design_baseline_release.yaml"
     ).read_text(encoding="utf-8")
-    release_matches = f"release_id: {EXPECTED_RELEASE}" in release_text
+    release_match = re.search(r"^release_id:\s*(\S+)\s*$", release_text, re.MULTILINE)
+    expected_release = release_match.group(1) if release_match else "UNKNOWN"
+    release_matches = expected_release != "UNKNOWN" and expected_release.endswith(f"-{CURRENT_BASELINE}")
     passed = not (parse_errors or missing or mismatches or extra) and release_matches
     return {
-        "release_id": EXPECTED_RELEASE,
+        "baseline": CURRENT_BASELINE,
+        "release_id": expected_release,
         "manifest_entries": len(expected),
         "actual_member_files": len(actual),
         "missing": missing,

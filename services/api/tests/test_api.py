@@ -42,5 +42,5 @@ def test_process_self_check_is_internal_and_deterministic() -> None:
         "service": "platform-api",
         "environment": "test",
         "status": "ready",
-        "release_id": "PDBR-2026.08.06-R4.1",
+        "release_id": "PDBR-2026.08.07-R4.2",
     }

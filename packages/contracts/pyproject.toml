@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "platform-contracts"
 version = "0.1.0"
-description = "Boundaries for consuming frozen R4.1 contracts"
+description = "Boundaries for consuming the current frozen platform contracts"
 requires-python = ">=3.12,<3.13"
 dependencies = ["jsonschema==4.26.0"]
 

@@ -1,15 +1,16 @@
 metadata:
-  release_id: PDBR-2026.08.06-R4.1
-  version: 1.4.1-governance-cleanup
-  status: GOVERNANCE_CLEANUP_COMPLETED
-  code_readiness: READY_WITH_RUNTIME_DB_VALIDATION_PENDING
-  parent_release_id: PDBR-2026.08.06-R4
-  last_modified_at: '2026-08-06T17:13:00+08:00'
+  release_id: PDBR-2026.08.07-R4.2
+  version: 1.4.2-auth-contract-completion
+  status: P1_AUTHENTICATION_CONTRACT_COMPLETED
+  code_readiness: READY_FOR_P1_IMPLEMENTATION
+  parent_release_id: PDBR-2026.08.06-R4.1
+  last_modified_at: '2026-08-07T00:00:00+08:00'
 must_read:
 - ../../../编码冻结基线/RELEASE/platform_design_baseline_release.yaml
 - ../../../编码冻结基线/SYSTEM_DESIGN.yaml
 - ../../../编码冻结基线/OPENAPI/openapi.yaml
 - ../../../编码冻结基线/DATABASE_DDL/database-schema.yaml
+- ../../../编码冻结基线/AUTHENTICATION_CONTRACT/authentication-contract.yaml
 invariants:
   technical_status: FROZEN
   write_api:
@@ -36,7 +37,7 @@ invariants:
   credential_revision_identity: credential_revision_id; test_account_id+revision_no unique
   technical_alert_endpoint_identity: technical_alert_endpoint_id; signature_config_ref is mutable reference
   run_task_initial_final_result: UNKNOWN
-  code_readiness: READY_WITH_RUNTIME_DB_VALIDATION_PENDING
+  code_readiness: READY_FOR_P1_IMPLEMENTATION
   implementation_release_readiness: NOT_EVALUATED_IMPLEMENTATION_NOT_PRESENT
 prohibited:
 - USE_R2_AS_CURRENT
@@ -48,8 +49,13 @@ prohibited:
 - 不得使用signature_config_ref作为TechnicalAlertEndpoint主键
 - 不得把真实平台验收证据作为开始编码的循环前置条件
 - 不得在未执行MySQL 8.4门禁时宣称PASS
+- 不得自创认证Operation、DTO、状态、Token、Cookie或密码政策
+- 不得写死、回显、记录或提交admin初始密码
+- 不得把Refresh Token原值写入数据库、JSON、日志或仓库
+- 不得把Permission写入JWT作为长期授权事实
+- 不得按username绕过正式RBAC Mapping
 authority_model:
-  model_id: AUTHORITY-MODEL-R4.1-001
+  model_id: AUTHORITY-MODEL-R4.2-001
   responsibilities:
   - authority: RELEASE_AND_MANIFEST
     scope: 当前发布身份、成员资格、版本、状态和哈希；不得改写产品业务语义。
@@ -69,7 +75,7 @@ authority_model:
     release_vs_business_fact: Release只决定成员和版本，不得覆盖业务事实。
 gates:
 - gate_id: MYSQL84_EMPTY_DATABASE_EXECUTION
-  status: NOT_EXECUTED_ENVIRONMENT_UNAVAILABLE
+  status: PASS
   blocking_scope: DATABASE_MODULE_FORMAL_MERGE
   blocks_code_initialization: false
 - gate_id: REAL_ACCEPTANCE_EVIDENCE

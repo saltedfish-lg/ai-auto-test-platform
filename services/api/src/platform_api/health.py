@@ -8,5 +8,5 @@ def process_self_check(settings: ApiSettings) -> dict[str, str]:
         "service": settings.service_name,
         "environment": settings.environment,
         "status": "ready",
-        "release_id": "PDBR-2026.08.06-R4.1",
+        "release_id": "PDBR-2026.08.07-R4.2",
     }

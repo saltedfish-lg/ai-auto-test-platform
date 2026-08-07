@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate or compare the TypeScript client using the frozen R4.1 generator."""
+"""Generate or compare the TypeScript client from the CURRENT frozen baseline."""
 
 from __future__ import annotations
 
@@ -10,11 +10,22 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-BASELINE = ROOT / "docs" / "baseline" / "R4.1"
+CURRENT_BASELINE = (ROOT / "docs" / "baseline" / "CURRENT").read_text(encoding="utf-8").strip()
+BASELINE = ROOT / "docs" / "baseline" / CURRENT_BASELINE
 GENERATOR = BASELINE / "编码冻结基线" / "RELEASE" / "validation" / "generate_ts_client.py"
 OUTPUT = ROOT / "apps" / "web" / "src" / "generated"
 CHECK_OUTPUT = ROOT / ".openapi-client-check"
 GENERATED_FILES = ("types.ts", "client.ts", "generation-report.json")
+
+
+def _normalize_generated_files_to_lf(output: Path) -> None:
+    """Normalize generated text artifacts to LF for byte-stable cross-platform checks."""
+    for name in GENERATED_FILES:
+        path = output / name
+        if not path.is_file():
+            continue
+        content = path.read_bytes().replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+        path.write_bytes(content)
 
 
 def generate(output: Path) -> None:
@@ -30,6 +41,7 @@ def generate(output: Path) -> None:
         cwd=ROOT,
         check=True,
     )
+    _normalize_generated_files_to_lf(output)
 
 
 def check() -> int:

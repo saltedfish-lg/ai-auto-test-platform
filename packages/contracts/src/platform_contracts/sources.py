@@ -1,4 +1,4 @@
-"""Safe paths to the read-only R4.1 OpenAPI and event schema sources."""
+"""Safe paths to the read-only current OpenAPI and event schema sources."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-BASELINE_RELEASE_ID = "PDBR-2026.08.06-R4.1"
+BASELINE_RELEASE_ID = "PDBR-2026.08.07-R4.2"
 SCHEMA_NAME = re.compile(r"^[a-z0-9_.-]+\.schema\.json$")
 
 
@@ -23,9 +23,9 @@ class BaselineSources:
             / "platform_design_baseline_release.yaml"
         )
         if not release.is_file():
-            raise FileNotFoundError(f"R4.1 release file not found under {self.baseline_root}")
+            raise FileNotFoundError(f"current baseline release file not found under {self.baseline_root}")
         if f"release_id: {BASELINE_RELEASE_ID}" not in release.read_text(encoding="utf-8"):
-            raise ValueError("baseline release_id does not match R4.1")
+            raise ValueError("baseline release_id does not match the current R4.2 release")
 
     @property
     def openapi(self) -> Path:

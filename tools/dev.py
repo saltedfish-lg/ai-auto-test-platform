@@ -12,9 +12,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PYTHON = sys.executable
-BASELINE_VALIDATION = (
-    ROOT / "docs" / "baseline" / "R4.1" / "编码冻结基线" / "RELEASE" / "validation"
-)
+CURRENT_BASELINE = (ROOT / "docs" / "baseline" / "CURRENT").read_text(encoding="utf-8").strip()
+BASELINE_ROOT = ROOT / "docs" / "baseline" / CURRENT_BASELINE
+BASELINE_VALIDATION = BASELINE_ROOT / "编码冻结基线" / "RELEASE" / "validation"
+BASELINE_RELATIVE = BASELINE_ROOT.relative_to(ROOT).as_posix()
 PYTHON_SOURCE_PATHS = (
     "packages/domain-kernel/src",
     "packages/contracts/src",
@@ -64,7 +65,7 @@ def baseline() -> None:
             PYTHON,
             str(BASELINE_VALIDATION / "validate_all.py"),
             "--root",
-            "docs/baseline/R4.1",
+            BASELINE_RELATIVE,
         )
     )
     run(
@@ -72,9 +73,12 @@ def baseline() -> None:
             PYTHON,
             str(BASELINE_VALIDATION / "validate_governance.py"),
             "--root",
-            "docs/baseline/R4.1",
+            BASELINE_RELATIVE,
         )
     )
+    auth_validator = BASELINE_VALIDATION / "validate_auth_contract.py"
+    if auth_validator.is_file():
+        run((PYTHON, str(auth_validator), "--root", BASELINE_RELATIVE))
 
 
 def bootstrap() -> None:
@@ -143,10 +147,14 @@ def verify_migrations() -> None:
             PYTHON,
             str(BASELINE_VALIDATION / "validate_all.py"),
             "--root",
-            "docs/baseline/R4.1",
+            BASELINE_RELATIVE,
         )
     )
-    print("MYSQL_8_4_RUNTIME_GATE = NOT_EXECUTED")
+    print(
+        "MYSQL_8_4_RUNTIME_GATE = "
+        f"BASELINE_EVIDENCE_AVAILABLE ({CURRENT_BASELINE}); "
+        "use tools/mysql84_gate.py --execute to rerun"
+    )
 
 
 def build() -> None:
