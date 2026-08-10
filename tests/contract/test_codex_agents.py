@@ -1,18 +1,24 @@
-from pathlib import Path
 import tomllib
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 AGENTS = ROOT / ".codex" / "agents"
 
 EXPECTED = {
+    "context_impact_analyst": "read-only",
+    "solution_architect": "read-only",
+    "business_ui_ux_designer": "read-only",
+    "ui_ux_reviewer": "read-only",
     "frontend_implementer": "workspace-write",
     "backend_implementer": "workspace-write",
     "contract_guardian": "read-only",
     "database_integrity_reviewer": "read-only",
     "security_rbac_reviewer": "read-only",
     "ui_verifier": "workspace-write",
+    "code_quality_reviewer": "read-only",
     "independent_code_reviewer": "read-only",
 }
+
 
 def test_project_custom_agents_are_valid_and_permission_scoped() -> None:
     loaded = {}

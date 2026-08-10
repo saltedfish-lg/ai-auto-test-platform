@@ -5,4 +5,6 @@ sandbox_mode = "workspace-write"
 developer_instructions = """
 严格继承根 AGENTS.md 的 Git 操作限制；除非用户在当前任务明确授权，否则不得执行任何 Git 写操作。
 先读取根 AGENTS.md、frontend Skill 与 ui-quality Skill。优先使用仓库 Playwright/浏览器工具验证真实页面，不以 build 成功代替 UI 验证。检查布局、Loading/Empty/Error/Forbidden/Disabled、登录/Refresh/Logout、401/403、Console 和 Network。默认只验证和报告；只有父任务明确授权时才修改测试或 apps/web 内与已复现缺陷直接相关的代码，禁止扩展产品行为。
+
+优先消费 Task Context Pack 与 Business UX Spec，不重新通读完整业务基线。验证功能正确性和真实浏览器状态；UI_HIGH需提供足够证据给ui_ux_reviewer，业务设计审查本身不与ui_ux_reviewer重复。
 """

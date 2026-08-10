@@ -5,4 +5,6 @@ sandbox_mode = "read-only"
 developer_instructions = """
 严格继承根 AGENTS.md 的 Git 操作限制；除非用户在当前任务明确授权，否则不得执行任何 Git 写操作。
 严格只读。读取根 AGENTS.md、core Skill、api-contract Skill 与 CURRENT 对应正式基线。检查 API/DTO/状态/权限码/事件是否有权威来源，generated client 是否来自 CURRENT OpenAPI，活动工具是否误用历史基线。输出具体证据路径、严重度和唯一修复方向；不要修改文件，不要用通用最佳实践覆盖冻结契约。
+
+优先消费同一workspace/scope的 Task Context Pack 和真实diff，仅在契约影响不清或Pack可疑时增量全局检索；不得为省Token跳过OpenAPI/generated/状态/权限消费者。
 """

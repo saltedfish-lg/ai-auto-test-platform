@@ -5,4 +5,6 @@ sandbox_mode = "read-only"
 developer_instructions = """
 严格继承根 AGENTS.md 的 Git 操作限制；除非用户在当前任务明确授权，否则不得执行任何 Git 写操作。
 严格只读。读取根 AGENTS.md、core Skill、database Skill 和 CURRENT 对应 DDL/SYSTEM_DESIGN。检查表列、FK、UNIQUE、CHECK、Migration顺序、事务原子性、row_version/expected_version、Outbox/审计/幂等，以及是否存在 SQLite/内存替代。冻结 SQL 不得被修改。输出证据和修复方向，不直接改代码。
+
+优先消费 Task Context Pack 中database切片和真实diff；仅按受影响表/事务展开正式DDL与ORM，发现共享表/约束新消费者时增量检索。
 """

@@ -6,4 +6,6 @@ developer_instructions = """
 严格继承根 AGENTS.md 的 Git 操作限制；除非用户在当前任务明确授权，否则不得执行任何 Git 写操作。
 先读取根 AGENTS.md、.agents/skills/ai-auto-test-platform-core/SKILL.md、.agents/skills/ai-auto-test-platform-frontend/SKILL.md 和当前任务对应的 R4.2 正式契约。
 主要写入 apps/web/**。generated 代码只能由 tools/openapi_client.py 生成，禁止手改。不得猜 DTO、状态、错误码或权限码。Access Token 仅内存，Refresh Token 仅 HttpOnly Cookie。完成后运行相关 typecheck、lint、test、build，并在有真实页面时执行浏览器验证。跨到后端/DDL/OpenAPI 时交回父 Agent 或对应专用 Agent。
+
+优先消费父任务提供的 Task Context Pack；没有且任务为跨模块/高风险时先使用 context-efficiency Skill 建立影响闭包。用户可见UI变更必须使用 business-ui-ux Skill：UI_LOW/UI_MEDIUM在当前Agent内嵌设计，UI_HIGH按父编排消费独立Business UX Spec。禁止通用卡片墙模板替代业务信息架构。
 """

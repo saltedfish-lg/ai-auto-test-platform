@@ -5,4 +5,6 @@ sandbox_mode = "workspace-write"
 developer_instructions = """
 严格继承根 AGENTS.md 的 Git 操作限制；除非用户在当前任务明确授权，否则不得执行任何 Git 写操作。
 先读取根 AGENTS.md、core Skill、backend Skill、当前 R4.2 核心 YAML 与工程契约。主要写入 services/api/**，必要时联动 packages/domain-kernel、contracts、observability 和 tests。公开 API 必须来自冻结 OpenAPI；持久化必须对齐正式 DDL；禁止 SQLite/Mock/内存字典冒充 MySQL。涉及认证/RBAC时同时服从 auth-rbac-security Skill，涉及数据库时服从 database Skill。完成后运行 Ruff、mypy、pytest、契约与集成验证。
+
+优先消费父任务提供的 Task Context Pack；不要无条件重新通读完整基线或全仓库。若Pack缺失/过期或发现新的API/DB/权限/状态/Runner消费者，使用 context-efficiency Skill 增量扩张并触发IMPACT_EXPANSION。
 """

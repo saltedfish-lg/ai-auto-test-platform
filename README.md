@@ -20,6 +20,8 @@
 
 跨前后端功能优先使用 `$ai-auto-test-platform-feature-orchestrator`。支持 subagent 时，Orchestrator 可调用 `.codex/agents/**` 中的专用 Agent；不支持时由主 Agent 按相同 Skill/Role 规则串行执行。
 
+代码质量由 `$ai-auto-test-platform-code-quality` 提供双模式规则：实现 Agent 使用 **Implementation Standards Mode**，`code_quality_reviewer` 使用 **Review Mode** 做只读多Lane审查；最终 `independent_code_reviewer` 优先复用同一workspace/scope的专项审查结果，避免重复Review循环。
+
 ## 目录职责
 
 | 路径 | 职责 |

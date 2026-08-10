@@ -23,7 +23,9 @@ class BaselineSources:
             / "platform_design_baseline_release.yaml"
         )
         if not release.is_file():
-            raise FileNotFoundError(f"current baseline release file not found under {self.baseline_root}")
+            raise FileNotFoundError(
+                f"current baseline release file not found under {self.baseline_root}"
+            )
         if f"release_id: {BASELINE_RELEASE_ID}" not in release.read_text(encoding="utf-8"):
             raise ValueError("baseline release_id does not match the current R4.2 release")
 

@@ -1,16 +1,87 @@
-import { render, screen } from "@testing-library/vue";
-import { ElCard, ElTag } from "element-plus";
+import { fireEvent, render, screen, waitFor } from "@testing-library/vue";
+import ElementPlus from "element-plus";
+import { createPinia, setActivePinia } from "pinia";
+import { createMemoryHistory, createRouter, type Router } from "vue-router";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { apiClient } from "../api/client";
 import PlatformShell from "../components/PlatformShell.vue";
+import { useSessionStore } from "../stores/session";
+import { authenticationResponse, currentUser, currentUserResponse } from "./auth-fixtures";
 
-describe("PlatformShell", () => {
-  it("renders the current R4.2 implementation-ready status", () => {
-    render(PlatformShell, { global: { components: { ElCard, ElTag } } });
+async function renderShell(permissions = ["PROJECT_VIEW", "USER_CREATE"]): Promise<Router> {
+  const pinia = createPinia();
+  setActivePinia(pinia);
+  vi.spyOn(apiClient, "login_platform_user").mockResolvedValue(
+    authenticationResponse(currentUser({ permissions })),
+  );
+  await useSessionStore().login({
+    username: "admin",
+    password: "input-only",
+  });
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      { path: "/", component: PlatformShell },
+      {
+        path: "/login",
+        component: { template: "<div>login route</div>" },
+      },
+      {
+        path: "/change-password",
+        component: { template: "<div>change</div>" },
+      },
+    ],
+  });
+  await router.push("/");
+  await router.isReady();
+  render(PlatformShell, {
+    global: { plugins: [pinia, ElementPlus, router] },
+  });
+  return router;
+}
 
-    expect(screen.getByText("AI 自动化测试执行平台")).toBeTruthy();
-    expect(screen.getByText("P1 实施准备")).toBeTruthy();
-    expect(screen.getByText("PDBR-2026.08.07-R4.2")).toBeTruthy();
-    expect(screen.getByText("PASS（R4.2 基线证据）")).toBeTruthy();
-    expect(screen.getByText("NOT_COMPLETED")).toBeTruthy();
+describe("身份工作台（组件测试，API 为 mock）", () => {
+  beforeEach(() => vi.restoreAllMocks());
+
+  it("renders current user, roles, permissions and permission-gated UX", async () => {
+    await renderShell();
+
+    expect(screen.getByText("欢迎回来，平台管理员")).toBeTruthy();
+    expect(screen.getByText("ROLE-SUPER-ADMIN")).toBeTruthy();
+    expect(screen.getByText("PROJECT_VIEW")).toBeTruthy();
+    expect(
+      screen.getByText("当前身份具备用户创建权限；用户治理功能将在对应正式模块实现。"),
+    ).toBeTruthy();
+  });
+
+  it("shows the fallback UX when the realtime permission is absent", async () => {
+    await renderShell(["PROJECT_VIEW"]);
+    expect(screen.getByText("当前身份未获得用户创建权限。")).toBeTruthy();
+  });
+
+  it("reloads current-user data and clears local state on logout", async () => {
+    const router = await renderShell();
+    vi.spyOn(apiClient, "get_current_user").mockResolvedValue(
+      currentUserResponse(currentUser({ display_name: "最新名称" })),
+    );
+    vi.spyOn(apiClient, "logout_platform_user").mockResolvedValue(null);
+
+    await fireEvent.click(screen.getByRole("button", { name: "刷新身份" }));
+    expect(await screen.findByText("欢迎回来，最新名称")).toBeTruthy();
+
+    await fireEvent.click(screen.getByRole("button", { name: "退出登录" }));
+    await waitFor(() => expect(router.currentRoute.value.path).toBe("/login"));
+    expect(useSessionStore().isAuthenticated).toBe(false);
+  });
+
+  it("leaves the protected view even when the logout request fails", async () => {
+    const router = await renderShell();
+    vi.spyOn(apiClient, "logout_platform_user").mockRejectedValue(new Error("synthetic failure"));
+
+    await fireEvent.click(screen.getByRole("button", { name: "退出登录" }));
+
+    await waitFor(() => expect(router.currentRoute.value.path).toBe("/login"));
+    expect(useSessionStore().isAuthenticated).toBe(false);
   });
 });

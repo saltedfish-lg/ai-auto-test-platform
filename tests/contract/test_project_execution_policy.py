@@ -1,5 +1,5 @@
-from pathlib import Path
 import tomllib
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -30,7 +30,7 @@ def test_root_agents_forbids_git_write_operations_by_default() -> None:
 def test_all_custom_agents_explicitly_inherit_root_git_policy() -> None:
     agent_dir = ROOT / ".codex" / "agents"
     paths = sorted(agent_dir.glob("*.toml"))
-    assert len(paths) == 7
+    assert len(paths) == 12
     for path in paths:
         data = tomllib.loads(path.read_text(encoding="utf-8"))
         instructions = data["developer_instructions"]

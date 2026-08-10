@@ -54,7 +54,9 @@ def verify() -> dict[str, object]:
     ).read_text(encoding="utf-8")
     release_match = re.search(r"^release_id:\s*(\S+)\s*$", release_text, re.MULTILINE)
     expected_release = release_match.group(1) if release_match else "UNKNOWN"
-    release_matches = expected_release != "UNKNOWN" and expected_release.endswith(f"-{CURRENT_BASELINE}")
+    release_matches = expected_release != "UNKNOWN" and expected_release.endswith(
+        f"-{CURRENT_BASELINE}"
+    )
     passed = not (parse_errors or missing or mismatches or extra) and release_matches
     return {
         "baseline": CURRENT_BASELINE,

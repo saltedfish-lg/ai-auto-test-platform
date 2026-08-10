@@ -26,6 +26,18 @@ def test_non_mysql_database_configuration_is_rejected() -> None:
         ApiSettings(_env_file=None, environment="test", database_url="sqlite:///local.db")
 
 
+def test_invalid_database_configuration_hides_secret_input() -> None:
+    marker = "synthetic-database-secret"
+    with pytest.raises(ValidationError) as captured:
+        ApiSettings(
+            _env_file=None,
+            environment="test",
+            database_url=f"postgresql://platform:{marker}@127.0.0.1/platform",
+        )
+
+    assert marker not in str(captured.value)
+
+
 def test_api_assembles_without_undeclared_public_routes() -> None:
     app = create_app(settings())
 
