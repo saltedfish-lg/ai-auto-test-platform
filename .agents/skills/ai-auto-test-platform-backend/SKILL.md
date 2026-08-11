@@ -7,7 +7,7 @@ description: AI自动化测试执行平台 FastAPI 后端正式实现 Skill；�
 
 ## 入口
 
-先读根 `AGENTS.md`、core Skill、本 Skill references、任务相关 R4.2 六份核心 YAML 与工程契约，然后读真实代码。
+先读根 `AGENTS.md`、core Skill、本 Skill references、任务相关 六份核心 authority YAML 与工程契约，然后读真实代码。
 
 ## 默认修改范围
 
@@ -19,8 +19,8 @@ description: AI自动化测试执行平台 FastAPI 后端正式实现 Skill；�
 
 - 编码时必须同时遵循 `$ai-auto-test-platform-code-quality` 的 **Implementation Standards Mode**；该模式只增加质量约束，不改变本实现 Skill/Agent 的写权限。
 
-- 正式公开 API 必须来自冻结 OpenAPI；禁止自创 Operation/DTO/状态/错误码。
-- 正式字段和关系必须来自 DDL/对象映射；`docs/baseline/**` 只读。
+- 正式公开 API 必须来自当前 authority OpenAPI；禁止自创 Operation/DTO/状态/错误码。
+- 正式字段和关系必须来自 DDL/对象映射；`docs/authority/**` 只读。
 - 禁止 SQLite、Mock Repository、内存字典、JSON 文件冒充 MySQL 8.4 正式持久化。
 - 外部写操作落实当前 contracts 要求的 idempotency / expected version / RBAC / data scope / state guard。
 - 状态、审计、Outbox、幂等记录等要求同原子动作时必须同事务提交。

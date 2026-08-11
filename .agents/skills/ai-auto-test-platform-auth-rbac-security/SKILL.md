@@ -1,6 +1,6 @@
 ---
 name: ai-auto-test-platform-auth-rbac-security
-description: R4.2 P1 身份认证、默认admin、JWT/Refresh Session、密码安全、RBAC与授权安全正式实现/审查Skill。
+description: 当前 authority P1 身份认证、默认admin、JWT/Refresh Session、密码安全、RBAC与授权安全正式实现/审查Skill。
 ---
 
 # P1 Authentication + Admin + RBAC + Security
@@ -9,12 +9,12 @@ description: R4.2 P1 身份认证、默认admin、JWT/Refresh Session、密码�
 
 必须读取：
 
-- `docs/baseline/R4.2/编码冻结基线/AUTHENTICATION_CONTRACT/authentication-contract.yaml`
-- `docs/baseline/R4.2/编码冻结基线/OPENAPI/openapi.yaml`
-- `docs/baseline/R4.2/编码冻结基线/DATABASE_DDL/V5__platform_authentication_contract.sql`
+- `docs/authority/编码权威事实/AUTHENTICATION_CONTRACT/authentication-contract.yaml`
+- `docs/authority/编码权威事实/OPENAPI/openapi.yaml`
+- `docs/authority/编码权威事实/DATABASE_DDL/V5__platform_authentication_contract.sql`
 - V3/V4、permission closure、state owner、ADR-032 及 core Skill 相关 references
 
-## 不可发散的冻结事实
+## 不可发散的当前已确认事实
 
 - Access JWT：RS256、kid、issuer/audience、900s、credential_version/session 实时校验；
 - 权限不放入 JWT 作为授权事实；每个受保护请求从数据库实时解析；

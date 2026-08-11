@@ -1,14 +1,11 @@
 # coding-checklists.md
 
-- release_id: PDBR-2026.08.07-R4.2
-- status: FROZEN
+- authority_model: SINGLE_LIVING_AUTHORITY
+- authority_root: docs/authority
+- status: CURRENT
 
-编码前检查release_id、DTO、权限映射、状态Owner、迁移、事件Schema和验收映射；提交前运行validation/validate_contracts.py。
+编码前检查当前 authority digest、DTO、权限映射、状态Owner、迁移、事件Schema和验收映射；实现完成后运行 `docs/authority/validation/validate_contracts.py`。Git提交由用户在IDEA中处理。
 
+当前事实以 `docs/authority/**` 为准；本文只是运行时紧凑索引，不复制完整源文档。若用户已明确改变相关产品事实，先 `AUTHORITY_UPDATE_ONLY` 修改当前 authority 并通过 validators，再继续实现。Git 历史与提交由用户在 IDEA 管理，Codex 不运行 Git。
 
-## R4.2状态
-
-发布`PDBR-2026.08.07-R4.2`允许恢复P1身份认证、默认admin与RBAC编码；MySQL 8.4空库安装和R4.1→R4.2升级门禁已通过；1691项真实平台验收仍为`SPECIFIED/NOT_STARTED`。
-
-
-权威模型：`AUTHORITY-MODEL-R4.2-001`；按职责域确定权威，本文不得覆盖核心事实或工程契约。
+权威模型：`AUTHORITY-MODEL-LIVING-001`。

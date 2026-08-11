@@ -10,7 +10,7 @@ description: AI自动化测试执行平台业务驱动UI/UX设计与审查Skill�
 解决两类问题：
 
 1. UI 不能只是“Element Plus + 卡片 + 表格 + Dialog”的机械拼装；
-2. UI 美化必须服务测试业务，而不是为了视觉效果改变冻结产品语义。
+2. UI 美化必须服务测试业务，而不是为了视觉效果改变当前产品语义。
 
 本 Skill 的设计权属于 **Engineering Autonomy**：可以自主决定布局、视觉层级、组件组合、密度、间距和交互表现，但不得自创业务对象、状态、权限、API、规则、审核流程或高风险行为。
 
@@ -20,7 +20,7 @@ description: AI自动化测试执行平台业务驱动UI/UX设计与审查Skill�
 
 - **UI_LOW**：文案、小样式、单控件、无业务流变化；`frontend_implementer` 内嵌使用本 Skill 的轻量清单。
 - **UI_MEDIUM**：新增常规页面、较大信息架构调整、复杂表格/表单/详情；生成紧凑 Business UX Spec，通常仍由当前 Agent 内嵌完成。
-- **UI_HIGH**：新建核心工作台、AI探索/录制/执行/Runner/报告等复杂页面，或大规模重设计；才优先调用 `business_ui_ux_designer` 独立产出 Business UX Spec，并在实现后调用 `ui_ux_reviewer`。
+- **UI_HIGH**：新建核心工作台、AI探索/录制/执行/Runner/报告等复杂页面，或大规模重设计；才按需调用 `business_ui_ux_specialist`：修改前使用 `DESIGN_MODE` 产出 Business UX Spec，实现后确需独立体验审查时复用同一角色的 `REVIEW_MODE`。
 
 所有 UI Agent 优先消费 `$ai-auto-test-platform-context-efficiency` 生成的 Task Context Pack，不重复通读完整基线。
 
@@ -41,7 +41,7 @@ UI_HIGH 若是**现有页面重设计/美化**，在 Designer 产出方案前必
 - `CURRENT_UI_BASELINE = SOURCE_BASED_CURRENT_UI_BASELINE`
 - `VISUAL_BASELINE_CONFIDENCE = LIMITED`
 
-此时允许基于当前 Vue 源码、路由、组件、已有测试/截图和业务事实继续设计与实现，但**禁止把源码推断冒充真实 Before 截图**；同时登记 `POST_CHANGE_BROWSER_VERIFY = REQUIRED`，环境恢复后必须补真实浏览器验证。UI/UX Reviewer 在这种状态下审查“源码基线 + Post-change 真实证据 + LIMITED 置信度”，不得强制要求一个不存在的 Before screenshot。
+此时允许基于当前 Vue 源码、路由、组件、已有测试/截图和业务事实继续设计与实现，但**禁止把源码推断冒充真实 Before 截图**；同时登记 `POST_CHANGE_BROWSER_VERIFY = REQUIRED`，环境恢复后必须补真实浏览器验证。`business_ui_ux_specialist` 的 `REVIEW_MODE` 在这种状态下审查“源码基线 + Post-change 真实证据 + LIMITED 置信度”，不得强制要求一个不存在的 Before screenshot。
 
 
 ## 一、设计前必须回答的业务问题
@@ -152,7 +152,7 @@ anti_patterns_to_avoid: []
 
 ## 七、Review Mode
 
-`ui_ux_reviewer` 使用本 Skill 的 Review Mode，只读检查：
+`business_ui_ux_specialist` 使用本 Skill 的 `REVIEW_MODE` 只读检查：
 
 - 页面信息层级是否与业务优先级一致；
 - 高频任务是否容易完成；
@@ -165,7 +165,7 @@ anti_patterns_to_avoid: []
 - 视觉是否一致但不过度装饰；
 - 可访问性、键盘、焦点、文本对比和非颜色状态表达。
 
-UI_LOW 默认不额外调度 Reviewer；UI_MEDIUM 由 `ui_verifier` + 内嵌清单即可；UI_HIGH 或用户明确要求“美化/重设计/审查体验”时调用独立 Reviewer。
+UI_LOW 默认不额外调度 Reviewer；UI_MEDIUM 由 `ui_verifier` + 内嵌清单即可；UI_HIGH 或用户明确要求“美化/重设计/审查体验”时才选择 `business_ui_ux_specialist` 的 `REVIEW_MODE`；不得为了固定流水线重复启动。
 
 ## 八、完成条件
 
@@ -177,7 +177,7 @@ UI_HIGH 必须具备：
 - 关键状态浏览器证据；
 - UI/UX Review 结论；
 - 现有页面重设计时 Before/After 使用同 viewport、同关键状态做业务级比较；
-- 不改变冻结产品/契约事实；
+- 不改变当前产品/契约事实；
 - 无明显机械化模板反模式。
 
 ## 参考

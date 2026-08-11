@@ -25,13 +25,7 @@ class ApiSettings(BaseSettings):
     service_name: str = "platform-api"
     host: IPvAnyAddress = Field(IPv4Address("127.0.0.1"), validation_alias="API_HOST")
     port: int = Field(8000, ge=1, le=65535, validation_alias="API_PORT")
-    jwt_private_key_file: Path | None = Field(
-        default=None, validation_alias="ATP_JWT_PRIVATE_KEY_FILE", repr=False
-    )
-    jwt_public_key_file: Path | None = Field(
-        default=None, validation_alias="ATP_JWT_PUBLIC_KEY_FILE", repr=False
-    )
-    jwt_key_id: str = Field("atp-local-rs256-v1", validation_alias="ATP_JWT_KEY_ID")
+    jwt_key_ring_file: Path = Field(validation_alias="ATP_JWT_KEY_RING_FILE", repr=False)
     bootstrap_admin_password_file: Path | None = Field(
         default=None,
         validation_alias="ATP_BOOTSTRAP_ADMIN_PASSWORD_FILE",
@@ -47,7 +41,7 @@ class ApiSettings(BaseSettings):
 
     @property
     def refresh_cookie_secure(self) -> bool:
-        """Only loopback local/test processes may use the frozen TLS exception."""
+        """Only loopback local/test processes may use the current TLS exception."""
         return not (
             self.environment in {"local", "test"} and str(self.host) in {"127.0.0.1", "localhost"}
         )

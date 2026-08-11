@@ -1,4 +1,4 @@
-"""FastAPI adapter for the five frozen P1 authentication operations."""
+"""FastAPI adapter for the five current P1 authentication operations."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Header, Request, Response
 
+from platform_api.audit import AuditContext
 from platform_api.auth_schemas import (
     AuthCookieActionRequest,
     AuthenticationResponse,
@@ -44,6 +45,10 @@ def _source_context(request: Request) -> str:
     user_agent = request.headers.get("user-agent", "")[:512]
     client = request.client.host if request.client is not None else ""
     return f"{client}|{user_agent}"
+
+
+def _audit_context(request: Request) -> AuditContext:
+    return AuditContext(_correlation_id(request), _source_context(request))
 
 
 def _bearer(authorization: str | None) -> str:
@@ -133,7 +138,7 @@ def _authentication_response(
 def login_platform_user(
     body: LoginRequest, request: Request, response: Response
 ) -> AuthenticationResponse:
-    result = _service(request).login(body.username, body.password, _source_context(request))
+    result = _service(request).login(body.username, body.password, _audit_context(request))
     _set_refresh_cookie(response, request, result.refresh_token)
     return _authentication_response(result, _correlation_id(request))
 
@@ -149,14 +154,7 @@ def refresh_platform_session(
     del body
     _require_same_origin(request)
     token = request.cookies.get(REFRESH_COOKIE_NAME)
-    if not token:
-        raise PlatformError(
-            title="Session revoked",
-            detail="The Refresh session cookie is unavailable.",
-            status=401,
-            code="AUTH_SESSION_REVOKED",
-        )
-    result = _service(request).refresh(token, _source_context(request))
+    result = _service(request).refresh(token, _audit_context(request))
     _set_refresh_cookie(response, request, result.refresh_token)
     return _authentication_response(result, _correlation_id(request))
 
@@ -175,7 +173,7 @@ def logout_platform_user(
 ) -> None:
     del body
     _require_same_origin(request)
-    _service(request).logout(request.cookies.get(REFRESH_COOKIE_NAME))
+    _service(request).logout(request.cookies.get(REFRESH_COOKIE_NAME), _audit_context(request))
     _clear_refresh_cookie(response, request)
 
 
@@ -184,7 +182,9 @@ def get_current_user(
     request: Request, authorization: str | None = Header(default=None)
 ) -> CurrentUserResponse:
     token = _bearer(authorization)
-    _, current_user = _service(request).authenticate_access(token, "get_current_user")
+    _, current_user = _service(request).authenticate_access(
+        token, "get_current_user", _audit_context(request)
+    )
     return CurrentUserResponse(data=current_user, correlation_id=_correlation_id(request))
 
 
@@ -206,7 +206,7 @@ def change_current_user_password(
         body.current_password,
         body.new_password,
         idempotency_key,
-        _source_context(request),
+        _audit_context(request),
     )
     _set_refresh_cookie(response, request, result.refresh_token)
     return _authentication_response(result, _correlation_id(request))

@@ -1,20 +1,21 @@
 # Repository Map & Authority
 
-## 当前发布
+## 当前权威模型
 
-- 根 `AGENTS.md`: `PDBR-2026.08.07-R4.2`
-- 权威模型：`AUTHORITY-MODEL-R4.2-001`
+- 根 `AGENTS.md`: `CURRENT_LIVING_AUTHORITY`
+- 权威模型：`SINGLE_LIVING_AUTHORITY`
+- 唯一活动事实源：`docs/authority/**`
 - 当前 P1：身份认证 + 默认 admin + RBAC 可正式编码
-- `docs/baseline/R4.2/**` 为当前冻结输入；不得修改基线文件
+- authority 是受控可变事实源：不得因实现方便擅自改产品语义；用户请求或已确认的 Product/Authority 决策可在 `AUTHORITY_UPDATE_ONLY` 阶段直接同步源文档。
+- 不创建 R4.x/R5.x 整套复制目录，不维护 CURRENT marker、Baseline Manifest 或 Release Snapshot。
 
 ## 权威顺序（按职责域）
 
-1. Release / Manifest：发布身份、成员、版本、状态、hash；
-2. 六份核心 YAML：产品范围、角色场景、对象规则、权限并发、AI/Runner、安全验收；
-3. SYSTEM_DESIGN + OpenAPI + DDL + Event + State Owner + Permission / Acceptance contracts：工程和物理实现；
-4. ADR：只有同步核心事实/工程契约后才生效；
-5. AGENTS / Skills：只管理 Codex 执行流程，不改变产品事实；
-6. README、导航 Markdown、DOCX、图：非权威投影。
+1. 六份核心 YAML：产品范围、角色场景、对象规则、权限并发、AI/Runner、安全验收；
+2. SYSTEM_DESIGN + OpenAPI + DDL + Event + State Owner + Permission / Acceptance contracts：工程和物理实现；
+3. ADR：只有同步核心事实/工程契约后才生效；
+4. AGENTS / Skills：只管理 Codex 执行流程，不改变产品事实；
+5. README、导航 Markdown、DOCX、图：非权威投影。
 
 ## 代码目录
 
@@ -24,13 +25,13 @@
 - `workers/background`: 后台任务进程；
 - `runner/agent`: 独立 Runner Agent；
 - `packages/domain-kernel`: 通用领域内核，不应变成业务对象垃圾桶；
-- `packages/contracts`: 冻结 OpenAPI/事件 Schema 加载和验证；
+- `packages/contracts`: 当前 authority OpenAPI/事件 Schema 加载和验证；
 - `packages/observability`: 日志、correlation ID、敏感字段过滤；
 - `tests/contract`: 契约验证；
 - `tests/integration`: 集成验证；
 - `tests/e2e`: 后续真实端到端验证；
 - `tools`: 生成、校验、门禁工具。
 
-## 当前基线解析规则
+## 当前 authority 解析规则
 
-活动工具、OpenAPI生成器与契约加载边界必须通过 `docs/baseline/CURRENT` 解析当前冻结版本；当前值为 R4.2。R4.1 只允许出现在父发布、升级验证或历史追踪语义中，不得作为活动代码输入。
+活动工具、OpenAPI 生成器与契约加载边界必须直接解析 `docs/authority`；不得要求版本目录、CURRENT marker、Manifest、Release Snapshot 或 Git 元数据。

@@ -1,4 +1,4 @@
-"""Application assembly for the R4.2 P1 platform API."""
+"""Application assembly for the current P1 platform API."""
 
 from __future__ import annotations
 
@@ -11,19 +11,21 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from platform_observability import configure_logging
 
+from platform_api.audit import AuthenticationAuditService
 from platform_api.auth_router import router as auth_router
 from platform_api.auth_service import AuthenticationService
 from platform_api.config import ApiSettings
 from platform_api.database import create_database_engine, create_session_factory
 from platform_api.errors import PlatformError, ProblemDetails
 from platform_api.middleware import CorrelationIdMiddleware
-from platform_api.security import JwtService, PasswordService
+from platform_api.security import JwtKeyRing, JwtService, PasswordService
 
 LOGGER = logging.getLogger(__name__)
 
 
 def create_app(settings: ApiSettings) -> FastAPI:
     configure_logging(settings.log_level)
+    jwt_service = JwtService(JwtKeyRing.load(settings.jwt_key_ring_file))
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -44,18 +46,12 @@ def create_app(settings: ApiSettings) -> FastAPI:
     engine = create_database_engine(settings.database_url)
     app.state.database_engine = engine
     app.state.session_factory = create_session_factory(engine)
-    if settings.jwt_private_key_file is not None and settings.jwt_public_key_file is not None:
-        app.state.auth_service = AuthenticationService(
-            app.state.session_factory,
-            PasswordService(),
-            JwtService(
-                settings.jwt_private_key_file,
-                settings.jwt_public_key_file,
-                settings.jwt_key_id,
-            ),
-        )
-    else:
-        app.state.auth_service = None
+    app.state.auth_service = AuthenticationService(
+        app.state.session_factory,
+        PasswordService(),
+        jwt_service,
+        AuthenticationAuditService(),
+    )
     app.add_middleware(CorrelationIdMiddleware)
     app.include_router(auth_router)
 

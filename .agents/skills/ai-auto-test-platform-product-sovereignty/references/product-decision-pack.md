@@ -9,7 +9,9 @@ product_decision:
   question: <一个可裁决的问题>
 
   authority_check:
-    current_baseline: <动态CURRENT>
+    authority_root: docs/authority
+    authority_model: SINGLE_LIVING_AUTHORITY
+    authority_digest: <当前摘要>
     searched_refs: []
     authoritative_fact_found: false
     conflict_refs: []
@@ -56,5 +58,5 @@ product_decision:
 - `user_decision.status=CONFIRMED` 只能来自用户当前请求、已记录的明确用户裁决或用户对 Decision Pack 的明确选择，不得由 Agent 推断；必须记录真实 `decision_source`。
 - 如果当前用户请求本身已经提供足以唯一落地的产品决定，直接记录 `CONFIRMED / selected_option=USER_DEFINED / decision_source=CURRENT_USER_REQUEST`；不得为了形式制造伪选项或再次要求确认。
 - 用户确认导致**新增、修改、删除产品事实，解决权威冲突或产品范围变化**时，`authority_update_required=true / workflow_state=AUTHORITY_UPDATE_ONLY`。尤其 `PRODUCT_DECISION_REQUIRED + CONFIRMED` 默认意味着新增原缺失产品事实。
-- `PENDING` 时 `workflow_state=BLOCKED_BY_PRODUCT_DECISION`；`CONFIRMED + authority_update_required=true` 时只能同步受治理权威事实，禁止 Architecture/Implementation。权威更新完成后必须重新执行产品门并得到 `PRODUCT_FACT_FOUND`，Decision Pack 本身不能升级为事实源。
+- `PENDING` 时 `workflow_state=BLOCKED_BY_PRODUCT_DECISION`；`CONFIRMED + authority_update_required=true` 时只能同步当前 living authority，禁止 Architecture/Implementation。权威更新完成后必须重新执行产品门并得到 `PRODUCT_FACT_FOUND`，Decision Pack 本身不能升级为事实源。
 - Decision Pack 只保存紧凑事实、差异和影响，不复制完整 YAML/OpenAPI/DDL。

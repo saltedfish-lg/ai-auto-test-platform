@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import json
 import re
 import secrets
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from importlib.resources import files
 from pathlib import Path
@@ -16,6 +17,8 @@ from typing import Any
 import jwt
 from argon2 import PasswordHasher, Type, extract_parameters
 from argon2.exceptions import InvalidHashError, VerifyMismatchError
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey, RSAPublicKey
 
 from platform_api.errors import PlatformError
 
@@ -140,18 +143,226 @@ class AccessClaims:
     credential_version: int
 
 
+@dataclass(frozen=True, slots=True)
+class JwtVerificationKey:
+    kid: str
+    public_key: bytes = field(repr=False)
+    activated_at: datetime
+    retired_from_signing_at: datetime | None
+    verify_until: datetime | None
+
+    def may_verify_at(self, now: datetime) -> bool:
+        if now < self.activated_at:
+            return False
+        if self.retired_from_signing_at is None:
+            return True
+        return (
+            self.retired_from_signing_at <= now
+            and self.verify_until is not None
+            and now < self.verify_until
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class JwtKeyRing:
+    """Validated immutable RS256 signing and verification snapshot."""
+
+    ring_version: str
+    active_signing_kid: str
+    private_key: bytes = field(repr=False)
+    keys: tuple[JwtVerificationKey, ...]
+
+    minimum_previous_overlap_seconds = 960
+    _root_fields = frozenset({"ring_version", "active_signing_kid", "keys"})
+    _key_fields = frozenset(
+        {
+            "kid",
+            "public_key_file",
+            "private_key_file",
+            "activated_at",
+            "retired_from_signing_at",
+            "verify_until",
+        }
+    )
+
+    @classmethod
+    def load(cls, manifest_file: Path, *, now: datetime | None = None) -> JwtKeyRing:
+        """Load a complete ring or fail without retaining a partial configuration."""
+        try:
+            document = json.loads(manifest_file.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError) as error:
+            raise RuntimeError("JWT key ring manifest is unreadable or invalid JSON") from error
+        if not isinstance(document, dict) or set(document) != cls._root_fields:
+            raise RuntimeError("JWT key ring manifest root schema is invalid")
+        ring_version = cls._required_identifier(document, "ring_version")
+        active_kid = cls._required_identifier(document, "active_signing_kid")
+        raw_keys = document.get("keys")
+        if not isinstance(raw_keys, list) or not raw_keys:
+            raise RuntimeError("JWT key ring must contain at least one key")
+
+        effective_now = cls._normalize_now(now)
+        resolved_keys: list[JwtVerificationKey] = []
+        seen_kids: set[str] = set()
+        active_private_key: bytes | None = None
+        active_matches = 0
+        for raw_key in raw_keys:
+            if (
+                not isinstance(raw_key, dict)
+                or not {
+                    "kid",
+                    "public_key_file",
+                    "activated_at",
+                }.issubset(raw_key)
+                or not set(raw_key).issubset(cls._key_fields)
+            ):
+                raise RuntimeError("JWT key ring entry schema is invalid")
+            kid = cls._required_identifier(raw_key, "kid")
+            if kid in seen_kids:
+                raise RuntimeError("JWT key ring kid values must be unique")
+            seen_kids.add(kid)
+            activated_at = cls._utc_timestamp(raw_key, "activated_at", required=True)
+            assert activated_at is not None
+            retired_at = cls._utc_timestamp(raw_key, "retired_from_signing_at", required=False)
+            verify_until = cls._utc_timestamp(raw_key, "verify_until", required=False)
+            if (retired_at is None) != (verify_until is None):
+                raise RuntimeError("JWT previous key retirement timestamps must be paired")
+            if retired_at is not None:
+                if retired_at < activated_at:
+                    raise RuntimeError("JWT key retirement precedes activation")
+                assert verify_until is not None
+                overlap = (verify_until - retired_at).total_seconds()
+                if overlap < cls.minimum_previous_overlap_seconds:
+                    raise RuntimeError("JWT previous key verification overlap is insufficient")
+
+            public_bytes, public_key = cls._load_public_key(
+                cls._resolve_key_path(manifest_file, raw_key, "public_key_file")
+            )
+            private_value = raw_key.get("private_key_file")
+            if private_value is not None and not isinstance(private_value, str):
+                raise RuntimeError("JWT private key file reference is invalid")
+            private_bytes: bytes | None = None
+            private_key: RSAPrivateKey | None = None
+            if isinstance(private_value, str):
+                private_bytes, private_key = cls._load_private_key(
+                    cls._resolve_key_path(manifest_file, raw_key, "private_key_file")
+                )
+
+            if kid == active_kid:
+                active_matches += 1
+                if retired_at is not None or activated_at > effective_now:
+                    raise RuntimeError("JWT active signing key is not currently active")
+                if private_key is None or private_bytes is None:
+                    raise RuntimeError("JWT active signing key requires private key material")
+                if private_key.public_key().public_numbers() != public_key.public_numbers():
+                    raise RuntimeError("JWT active signing public and private keys do not match")
+                active_private_key = private_bytes
+            elif retired_at is not None:
+                if private_key is not None:
+                    raise RuntimeError(
+                        "JWT previous verification keys must not retain private keys"
+                    )
+            elif activated_at <= effective_now:
+                raise RuntimeError("JWT non-active key must be previous or staged for future use")
+
+            resolved_keys.append(
+                JwtVerificationKey(
+                    kid=kid,
+                    public_key=public_bytes,
+                    activated_at=activated_at,
+                    retired_from_signing_at=retired_at,
+                    verify_until=verify_until,
+                )
+            )
+        if active_matches != 1 or active_private_key is None:
+            raise RuntimeError("JWT active signing kid must resolve exactly once")
+        return cls(ring_version, active_kid, active_private_key, tuple(resolved_keys))
+
+    def verification_key(self, kid: str, *, now: datetime | None = None) -> bytes | None:
+        effective_now = self._normalize_now(now)
+        for key in self.keys:
+            if key.kid != kid:
+                continue
+            if key.kid == self.active_signing_kid:
+                return key.public_key if key.may_verify_at(effective_now) else None
+            # staged key 仅用于预分发; 到达 activated_at 后也必须显式切换 active_signing_kid.
+            if key.retired_from_signing_at is not None and key.may_verify_at(effective_now):
+                return key.public_key
+            return None
+        return None
+
+    @staticmethod
+    def _normalize_now(now: datetime | None) -> datetime:
+        value = now or datetime.now(UTC)
+        if value.tzinfo is None:
+            raise RuntimeError("JWT key ring validation time must be timezone-aware UTC")
+        return value.astimezone(UTC)
+
+    @staticmethod
+    def _required_identifier(document: dict[str, Any], field: str) -> str:
+        value = document.get(field)
+        if not isinstance(value, str) or not value or len(value) > 128:
+            raise RuntimeError(f"JWT key ring {field} is invalid")
+        return value
+
+    @staticmethod
+    def _utc_timestamp(document: dict[str, Any], field: str, *, required: bool) -> datetime | None:
+        value = document.get(field)
+        if value is None and not required:
+            return None
+        if not isinstance(value, str) or not value.endswith(("Z", "+00:00")):
+            raise RuntimeError(f"JWT key ring {field} must be an ISO UTC timestamp")
+        try:
+            normalized = value.removesuffix("Z") + ("+00:00" if value.endswith("Z") else "")
+            parsed = datetime.fromisoformat(normalized)
+        except ValueError as error:
+            raise RuntimeError(f"JWT key ring {field} must be an ISO UTC timestamp") from error
+        if parsed.tzinfo is None or parsed.utcoffset() != timedelta(0):
+            raise RuntimeError(f"JWT key ring {field} must be an ISO UTC timestamp")
+        return parsed.astimezone(UTC)
+
+    @staticmethod
+    def _resolve_key_path(manifest_file: Path, document: dict[str, Any], field: str) -> Path:
+        value = document.get(field)
+        if not isinstance(value, str) or not value:
+            raise RuntimeError(f"JWT key ring {field} is invalid")
+        path = Path(value)
+        return path if path.is_absolute() else manifest_file.resolve().parent / path
+
+    @staticmethod
+    def _load_public_key(path: Path) -> tuple[bytes, RSAPublicKey]:
+        try:
+            value = path.read_bytes()
+            key = serialization.load_pem_public_key(value)
+        except (OSError, ValueError, TypeError) as error:
+            raise RuntimeError("JWT public key material is unreadable or invalid") from error
+        if not isinstance(key, RSAPublicKey):
+            raise RuntimeError("JWT public key must be RSA")
+        return value, key
+
+    @staticmethod
+    def _load_private_key(path: Path) -> tuple[bytes, RSAPrivateKey]:
+        try:
+            value = path.read_bytes()
+            key = serialization.load_pem_private_key(value, password=None)
+        except (OSError, ValueError, TypeError) as error:
+            raise RuntimeError("JWT private key material is unreadable or invalid") from error
+        if not isinstance(key, RSAPrivateKey):
+            raise RuntimeError("JWT private key must be RSA")
+        return value, key
+
+
 class JwtService:
     issuer = "ai-auto-test-platform"
     audience = "ai-auto-test-platform-api"
     ttl_seconds = 900
     clock_skew_seconds = 60
 
-    def __init__(self, private_key_file: Path | None, public_key_file: Path | None, kid: str):
-        if private_key_file is None or public_key_file is None:
-            raise RuntimeError("RS256 key files are required for authentication")
-        self._private_key = private_key_file.read_bytes()
-        self._public_key = public_key_file.read_bytes()
-        self._kid = kid
+    def __init__(self, key_ring: JwtKeyRing):
+        self._key_ring = key_ring
+
+    @property
+    def ring_version(self) -> str:
+        return self._key_ring.ring_version
 
     def issue(self, claims: AccessClaims, *, now: datetime | None = None) -> str:
         issued = (now or datetime.now(UTC)).astimezone(UTC)
@@ -168,15 +379,24 @@ class JwtService:
         }
         return jwt.encode(
             payload,
-            self._private_key,
+            self._key_ring.private_key,
             algorithm="RS256",
-            headers={"kid": self._kid},
+            headers={"kid": self._key_ring.active_signing_kid},
         )
 
-    def decode(self, token: str) -> AccessClaims:
+    def decode(self, token: str, *, now: datetime | None = None) -> AccessClaims:
         try:
             header = jwt.get_unverified_header(token)
-            if header.get("kid") != self._kid or header.get("alg") != "RS256":
+            kid = header.get("kid")
+            if not isinstance(kid, str) or header.get("alg") != "RS256":
+                raise PlatformError(
+                    title="Invalid access token",
+                    detail="The access token is invalid.",
+                    status=401,
+                    code="AUTH_TOKEN_INVALID",
+                )
+            public_key = self._key_ring.verification_key(kid, now=now)
+            if public_key is None:
                 raise PlatformError(
                     title="Invalid access token",
                     detail="The access token is invalid.",
@@ -185,7 +405,7 @@ class JwtService:
                 )
             payload = jwt.decode(
                 token,
-                self._public_key,
+                public_key,
                 algorithms=["RS256"],
                 audience=self.audience,
                 issuer=self.issuer,

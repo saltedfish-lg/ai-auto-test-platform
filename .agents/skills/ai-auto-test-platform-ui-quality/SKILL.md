@@ -9,7 +9,7 @@ description: 用真实浏览器验证AI自动化测试执行平台页面视觉�
 
 适用于已经有可运行页面的任务。优先使用 `apps/web` 已安装的 Playwright Test 与真实开发服务器。
 
-本 Skill 主要验证“页面真实运行是否正确”；业务信息架构与反机械化设计由 `$ai-auto-test-platform-business-ui-ux` 定义，UI_HIGH时由 `ui_ux_reviewer` 做独立只读体验审查。
+本 Skill 主要验证“页面真实运行是否正确”；业务信息架构与反机械化设计由 `$ai-auto-test-platform-business-ui-ux` 定义，UI_HIGH时按需由 `business_ui_ux_specialist` 的 `REVIEW_MODE` 做独立只读体验审查。
 
 ## 验证前
 
@@ -32,7 +32,7 @@ description: 用真实浏览器验证AI自动化测试执行平台页面视觉�
 4. 记录 Console/Network 明显异常；
 5. 输出 `PRE_CHANGE_BASELINE = CAPTURED` 与紧凑截图/路径索引。
 
-不得在该模式修改页面。新页面输出 `PRE_CHANGE_BASELINE = NOT_APPLICABLE_NEW_PAGE`。该证据供 `business_ui_ux_designer` 和最终 `ui_ux_reviewer` 使用，不要求像素级 diff。
+不得在该模式修改页面。新页面输出 `PRE_CHANGE_BASELINE = NOT_APPLICABLE_NEW_PAGE`。该证据供 `business_ui_ux_specialist` 的 `DESIGN_MODE / REVIEW_MODE` 使用，不要求像素级 diff。
 
 若真实 Before 因环境条件无法取得，输出 `PRE_CHANGE_BASELINE = BLOCKED_BY_ENVIRONMENT`，并记录具体阻断原因。此时不得伪造 screenshot；上游可退化到 `SOURCE_BASED_CURRENT_UI_BASELINE`，同时标记 `VISUAL_BASELINE_CONFIDENCE = LIMITED` 和 `POST_CHANGE_BROWSER_VERIFY = REQUIRED`。环境恢复后，Post-change Browser Verify 仍为强制验证债务。
 

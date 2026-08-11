@@ -1,9 +1,0 @@
-{
-  "release_id": "PDBR-2026.08.07-R4.2",
-  "schema_types": 464,
-  "client_methods": 250,
-  "outputs": [
-    "types.ts",
-    "client.ts"
-  ]
-}

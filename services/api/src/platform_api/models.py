@@ -1,4 +1,4 @@
-"""SQLAlchemy mappings for the frozen R4.2 P1 authentication tables."""
+"""SQLAlchemy mappings for the current P1 authentication tables."""
 
 from __future__ import annotations
 
@@ -205,6 +205,20 @@ class AuthRefreshSession(Base):
     row_version: Mapped[int] = mapped_column(BigInteger)
     created_at: Mapped[datetime] = mapped_column(DateTime)
     updated_at: Mapped[datetime] = mapped_column(DateTime)
+
+
+class AuthSecurityAudit(Base):
+    __tablename__ = "atp_auth_security_audit"
+    audit_id: Mapped[str] = mapped_column(String(26), primary_key=True)
+    action: Mapped[str] = mapped_column(String(32))
+    operation_id: Mapped[str] = mapped_column(String(128))
+    actor_id: Mapped[str | None] = mapped_column(String(26))
+    target_user_id: Mapped[str | None] = mapped_column(String(26))
+    session_id: Mapped[str | None] = mapped_column(String(26))
+    result_code: Mapped[str] = mapped_column(String(64))
+    correlation_id: Mapped[str] = mapped_column(String(128))
+    occurred_at: Mapped[datetime] = mapped_column(DateTime)
+    source_context_hash: Mapped[bytes] = mapped_column(LargeBinary(32))
 
 
 class IdempotencyRecord(Base):

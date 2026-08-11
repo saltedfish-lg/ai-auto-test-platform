@@ -1,18 +1,19 @@
 metadata:
-  release_id: PDBR-2026.08.07-R4.2
-  version: 1.4.2-auth-contract-completion
-  status: P1_AUTHENTICATION_CONTRACT_COMPLETED
+  authority_model: SINGLE_LIVING_AUTHORITY
+  authority_model_id: AUTHORITY-MODEL-LIVING-001
+  authority_root: docs/authority
+  authority_status: ACTIVE_CONTROLLED_MUTABLE
   code_readiness: READY_FOR_P1_IMPLEMENTATION
-  parent_release_id: PDBR-2026.08.06-R4.1
-  last_modified_at: '2026-08-07T00:00:00+08:00'
+  versioned_baseline_copies: FORBIDDEN
+  manifest_or_release_snapshot: NOT_REQUIRED
+  codex_git_access: DISABLED
 must_read:
-- ../../../编码冻结基线/RELEASE/platform_design_baseline_release.yaml
-- ../../../编码冻结基线/SYSTEM_DESIGN.yaml
-- ../../../编码冻结基线/OPENAPI/openapi.yaml
-- ../../../编码冻结基线/DATABASE_DDL/database-schema.yaml
-- ../../../编码冻结基线/AUTHENTICATION_CONTRACT/authentication-contract.yaml
+- docs/authority/编码权威事实/SYSTEM_DESIGN.yaml
+- docs/authority/编码权威事实/OPENAPI/openapi.yaml
+- docs/authority/编码权威事实/DATABASE_DDL/database-schema.yaml
+- docs/authority/编码权威事实/AUTHENTICATION_CONTRACT/authentication-contract.yaml
 invariants:
-  technical_status: FROZEN
+  technical_status: CURRENT_APPROVED
   write_api:
   - IDEMPOTENCY_KEY_REQUIRED
   - EXPECTED_VERSION_REQUIRED
@@ -38,47 +39,41 @@ invariants:
   technical_alert_endpoint_identity: technical_alert_endpoint_id; signature_config_ref is mutable reference
   run_task_initial_final_result: UNKNOWN
   code_readiness: READY_FOR_P1_IMPLEMENTATION
-  implementation_release_readiness: NOT_EVALUATED_IMPLEMENTATION_NOT_PRESENT
 prohibited:
-- USE_R2_AS_CURRENT
+- CREATE_VERSIONED_BASELINE_COPY
 - GENERIC_UNTYPED_API_PAYLOAD
 - JSON_AS_FORMAL_RELATION_OR_STATE
 - APPROVER_EQUALS_SUBMITTER
 - PASS_WITHOUT_EVIDENCE
+- CODEX_GIT_COMMAND
 - 不得使用project_id作为CredentialRevision主键
 - 不得使用signature_config_ref作为TechnicalAlertEndpoint主键
 - 不得把真实平台验收证据作为开始编码的循环前置条件
 - 不得在未执行MySQL 8.4门禁时宣称PASS
 - 不得自创认证Operation、DTO、状态、Token、Cookie或密码政策
-- 不得写死、回显、记录或提交admin初始密码
+- 不得写死、回显、记录admin初始密码
 - 不得把Refresh Token原值写入数据库、JSON、日志或仓库
 - 不得把Permission写入JWT作为长期授权事实
-- 不得按username绕过正式RBAC Mapping
 authority_model:
-  model_id: AUTHORITY-MODEL-R4.2-001
+  model_id: AUTHORITY-MODEL-LIVING-001
   responsibilities:
-  - authority: RELEASE_AND_MANIFEST
-    scope: 当前发布身份、成员资格、版本、状态和哈希；不得改写产品业务语义。
+  - authority: SINGLE_LIVING_AUTHORITY
+    scope: docs/authority/** 是唯一活动产品与工程契约事实源；允许受控直接修改，不复制版本目录。
   - authority: SIX_CORE_YAML_FACTS
     scope: 产品范围、角色场景、对象规则、权限并发、AI/Runner和安全验收业务语义。
   - authority: SYSTEM_DESIGN_AND_ENGINEERING_CONTRACTS
-    scope: 技术实现和物理契约；必须服从六份核心YAML，同一工程契约内部以标准格式文件为权威。
+    scope: 技术实现和物理契约；必须服从核心YAML。
   - authority: ADR
-    scope: 决策及理由；只有同步受影响核心事实与工程契约后才成为当前实施依据。
+    scope: 决策及理由；只有同步受影响当前事实源后才成为实施依据。
   - authority: AGENTS_AND_SKILL
-    scope: Codex执行流程、修改边界和门禁；不得自行改变产品或工程契约。
-  - authority: NAVIGATION_AND_PROJECTIONS
-    scope: Markdown导航、DOCX和图形为非权威阅读投影。
+    scope: Codex流程与门禁；不得自行改变产品或工程契约。
+  - authority: USER_GIT_WORKFLOW
+    scope: Git diff/commit/push/tag/branch/history完全由用户在IDEA中管理，Codex不访问Git。
   conflict_resolution:
-    product_fact_vs_engineering_contract: 停止实现并以六份核心YAML为业务语义，修复工程契约后继续。
-    adr_vs_old_yaml: ADR必须先同步核心YAML和工程契约；未同步时不得仅凭ADR覆盖。
-    release_vs_business_fact: Release只决定成员和版本，不得覆盖业务事实。
+    product_fact_vs_engineering_contract: 停止实现，以核心YAML为业务语义，修复当前engineering contract后继续。
+    adr_vs_authority: ADR必须先同步当前authority；未同步时不得仅凭ADR覆盖。
+    code_vs_authority: 代码不得反向覆盖authority，先完成Product Decision与Authority Update。
 gates:
 - gate_id: MYSQL84_EMPTY_DATABASE_EXECUTION
-  status: PASS
-  blocking_scope: DATABASE_MODULE_FORMAL_MERGE
-  blocks_code_initialization: false
-- gate_id: REAL_ACCEPTANCE_EVIDENCE
-  status: NOT_EVALUATED_IMPLEMENTATION_NOT_PRESENT
-  blocking_scope: IMPLEMENTATION_RELEASE_READINESS
+  status: RERUNNABLE
   blocks_code_initialization: false

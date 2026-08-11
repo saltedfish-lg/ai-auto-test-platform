@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Run the R4.2 P1 auth UI against real FastAPI, Chromium and isolated MySQL."""
+"""Run the current living-authority P1 auth UI gate against FastAPI, Chromium and MySQL."""
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import secrets
@@ -19,15 +20,16 @@ from typing import BinaryIO
 from p1_auth_mysql_gate import (
     ADMIN_URL_ENV,
     DATABASE_PREFIX,
-    MIGRATIONS,
     _connection,
     _execute_script,
+    _migration_names,
     _migration_path,
+    _resolve_authority,
     _test_database_url,
 )
 from platform_api.bootstrap import AdminBootstrapService
 from platform_api.database import create_database_engine, create_session_factory
-from platform_api.keygen import generate_development_keys
+from platform_api.keygen import generate_development_key_ring
 from platform_api.models import PlatformUser, PlatformUserCredential, Role, UserRoleBinding
 from platform_api.security import PasswordService, new_ulid, utc_now
 from sqlalchemy import select
@@ -178,6 +180,10 @@ def _browser_executable() -> Path | None:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.parse_args()
+    authority = _resolve_authority()
+    migrations = _migration_names(authority)
     if ADMIN_URL_ENV not in os.environ:
         raise RuntimeError(f"{ADMIN_URL_ENV} is required")
     if _port_open(8000) or _port_open(5173):
@@ -202,11 +208,13 @@ def main() -> int:
                 f"CREATE DATABASE `{database}` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci"
             )
             created = True
-        for migration in MIGRATIONS:
-            _execute_script(database, _migration_path(migration))
+        for migration in migrations:
+            _execute_script(database, _migration_path(authority, migration))
 
         database_url = _test_database_url(database)
-        private_key, public_key = generate_development_keys(runtime_directory / "keys")
+        key_ring = generate_development_key_ring(
+            runtime_directory / "keys", kid="p1-browser-rs256-v1"
+        )
         engine = create_database_engine(database_url)
         factory = create_session_factory(engine)
         passwords = PasswordService()
@@ -237,9 +245,7 @@ def main() -> int:
                 "PLATFORM_DATABASE_URL": database_url,
                 "API_HOST": "127.0.0.1",
                 "API_PORT": "8000",
-                "ATP_JWT_PRIVATE_KEY_FILE": str(private_key),
-                "ATP_JWT_PUBLIC_KEY_FILE": str(public_key),
-                "ATP_JWT_KEY_ID": "p1-browser-rs256-v1",
+                "ATP_JWT_KEY_RING_FILE": str(key_ring.manifest_file),
             }
         )
         api_process, api_log = _start_process(

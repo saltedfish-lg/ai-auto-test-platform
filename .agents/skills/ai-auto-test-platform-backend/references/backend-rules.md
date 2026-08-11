@@ -26,7 +26,7 @@
 - MySQL + PyMySQL；`ApiSettings` 已拒绝 SQLite；
 - SQLAlchemy 2.x；
 - 使用真实约束，不把业务唯一性只放在 Python if 中；
-- 正式 DDL 已存在时实现必须适配 DDL，不应修改冻结 SQL 来迁就代码。
+- 正式 DDL 已存在时实现必须适配 DDL，不应修改当前 migration SQL 来迁就代码。
 
 ## API 错误
 

@@ -28,8 +28,8 @@ def test_code_quality_agent_is_read_only_and_inherits_git_policy() -> None:
     )
     assert data["name"] == "code_quality_reviewer"
     assert data["sandbox_mode"] == "read-only"
-    assert "继承根 AGENTS.md 的 Git 操作限制" in data["developer_instructions"]
-    assert "不得执行任何 Git 写操作" in data["developer_instructions"]
+    assert "CODEX_GIT_ACCESS=DISABLED" in data["developer_instructions"]
+    assert "不得执行任何 Git 命令" in data["developer_instructions"]
     assert "Review Mode" in data["developer_instructions"]
 
 
@@ -77,4 +77,4 @@ def test_root_agents_define_comment_and_quality_policy() -> None:
     assert "Review Mode" in text
     assert "中文原因型注释" in text
     assert "第三人称或客观陈述" in text
-    assert "350" in text
+    assert "不机械复述代码" in text

@@ -27,7 +27,7 @@ description: AI自动化测试执行平台代码质量实施规范与独立只�
 
 ## 入口
 
-先读根 `AGENTS.md`、core Skill，并优先消费 `$ai-auto-test-platform-context-efficiency` 生成的同一workspace/scope Task Context Pack、真实diff、改动代码和相关测试。按需读取 R4.2 正式事实与 `references/**`，不要一次性把所有参考材料塞入上下文。Task Context Pack 只是索引：发现遗漏、过期或可疑跨层消费者时必须增量全局检索，不得为了省Token盲信Pack。
+先读根 `AGENTS.md`、core Skill，并优先消费 `$ai-auto-test-platform-context-efficiency` 生成的同一workspace/scope Task Context Pack、真实diff、改动代码和相关测试。按需读取 当前 authority 正式事实与 `references/**`，不要一次性把所有参考材料塞入上下文。Task Context Pack 只是索引：发现遗漏、过期或可疑跨层消费者时必须增量全局检索，不得为了省Token盲信Pack。
 
 ## 六个审查 Lane
 
@@ -42,7 +42,7 @@ description: AI自动化测试执行平台代码质量实施规范与独立只�
 
 本 Skill 不重新裁决：
 
-- R4.2/OpenAPI/DDL/状态/权限事实：交给 `contract_guardian`；
+- 当前 authority/OpenAPI/DDL/状态/权限事实：交给 `contract_guardian`；
 - JWT/密码/RBAC/Secret 等安全事实：交给 `security_rbac_reviewer`；
 - MySQL/Migration/FK/CHECK/事务完整性：交给 `database_integrity_reviewer`；
 - 浏览器真实交互：交给 `ui_verifier`。

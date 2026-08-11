@@ -1,5 +1,4 @@
-"""Safe paths to the read-only current OpenAPI and event schema sources."""
-
+"""Safe paths to the current living-authority OpenAPI and event schema sources."""
 from __future__ import annotations
 
 import json
@@ -7,40 +6,32 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-BASELINE_RELEASE_ID = "PDBR-2026.08.07-R4.2"
+AUTHORITY_MODEL = "SINGLE_LIVING_AUTHORITY"
 SCHEMA_NAME = re.compile(r"^[a-z0-9_.-]+\.schema\.json$")
 
 
 @dataclass(frozen=True, slots=True)
-class BaselineSources:
-    baseline_root: Path
+class AuthoritySources:
+    authority_root: Path
 
     def __post_init__(self) -> None:
-        release = (
-            self.baseline_root
-            / "编码冻结基线"
-            / "RELEASE"
-            / "platform_design_baseline_release.yaml"
-        )
-        if not release.is_file():
-            raise FileNotFoundError(
-                f"current baseline release file not found under {self.baseline_root}"
-            )
-        if f"release_id: {BASELINE_RELEASE_ID}" not in release.read_text(encoding="utf-8"):
-            raise ValueError("baseline release_id does not match the current R4.2 release")
+        required = (self.openapi, self.event_registry)
+        missing = [str(path) for path in required if not path.is_file()]
+        if missing:
+            raise FileNotFoundError("current authority sources missing: " + ", ".join(missing))
 
     @property
     def openapi(self) -> Path:
-        return self.baseline_root / "编码冻结基线" / "OPENAPI" / "openapi.yaml"
+        return self.authority_root / "编码权威事实" / "OPENAPI" / "openapi.yaml"
 
     @property
     def event_registry(self) -> Path:
-        return self.baseline_root / "编码冻结基线" / "EVENT_CONTRACTS" / "event-registry.yaml"
+        return self.authority_root / "编码权威事实" / "EVENT_CONTRACTS" / "event-registry.yaml"
 
     def load_event_schema(self, name: str) -> dict[str, object]:
         if SCHEMA_NAME.fullmatch(name) is None:
             raise ValueError("invalid event schema name")
-        path = self.baseline_root / "编码冻结基线" / "EVENT_CONTRACTS" / "schemas" / name
+        path = self.authority_root / "编码权威事实" / "EVENT_CONTRACTS" / "schemas" / name
         document = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(document, dict):
             raise TypeError("event schema must be a JSON object")

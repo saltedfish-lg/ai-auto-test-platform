@@ -1,15 +1,15 @@
 # AI自动化测试执行平台
 
-本仓库是《AI自动化测试执行平台》的 Monorepo。当前正式编码基线由 `docs/baseline/CURRENT` 导航，当前值为 **R4.2**，对应 Release `PDBR-2026.08.07-R4.2`。当前处于 **P1 身份认证 + 默认 admin + RBAC 正式实现准备/实施阶段**。
+本仓库是《AI自动化测试执行平台》的 Monorepo。项目采用 **Single Living Authority**：`docs/authority/**` 是唯一活动事实源，可在产品主权与验证门禁约束下持续完善。当前处于 **P1 身份认证 + 默认 admin + RBAC 正式实现准备/实施阶段**。
 
-## 基线与门禁状态
+## 当前事实源与门禁状态
 
 - `CODE_BASELINE_READINESS = READY_FOR_P1_IMPLEMENTATION`
-- `MYSQL_8_4_RUNTIME_GATE = PASS`（R4.2 已绑定 MySQL 8.4.11 空库安装与 R4.1→R4.2 升级证据）
+- `MYSQL_8_4_RUNTIME_GATE` 以当前环境实际执行结果为准；静态验证不得冒充 MySQL 8.4 运行时证据。
 - `REAL_PLATFORM_ACCEPTANCE = NOT_COMPLETED`
 - 1691 项正式验收规范仍为 `SPECIFIED/NOT_STARTED`；治理验证、Migration 或工程测试不得冒充真实平台业务验收。
-- `docs/baseline/R4.2/**` 是当前只读冻结基线；`docs/baseline/R4.1/**` 仅保留为历史父基线和升级溯源。
-- 活动工具必须通过 `docs/baseline/CURRENT` 解析当前基线；不得用历史版本常量覆盖当前契约。
+- `docs/authority/**` 是唯一活动事实源；不创建 R4.x/R5.x 整套复制目录，不维护 CURRENT marker、Baseline Manifest 或 Release Snapshot。
+- Codex 只维护当前事实源并运行 Validators；Git 对 Codex 禁用，提交、推送、回滚与历史查看由用户在 IDEA 中完成。
 
 ## Codex 扩展
 
@@ -32,7 +32,7 @@
 | `workers/background` | Background Worker 进程 |
 | `runner/agent` | 独立 Runner Agent |
 | `packages/domain-kernel` | 通用领域内核 |
-| `packages/contracts` | 当前冻结 OpenAPI/事件 Schema 的加载与验证边界 |
+| `packages/contracts` | 当前 OpenAPI/事件 Schema 的加载与验证边界 |
 | `packages/observability` | 结构化日志、correlation ID 与敏感字段过滤 |
 | `tests` | 契约、集成和 E2E 测试入口 |
 | `tools` | 生成、校验与门禁统一入口 |
@@ -44,7 +44,7 @@
 - Python 3.12.x
 - Node.js 22 或 24（`package.json` 约束为 `>=22 <25`）
 - npm 11
-- MySQL 8.4.x（R4.2 运行证据使用 MySQL 8.4.11）
+- MySQL 8.4.x
 
 ## 安装依赖
 
@@ -72,7 +72,7 @@ cp .env.example .env
 # 前端
 npm run dev:web
 
-# API；正式公共路由只能来自当前冻结 OpenAPI
+# API；正式公共路由只能来自当前 authority OpenAPI
 platform-api
 
 # 进程装配自检
@@ -87,7 +87,7 @@ platform-worker
 platform-runner
 ```
 
-Runner 当前底座不会因为 R4.2 切换而自动实现后续 Runner 注册、心跳、领取任务或正式执行；这些能力仍按后续业务阶段和冻结契约实现。
+Runner 当前底座不会因为 authority 文档调整而自动实现后续 Runner 注册、心跳、领取任务或正式执行；这些能力仍按后续业务阶段和当前权威契约实现。
 
 ## 统一验证命令
 
@@ -102,24 +102,22 @@ python tools/dev.py verify-migrations
 python tools/dev.py generate-openapi
 python tools/dev.py check-openapi
 python tools/dev.py build
-python tools/dev.py baseline
+python tools/dev.py authority
 python tools/dev.py verify
 ```
 
-`python tools/dev.py verify` 是本地和 CI 的全量工程验证入口。基线相关工具均从 `docs/baseline/CURRENT` 解析当前冻结版本。
-
-当前 R4.2 基线也可直接验证：
+`python tools/dev.py verify` 是本地和 CI 的全量工程验证入口。当前事实源也可直接验证：
 
 ```powershell
-python tools/verify_baseline.py
-python docs/baseline/R4.2/编码冻结基线/RELEASE/validation/validate_all.py --root docs/baseline/R4.2
-python docs/baseline/R4.2/编码冻结基线/RELEASE/validation/validate_governance.py --root docs/baseline/R4.2
-python docs/baseline/R4.2/编码冻结基线/RELEASE/validation/validate_auth_contract.py --root docs/baseline/R4.2
+python tools/verify_authority.py
+python docs/authority/validation/validate_all.py --root docs/authority
+python docs/authority/validation/validate_governance.py --root docs/authority
+python docs/authority/validation/validate_auth_contract.py --root docs/authority
 ```
 
 ## MySQL 8.4 门禁
 
-查看当前冻结基线已经记录的门禁状态：
+查看当前 authority 记录的门禁状态：
 
 ```powershell
 python tools/mysql84_gate.py

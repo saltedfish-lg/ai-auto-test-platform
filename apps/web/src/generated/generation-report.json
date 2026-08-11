@@ -1,5 +1,6 @@
 {
-  "release_id": "PDBR-2026.08.07-R4.2",
+  "authority_model": "SINGLE_LIVING_AUTHORITY",
+  "authority_root": "docs/authority",
   "schema_types": 464,
   "client_methods": 250,
   "outputs": [

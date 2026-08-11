@@ -5,10 +5,8 @@ ROOT = Path(__file__).resolve().parents[2]
 AGENTS = ROOT / ".codex" / "agents"
 
 EXPECTED = {
-    "context_impact_analyst": "read-only",
     "solution_architect": "read-only",
-    "business_ui_ux_designer": "read-only",
-    "ui_ux_reviewer": "read-only",
+    "business_ui_ux_specialist": "read-only",
     "frontend_implementer": "workspace-write",
     "backend_implementer": "workspace-write",
     "contract_guardian": "read-only",

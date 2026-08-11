@@ -1,11 +1,5 @@
-"""Consumers for frozen contract sources; no formal contract is redefined here."""
-
+"""Consumers for current authority contract sources; no formal contract is redefined here."""
 from platform_contracts.schema import ContractViolation, JsonSchemaValidator
-from platform_contracts.sources import BASELINE_RELEASE_ID, BaselineSources
+from platform_contracts.sources import AUTHORITY_MODEL, AuthoritySources
 
-__all__ = [
-    "BASELINE_RELEASE_ID",
-    "BaselineSources",
-    "ContractViolation",
-    "JsonSchemaValidator",
-]
+__all__ = ["AUTHORITY_MODEL", "AuthoritySources", "ContractViolation", "JsonSchemaValidator"]

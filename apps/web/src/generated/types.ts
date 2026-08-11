@@ -1,4 +1,4 @@
-/* Generated from PDBR-2026.08.07-R4.2 OpenAPI. DO NOT EDIT. */
+/* Generated from current docs/authority OpenAPI. DO NOT EDIT. */
 
 
 

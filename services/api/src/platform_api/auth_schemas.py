@@ -1,4 +1,4 @@
-"""Pydantic DTOs aligned to the frozen five authentication operations."""
+"""Pydantic DTOs aligned to the current five authentication operations."""
 
 from __future__ import annotations
 

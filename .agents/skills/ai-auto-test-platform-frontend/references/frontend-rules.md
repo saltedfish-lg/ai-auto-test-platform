@@ -25,7 +25,7 @@ apps/web/src/
 
 ## 认证 UI
 
-R4.2 P1：
+当前 authority P1：
 
 - 登录：`POST /api/v1/auth/login`；
 - 刷新：`POST /api/v1/auth/refresh`；

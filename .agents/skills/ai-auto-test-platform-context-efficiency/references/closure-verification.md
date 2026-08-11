@@ -1,29 +1,14 @@
-# Post-change Closure Verification
+# Closure Verification
 
-## 反查对象
+## Post-change Closure
 
-- renamed/deleted symbols
-- new symbols
-- API / schema / DTO
-- table / column / constraint
-- permission / role / scope
-- state / event
-- route / store / component
-- config / env / command
+1. 使用 `workspace_snapshot.py delta` 对比 `snapshot_version=3` 的 filesystem task-start/current 快照，得到 `added / removed / modified / task_delta_paths`。
+2. 从真实 task delta 提取旧/新 symbol、operationId、DTO、table、permission、state、event、route、config、Runner capability 等 seed。
+3. 执行 `TARGETED_REVERSE_LOOKUP`，检查全部消费者。
+4. 发现新消费者时标记 `IMPACT_EXPANSION`，扩充**同一个** Task Context Pack 并递增 `pack_revision`。
+5. 运行与真实影响域对应的 contract/database/security/UI/code-quality/acceptance 验证。
+6. 所有已知影响关闭后才允许 `IMPACT_CLOSURE_PASS`。
 
-## 必做
+`STALE / Post-change Closure / IMPACT_EXPANSION` 均禁止重新执行 `impact_scan.py`；只允许 `DELTA_REFRESH + TARGETED_REVERSE_LOOKUP`。
 
-0. 用 `workspace_snapshot.py delta` 比较 current 与 task-start snapshot（`snapshot_version=2`，绑定 resolved root 与 repository identity；snapshot/delta artifact 必须位于 workspace 外；Git index 查询使用临时 `GIT_INDEX_FILE` 副本且真实 index 字节不变），得到 `task_delta_paths`；优先把这些路径归因给当前任务，并显式报告本任务对任务开始前既有 dirty/untracked 状态的继续修改或清除；
-1. 旧引用残留扫描；
-2. 新引用消费者扫描；
-3. 当前基线契约一致性；
-4. generated 生成链一致性；
-5. 测试和fixture同步；
-6. 跨层构建/类型/契约/集成验证；
-7. UI变更时浏览器真实验证；
-8. 高风险变更时专项 Reviewer；
-9. 检查只读 Git workspace 的 `status` 与 tracked-but-deleted 路径，特别是 `.github/**`、构建、依赖、环境、部署配置；文件已删除不等于影响已消失；若 `.git` 存在但 metadata 为 `UNAVAILABLE`，不得宣告 Impact Closure。
-
-## 失败处理
-
-发现新消费者不是“审查发现”，而是新的实施范围：先回到修改流程，补完后再审查。若 task-start snapshot 或 Git metadata 因环境不可用导致任务归因证据不完整，必须明确 `BLOCKED_BY_ENVIRONMENT`，不能把整个预存 dirty workspace 当作当前任务结果。
+Filesystem snapshot、delta、scan state、checkpoint 必须位于 workspace 外。Git 不参与当前 Task 归因，也不得作为 Closure 必需证据。

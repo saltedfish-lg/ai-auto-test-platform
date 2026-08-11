@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Run the implementable R4.2 P1 auth/RBAC gate in an isolated MySQL database."""
+"""Run the current living-authority P1 auth/RBAC gate in an isolated MySQL database."""
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import secrets
@@ -16,15 +17,32 @@ from pymysql.constants import CLIENT  # type: ignore[import-untyped]
 from sqlalchemy.engine import make_url
 
 ROOT = Path(__file__).resolve().parents[1]
-BASELINE = ROOT / "docs" / "baseline" / "R4.2"
+AUTHORITY_ROOT = ROOT / "docs" / "authority"
 DATABASE_PREFIX = "ai_auto_test_platform_p1_codex_"
 ADMIN_URL_ENV = "ATP_P1_MYSQL_ADMIN_URL"
-MIGRATIONS = (
+MIGRATION_CANDIDATES = (
     "V3__platform_contract_rebuild.sql",
     "V4__rbac_seed_data.sql",
     "V5__platform_authentication_contract.sql",
+    "V6__p1_auth_governance_closure.sql",
 )
 
+
+def _resolve_authority() -> Path:
+    if not AUTHORITY_ROOT.is_dir():
+        raise RuntimeError("docs/authority is required")
+    return AUTHORITY_ROOT
+
+
+def _migration_names(authority: Path) -> tuple[str, ...]:
+    migrations = tuple(
+        name for name in MIGRATION_CANDIDATES if len(list(authority.rglob(name))) == 1
+    )
+    if migrations != MIGRATION_CANDIDATES:
+        raise RuntimeError(
+            "current authority must contain the V3/V4/V5/V6 migration chain exactly once"
+        )
+    return migrations
 
 def _connection(database: str | None = None) -> pymysql.Connection:
     raw_url = os.getenv(ADMIN_URL_ENV)
@@ -45,10 +63,10 @@ def _connection(database: str | None = None) -> pymysql.Connection:
     )
 
 
-def _migration_path(name: str) -> Path:
-    matches = list(BASELINE.rglob(name))
+def _migration_path(authority: Path, name: str) -> Path:
+    matches = list(authority.rglob(name))
     if len(matches) != 1:
-        raise RuntimeError(f"expected one frozen migration named {name}, found {len(matches)}")
+        raise RuntimeError(f"expected one current-authority migration named {name}, found {len(matches)}")
     return matches[0]
 
 
@@ -66,6 +84,10 @@ def _test_database_url(database: str) -> str:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.parse_args()
+    authority = _resolve_authority()
+    migrations = _migration_names(authority)
     database = DATABASE_PREFIX + datetime.now(UTC).strftime("%Y%m%d%H%M%S") + secrets.token_hex(3)
     if not database.startswith(DATABASE_PREFIX):
         raise RuntimeError("unsafe P1 gate database name")
@@ -82,8 +104,8 @@ def main() -> int:
                 f"CREATE DATABASE `{database}` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci"
             )
             created = True
-        for migration in MIGRATIONS:
-            _execute_script(database, _migration_path(migration))
+        for migration in migrations:
+            _execute_script(database, _migration_path(authority, migration))
         environment = os.environ.copy()
         environment["ATP_P1_TEST_DATABASE_URL"] = _test_database_url(database)
         completed = subprocess.run(
@@ -108,7 +130,9 @@ def main() -> int:
             json.dumps(
                 {
                     "mysql_version": version,
-                    "migration_order": list(MIGRATIONS),
+                    "authority_model": "SINGLE_LIVING_AUTHORITY",
+                    "authority_root": "docs/authority",
+                    "migration_order": list(migrations),
                     "isolated_database_removed": created,
                     "pytest_exit_code": test_exit,
                     "gate": "PASS" if test_exit == 0 else "FAIL",

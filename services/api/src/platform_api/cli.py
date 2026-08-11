@@ -12,11 +12,12 @@ from uuid import uuid4
 import uvicorn
 
 from platform_api.app import create_app
+from platform_api.audit import AuthenticationAuditService
 from platform_api.bootstrap import AdminBootstrapService
 from platform_api.config import ApiSettings
 from platform_api.database import create_database_engine, create_session_factory
 from platform_api.health import process_self_check
-from platform_api.keygen import generate_development_keys
+from platform_api.keygen import generate_development_key_ring
 from platform_api.security import PasswordService
 
 
@@ -31,13 +32,14 @@ def main() -> int:
     key_parser.add_argument("--output-directory", type=Path, default=Path(".runtime/secrets"))
     args = parser.parse_args()
     if args.command == "generate-dev-rsa-keys":
-        private_path, public_path = generate_development_keys(args.output_directory)
+        key_ring = generate_development_key_ring(args.output_directory)
         print(
             json.dumps(
                 {
                     "status": "CREATED",
-                    "private_key_file": str(private_path),
-                    "public_key_file": str(public_path),
+                    "key_ring_file": str(key_ring.manifest_file),
+                    "ring_version": key_ring.ring_version,
+                    "active_signing_kid": key_ring.kid,
                     "algorithm": "RS256",
                 }
             )
@@ -47,9 +49,11 @@ def main() -> int:
     if args.command == "bootstrap-admin":
         password = _read_bootstrap_password(settings)
         service = AdminBootstrapService(
-            create_session_factory(create_database_engine(settings.database_url)), PasswordService()
+            create_session_factory(create_database_engine(settings.database_url)),
+            PasswordService(),
+            AuthenticationAuditService(),
         )
-        result = service.bootstrap(password, f"bootstrap-{uuid4()}")
+        result = service.bootstrap(password, str(uuid4()))
         print(json.dumps(result.safe_dict(), ensure_ascii=False))
         return 0
     if args.check:

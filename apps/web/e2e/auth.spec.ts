@@ -19,7 +19,7 @@ async function submitLogin(page: Page, username: string, password: string) {
   return response;
 }
 
-test("R4.2 P1 authentication browser closure", async ({ page, context }) => {
+test("P1 authentication browser closure", async ({ page, context }) => {
   const initialPassword = requiredEnvironment("P1_E2E_ADMIN_INITIAL_PASSWORD");
   const changedPassword = requiredEnvironment("P1_E2E_ADMIN_CHANGED_PASSWORD");
   const normalUsername = requiredEnvironment("P1_E2E_NORMAL_USERNAME");

@@ -1,4 +1,4 @@
-"""Explicit, transactional default-admin bootstrap after V3 -> V4 -> V5."""
+"""Explicit, transactional default-admin bootstrap after V3 -> V4 -> V5 -> V6."""
 
 from __future__ import annotations
 
@@ -11,6 +11,8 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
+from platform_api.audit import AuditContext, AuthenticationAuditService
+from platform_api.middleware import canonicalize_correlation_id
 from platform_api.models import (
     Admin,
     DataScopeGrant,
@@ -41,12 +43,17 @@ class BootstrapResult:
 
 class AdminBootstrapService:
     def __init__(
-        self, session_factory: sessionmaker[Session], password_service: PasswordService
+        self,
+        session_factory: sessionmaker[Session],
+        password_service: PasswordService,
+        audit_service: AuthenticationAuditService | None = None,
     ) -> None:
         self._session_factory = session_factory
         self._passwords = password_service
+        self._audit = audit_service or AuthenticationAuditService()
 
     def bootstrap(self, password: str, correlation_id: str) -> BootstrapResult:
+        correlation_id = canonicalize_correlation_id(correlation_id)
         self._passwords.validate(password, "admin")
         try:
             with self._session_factory.begin() as db:
@@ -184,6 +191,15 @@ class AdminBootstrapService:
                             now,
                         )
                     )
+                self._audit.append(
+                    db,
+                    AuditContext(correlation_id, "system-bootstrap-admin"),
+                    action="ROLE_ASSIGNED",
+                    operation_id="bootstrap_admin",
+                    result_code=SUPER_ADMIN_ROLE,
+                    actor_id=user_id,
+                    target_user_id=user_id,
+                )
         except IntegrityError:
             with self._session_factory() as db:
                 existing_record = db.get(IdempotencyRecord, BOOTSTRAP_KEY)

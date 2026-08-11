@@ -1,6 +1,6 @@
 ---
 name: ai-auto-test-platform-architecture
-description: AI自动化测试执行平台按风险触发的技术架构裁决Skill；在冻结产品/契约事实内判断模块边界、状态归属、事务、一致性、同步异步、事件、Runner/Worker、并发与恢复方案。ARCH_LOW不额外启动架构Agent，ARCH_MEDIUM由当前实现Agent内嵌轻量检查，ARCH_HIGH才调用只读solution_architect。
+description: AI自动化测试执行平台按风险触发的技术架构裁决Skill；在当前产品/契约事实内判断模块边界、状态归属、事务、一致性、同步异步、事件、Runner/Worker、并发与恢复方案。ARCH_LOW不额外启动架构Agent，ARCH_MEDIUM由当前实现Agent内嵌轻量检查，ARCH_HIGH才调用只读solution_architect。
 ---
 
 # Risk-triggered Architecture Decision
@@ -21,7 +21,7 @@ description: AI自动化测试执行平台按风险触发的技术架构裁决Sk
 - 并发、锁、租约、fencing、恢复和一致性如何实现；
 - 当前方案是否产生循环依赖、双写、状态多主、旁路写入或不可恢复耦合。
 
-它**不得**改变 R4.2 已冻结的产品语义、OpenAPI、DDL、权限、状态机、Runner 规则、验收规则或安全边界。
+它**不得**改变 当前 authority 已冻结的产品语义、OpenAPI、DDL、权限、状态机、Runner 规则、验收规则或安全边界。
 
 ## 一、先复用当前 Architecture Decision
 
@@ -118,7 +118,7 @@ ARCH_HIGH 使用 `references/architecture-decision.md` 的紧凑格式，至少�
 
 - 模块内部类/方法拆分；
 - Application/Domain/Infrastructure 的实现组织；
-- 在冻结契约内选择事务实现、Repository/UoW 组织；
+- 在当前 authority 契约内选择事务实现、Repository/UoW 组织；
 - 在已明确需要幂等/Outbox/锁等前提下选择成熟技术实现；
 - 日志、Tracing、内部 Adapter、Mapper 的结构；
 - 不改变外部可观察语义的工程优化。
@@ -149,7 +149,7 @@ ARCH_HIGH 使用 `references/architecture-decision.md` 的紧凑格式，至少�
 - `code_quality_reviewer`：结构、hack、回归、测试、注释、可维护性；
 - `independent_code_reviewer`：最终独立收口。
 
-架构师不得重复这些专项 Reviewer 的完整审查，更不得以“最佳实践”为由覆盖冻结事实。
+架构师不得重复这些专项 Reviewer 的完整审查，更不得以“最佳实践”为由覆盖当前已确认事实。
 
 ## 六、Context / Token 规则
 
@@ -168,7 +168,7 @@ ARCH_HIGH 使用 `references/architecture-decision.md` 的紧凑格式，至少�
 - `ARCH_LOW`：不记录；
 - `ARCH_MEDIUM`：Architecture Check 只进入任务结果；
 - `ARCH_HIGH`：若是长期、跨模块、以后会反复被依赖的技术裁决，输出 `ADR_CANDIDATE = true`；
-- `solution_architect` 自身只读，不直接创建 ADR；由主任务在明确需要治理文档且不触碰冻结基线时决定是否落盘。
+- `solution_architect` 自身只读，不直接创建 ADR；由主任务在明确需要治理文档且不触碰living authority时决定是否落盘。
 
 详见 `references/adr-policy.md`。
 

@@ -40,7 +40,7 @@ async function logout(): Promise<void> {
         <div class="brand-mark compact" aria-hidden="true">AT</div>
         <div>
           <strong>AI 测试平台</strong>
-          <span>R4.2 · P1</span>
+          <span>P1 · 身份与权限</span>
         </div>
       </div>
       <nav aria-label="主导航">

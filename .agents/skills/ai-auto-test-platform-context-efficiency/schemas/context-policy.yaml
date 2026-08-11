@@ -1,8 +1,14 @@
-version: 6
+version: 8
 principle: SEARCH_BROAD_LOAD_NARROW_VERIFY_BROAD
 correctness_over_token_budget: true
+authority_model:
+  mode: SINGLE_LIVING_AUTHORITY
+  root: docs/authority
+  versioned_baseline_copies: forbidden
+  manifest_or_release_snapshot_required: false
+  history_owner: USER_MANAGED_GIT_OUTSIDE_CODEX
+  codex_git_access: DISABLED
 search_scope:
-  # 缺失任一 required_roots 都使 scope 不完整，并禁止 IMPACT_CLOSURE_PASS。
   required_roots:
     - AGENTS.md
     - package.json
@@ -20,26 +26,23 @@ search_scope:
     - packages
     - tests
     - tools
-    - docs/baseline/CURRENT
-  # optional_roots 存在时参与检索；缺失只记录，不阻断闭环。
+    - docs/authority
   optional_roots:
     - db
     - .github
-  # 治理目录默认不参与普通业务修改的全量 impact scan；Agent/Skill/Codex治理任务显式扩张。
   governance_roots:
     - .agents
     - .codex
   governance_scope_mode: conditional_expansion
-  current_baseline_resolution: dynamic_from_current_marker
+  authority_resolution: fixed_single_living_root
   large_file_strategy: stream_line_by_line_never_silent_skip
   fail_closed_on:
     - missing_required_root
-    - unresolved_current_baseline
+    - missing_living_authority
     - scan_error
-    - git_metadata_unavailable_when_repository_present
     - snapshot_version_mismatch
     - snapshot_root_mismatch
-    - snapshot_repository_mismatch
+    - workspace_identity_mismatch
   exclude_runtime_noise:
     - .git
     - node_modules
@@ -52,42 +55,83 @@ search_scope:
     - .mypy_cache
     - .ruff_cache
     - test-results
-  historical_baseline: on_demand
-  git_workspace_strategy: read_only_metadata_with_fail_closed_evidence
-  git_workspace_statuses:
-    - COMPLETE
-    - NOT_APPLICABLE
-    - UNAVAILABLE
-  git_metadata_required_by_default_for:
-    - CROSS_MODULE
-    - HIGH_RISK
-  git_metadata_force_required_for:
-    - ci
-    - dependency
-    - build
-    - deploy
-    - environment_config
-    - engineering_tooling
+    - .runtime
+    - .tmp
+impact_scan_lifecycle:
+  strategy: SINGLE_FULL_IMPACT_SCAN_SHARED_PACK_INCREMENTAL_CLOSURE
+  full_impact_scan_max_successful_runs: 1
+  full_impact_scan_owner: feature_orchestrator
+  executor_selection: orchestrator_current_main_agent_only
+  formal_task_state_outside_workspace_required: true
+  canonical_guard_identity: workspace_root_plus_task_id
+  task_id_rotation_to_bypass_scan_lock: forbidden
+  failed_attempt_consumes_success_quota: false
+  second_full_scan_after_complete: fail_closed_IMPACT_SCAN_ALREADY_COMPLETED
+  child_agent_pack_policy: MUST_CONSUME_TASK_CONTEXT_PACK
+  missing_pack_for_formal_cross_module_or_high_risk: TASK_CONTEXT_PACK_REQUIRED
+  stale_pack_refresh:
+    - DELTA_REFRESH
+    - TARGETED_REVERSE_LOOKUP
+  impact_expansion_refresh:
+    - DELTA_REFRESH
+    - TARGETED_REVERSE_LOOKUP
+  targeted_lookup_requires_seed: true
+  targeted_lookup_must_not_invoke_impact_scan: true
+task_resume_validation:
+  lifecycle_owner: feature_orchestrator
+  context_state_provider: context_efficiency
+  checkpoint_schema_version: 2
+  checkpoint_artifact_outside_workspace_required: true
+  checkpoint_write_strategy: atomic_temp_fsync_replace
+  checkpoint_checksum: sha256
+  stage_progression:
+    - TASK_INITIALIZED
+    - CONTEXT_READY
+    - DECISIONS_READY
+    - IMPLEMENTATION_READY
+    - IMPLEMENTATION_COMPLETE
+    - VERIFICATION_COMPLETE
+    - CLOSURE_COMPLETE
+  resume_statuses:
+    - RESUME_EXACT
+    - RESUME_WITH_DELTA_REFRESH
+    - RESUME_REJECTED
+    - CHECKPOINT_CORRUPTED
+  resume_exact_action: continue_next_stage_without_replaying_completed_valid_stages
+  resume_with_delta_refresh:
+    - DELTA_REFRESH
+    - TARGETED_REVERSE_LOOKUP
+    - MINIMAL_STAGE_INVALIDATION
+  full_impact_scan_on_resume: forbidden
+  reject_on:
+    - task_id_mismatch
+    - workspace_root_mismatch
+    - workspace_identity_mismatch
+    - authority_root_mismatch
+    - checkpoint_schema_or_checksum_failure
+  authority_digest_change: RESUME_WITH_DELTA_REFRESH
+  checkpoint_chain_of_thought: forbidden
+  per_agent_checkpoint_state: forbidden
 context_pack:
   local_fingerprint: optional
   cross_module_fingerprint: required
   high_risk_fingerprint: required
   task_start_workspace_snapshot:
-    snapshot_schema_version: 2
-    formal_change_default: required_when_git_complete
+    snapshot_schema_version: 3
+    formal_change_default: required
     helper: scripts/workspace_snapshot.py
+    mode: FILESYSTEM_ONLY
+    git_access: DISABLED
     capture_before_first_workspace_write: true
-    snapshot_artifacts_outside_repository_required: true
-    fingerprint_dirty_paths_by_content: true
-    preserve_real_git_index_bytes: true
-    git_index_strategy: temporary_GIT_INDEX_FILE_copy
+    snapshot_artifacts_outside_workspace_required: true
+    fingerprint_controlled_files_by_sha256: true
     fail_closed_on_identity_mismatch: true
     identity_fields:
       - resolved_workspace_root
-      - git_toplevel
-      - git_common_dir
-      - git_common_dir_file_id_when_available
+      - workspace_root_identity
+      - filesystem_identity_digest
   delta_refresh_on:
+    - authority_change
     - api_contract_change
     - database_change
     - permission_or_security_change

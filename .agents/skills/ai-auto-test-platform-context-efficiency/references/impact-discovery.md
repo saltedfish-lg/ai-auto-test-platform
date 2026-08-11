@@ -26,3 +26,12 @@ Worker/Runner、调度、事务、Outbox、审计、制品、监控、E2E、工�
 只有当新增一层检索不再发现新的活动消费者，且高风险扩张项已检查，才能认为 Pre-change Impact Closure 完成。
 
 不要因为某个文件“看起来就是唯一实现”而提前停止。
+
+## Single Full Impact Scan 约束
+
+上述 L0→L4 的首次广域闭包属于同一个 `FULL_IMPACT_SCAN`，每个正式 Task 最多成功执行一次。它完成后形成唯一 Task Context Pack。后续发现新消费者时不重新从 L0 扫描仓库，而以新消费者/符号作为 seed 执行 `TARGETED_REVERSE_LOOKUP` 并扩充现有 Pack。
+
+- Pack CURRENT：子 Agent 必须消费，不得重建；
+- Pack STALE：`DELTA_REFRESH + TARGETED_REVERSE_LOOKUP`；
+- `IMPACT_EXPANSION`：扩充现有 Pack，不得触发 Full Scan #2；
+- 正式 CROSS_MODULE/HIGH_RISK 子 Agent 没拿到 Pack：返回 `TASK_CONTEXT_PACK_REQUIRED`。

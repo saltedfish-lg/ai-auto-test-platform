@@ -13,7 +13,7 @@ description: AI自动化测试执行平台 Vue 3 前端正式实现 Skill；适�
 2. 使用 `$ai-auto-test-platform-context-efficiency` 复用/建立当前任务 Task Context Pack；
 3. 精准读取 `.agents/skills/ai-auto-test-platform-core/SKILL.md` 及任务相关 references；
 4. 读取本 Skill 的 `references/repository-map.md` 与 `references/engineering-autonomy.md`；
-5. 只加载当前任务相关的 R4.2 权威角色/场景/菜单/对象/状态/权限/OpenAPI 片段；
+5. 只加载当前任务相关的 当前 authority 权威角色/场景/菜单/对象/状态/权限/OpenAPI 片段；
 6. 检查 `apps/web` 当前代码和相关测试。
 
 不要无条件通读完整基线、完整OpenAPI或所有前端文件。
@@ -45,7 +45,7 @@ Vue 3.5、TypeScript 5.9、Vite 7、Vue Router、Pinia、Element Plus、Zod、Vi
 
 - UI_LOW：局部样式/文案/单控件；内嵌轻量Business UX清单；
 - UI_MEDIUM：新增常规页面/复杂表格表单/详情；内嵌生成紧凑Business UX Spec；
-- UI_HIGH：AI探索、录制、执行、Runner、报告等核心工作台或大规模重设计；可由父编排调用`business_ui_ux_designer`，实现后需独立UI/UX审查。
+- UI_HIGH：AI探索、录制、执行、Runner、报告等核心工作台或大规模重设计；可由父编排按需选择 `business_ui_ux_specialist` 的 `DESIGN_MODE`，实现后仅在 UI_HIGH/明确要求时使用同一角色 `REVIEW_MODE`。
 
 ## 实现流程
 

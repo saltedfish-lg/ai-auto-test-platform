@@ -5,10 +5,16 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from typing import NoReturn
 
-from sqlalchemy import Select, or_, select, update
+from sqlalchemy import Select, or_, select
 from sqlalchemy.orm import Session, sessionmaker
 
+from platform_api.audit import (
+    AuditContext,
+    AuthenticationAuditAction,
+    AuthenticationAuditService,
+)
 from platform_api.auth_schemas import CurrentUserResource
 from platform_api.errors import PlatformError
 from platform_api.models import (
@@ -104,13 +110,15 @@ class AuthenticationService:
         session_factory: sessionmaker[Session],
         passwords: PasswordService,
         jwt_service: JwtService,
+        audit_service: AuthenticationAuditService,
     ) -> None:
         self._session_factory = session_factory
         self._passwords = passwords
         self._jwt = jwt_service
+        self._audit = audit_service
 
     def login(
-        self, username: str, password: str, source_context: str | None
+        self, username: str, password: str, audit_context: AuditContext
     ) -> AuthenticationResult:
         with self._session_factory() as db:
             user = db.scalar(
@@ -118,7 +126,13 @@ class AuthenticationService:
             )
             if user is None:
                 self._passwords.verify_dummy(password)
-                raise self._invalid_credentials()
+                self._raise_audited_failure(
+                    db,
+                    audit_context,
+                    action="LOGIN_FAILED",
+                    operation_id="login_platform_user",
+                    error=self._invalid_credentials(),
+                )
             credential = db.scalar(
                 select(PlatformUserCredential)
                 .where(PlatformUserCredential.user_id == user.user_id)
@@ -126,10 +140,32 @@ class AuthenticationService:
             )
             if credential is None or credential.lifecycle_status != ACTIVE:
                 self._passwords.verify_dummy(password)
-                raise self._invalid_credentials()
+                self._raise_audited_failure(
+                    db,
+                    audit_context,
+                    action="LOGIN_FAILED",
+                    operation_id="login_platform_user",
+                    error=self._invalid_credentials(),
+                    target_user_id=user.user_id,
+                )
             try:
-                self._require_login_user_state(user, db, credential)
-            except PlatformError:
+                self._require_login_user_state(
+                    user,
+                    db,
+                    credential,
+                    audit_context,
+                    "login_platform_user",
+                    actor_id=None,
+                )
+            except PlatformError as error:
+                self._audit.append(
+                    db,
+                    audit_context,
+                    action="LOGIN_FAILED",
+                    operation_id="login_platform_user",
+                    result_code=error.code,
+                    target_user_id=user.user_id,
+                )
                 db.commit()
                 raise
             valid_password = self._passwords.verify(credential.password_hash, password)
@@ -140,14 +176,47 @@ class AuthenticationService:
             if not valid_password:
                 if not temporarily_locked:
                     self._record_login_failure(credential, now)
-                    db.commit()
-                raise self._invalid_credentials()
+                    if credential.locked_until is not None:
+                        self._audit.append(
+                            db,
+                            audit_context,
+                            action="USER_DISABLED_OR_LOCKED",
+                            operation_id="login_platform_user",
+                            result_code="AUTH_ACCOUNT_TEMPORARILY_LOCKED",
+                            target_user_id=user.user_id,
+                        )
+                self._raise_audited_failure(
+                    db,
+                    audit_context,
+                    action="LOGIN_FAILED",
+                    operation_id="login_platform_user",
+                    error=self._invalid_credentials(),
+                    target_user_id=user.user_id,
+                )
             if temporarily_locked:
-                raise PlatformError(
+                lock_error = PlatformError(
                     title="Account temporarily locked",
                     detail="The account is temporarily locked.",
                     status=403,
                     code="AUTH_ACCOUNT_TEMPORARILY_LOCKED",
+                )
+                self._audit.append(
+                    db,
+                    audit_context,
+                    action="USER_DISABLED_OR_LOCKED",
+                    operation_id="login_platform_user",
+                    result_code=lock_error.code,
+                    actor_id=user.user_id,
+                    target_user_id=user.user_id,
+                )
+                self._raise_audited_failure(
+                    db,
+                    audit_context,
+                    action="LOGIN_FAILED",
+                    operation_id="login_platform_user",
+                    error=lock_error,
+                    actor_id=user.user_id,
+                    target_user_id=user.user_id,
                 )
             if self._passwords.needs_rehash(credential.password_hash):
                 credential.password_hash = self._passwords.hash(password)
@@ -158,21 +227,41 @@ class AuthenticationService:
             credential.last_successful_login_at = now
             credential.row_version += 1
             session, refresh_token = self._create_session(
-                db, credential, source_context, family_id=None
+                db,
+                credential,
+                audit_context,
+                family_id=None,
+                operation_id="login_platform_user",
+                actor_id=user.user_id,
             )
             current_user = self._current_user(db, user, credential)
+            self._audit.append(
+                db,
+                audit_context,
+                action="LOGIN_SUCCEEDED",
+                operation_id="login_platform_user",
+                result_code="SUCCESS",
+                actor_id=user.user_id,
+                target_user_id=user.user_id,
+                session_id=session.session_id,
+            )
             db.commit()
         return self._result(
             user.user_id, credential.credential_version, session, refresh_token, current_user
         )
 
     def authenticate_access(
-        self, token: str, operation_id: str
+        self, token: str, operation_id: str, audit_context: AuditContext
     ) -> tuple[AuthenticatedIdentity, CurrentUserResource]:
         claims = self._jwt.decode(token)
         with self._session_factory() as db:
             try:
-                identity = self._load_access_identity(db, claims)
+                identity = self._load_access_identity(
+                    db,
+                    claims,
+                    audit_context=audit_context,
+                    operation_id=operation_id,
+                )
             except PlatformError:
                 db.commit()
                 raise
@@ -193,20 +282,47 @@ class AuthenticationService:
             db.commit()
         return identity, current_user
 
-    def refresh(self, token: str, source_context: str | None) -> AuthenticationResult:
-        try:
-            token_digest = refresh_token_hash(token)
-        except ValueError:
-            raise self._session_revoked() from None
+    def refresh(self, token: str | None, audit_context: AuditContext) -> AuthenticationResult:
         with self._session_factory() as db:
+            if token is None:
+                self._raise_audited_failure(
+                    db,
+                    audit_context,
+                    action="REFRESH_FAILED",
+                    operation_id="refresh_platform_session",
+                    error=self._session_revoked(),
+                )
+            try:
+                token_digest = refresh_token_hash(token)
+            except ValueError:
+                self._raise_audited_failure(
+                    db,
+                    audit_context,
+                    action="REFRESH_FAILED",
+                    operation_id="refresh_platform_session",
+                    error=self._session_revoked(),
+                )
             session_hint = db.scalar(
                 select(AuthRefreshSession).where(AuthRefreshSession.token_hash == token_digest)
             )
             if session_hint is None:
-                raise self._session_revoked()
+                self._raise_audited_failure(
+                    db,
+                    audit_context,
+                    action="REFRESH_FAILED",
+                    operation_id="refresh_platform_session",
+                    error=self._session_revoked(),
+                )
             credential_hint = db.get(PlatformUserCredential, session_hint.credential_id)
             if credential_hint is None:
-                raise self._session_revoked()
+                self._raise_audited_failure(
+                    db,
+                    audit_context,
+                    action="REFRESH_FAILED",
+                    operation_id="refresh_platform_session",
+                    error=self._session_revoked(),
+                    session_id=session_hint.session_id,
+                )
             user = db.scalar(
                 select(PlatformUser)
                 .where(PlatformUser.user_id == credential_hint.user_id)
@@ -229,40 +345,134 @@ class AuthenticationService:
                 .with_for_update()
             )
             if user is None or credential is None or old is None:
-                raise self._session_revoked()
+                self._raise_audited_failure(
+                    db,
+                    audit_context,
+                    action="REFRESH_FAILED",
+                    operation_id="refresh_platform_session",
+                    error=self._session_revoked(),
+                    target_user_id=credential_hint.user_id,
+                    session_id=session_hint.session_id,
+                )
             now = utc_now()
             if old.lifecycle_status == "ROTATED":
-                self._compromise_family(db, old.family_id, now)
-                db.commit()
-                raise self._session_revoked()
+                self._compromise_family(
+                    db,
+                    old.family_id,
+                    now,
+                    audit_context,
+                    actor_id=user.user_id,
+                    operation_id="refresh_platform_session",
+                )
+                self._raise_audited_failure(
+                    db,
+                    audit_context,
+                    action="REFRESH_FAILED",
+                    operation_id="refresh_platform_session",
+                    error=self._session_revoked(),
+                    actor_id=user.user_id,
+                    target_user_id=user.user_id,
+                    session_id=old.session_id,
+                )
             if old.lifecycle_status != ACTIVE:
-                raise self._session_revoked()
+                self._raise_audited_failure(
+                    db,
+                    audit_context,
+                    action="REFRESH_FAILED",
+                    operation_id="refresh_platform_session",
+                    error=self._session_revoked(),
+                    actor_id=user.user_id,
+                    target_user_id=user.user_id,
+                    session_id=old.session_id,
+                )
             if old.expires_at <= now:
                 old.lifecycle_status = "EXPIRED"
                 old.row_version += 1
-                db.commit()
-                raise self._session_revoked()
+                self._audit.append(
+                    db,
+                    audit_context,
+                    action="SESSION_REVOKED",
+                    operation_id="refresh_platform_session",
+                    result_code="EXPIRED",
+                    actor_id=user.user_id,
+                    target_user_id=user.user_id,
+                    session_id=old.session_id,
+                )
+                self._raise_audited_failure(
+                    db,
+                    audit_context,
+                    action="REFRESH_FAILED",
+                    operation_id="refresh_platform_session",
+                    error=self._session_revoked(),
+                    actor_id=user.user_id,
+                    target_user_id=user.user_id,
+                    session_id=old.session_id,
+                )
             if credential.lifecycle_status != ACTIVE:
-                raise self._session_revoked()
+                self._raise_audited_failure(
+                    db,
+                    audit_context,
+                    action="REFRESH_FAILED",
+                    operation_id="refresh_platform_session",
+                    error=self._session_revoked(),
+                    target_user_id=user.user_id,
+                    session_id=old.session_id,
+                )
             try:
-                self._require_login_user_state(user, db, credential)
-            except PlatformError:
+                self._require_login_user_state(
+                    user,
+                    db,
+                    credential,
+                    audit_context,
+                    "refresh_platform_session",
+                    actor_id=user.user_id,
+                )
+            except PlatformError as error:
+                self._audit.append(
+                    db,
+                    audit_context,
+                    action="REFRESH_FAILED",
+                    operation_id="refresh_platform_session",
+                    result_code=error.code,
+                    target_user_id=user.user_id,
+                    session_id=old.session_id,
+                )
                 db.commit()
                 raise
             if credential.force_password_change:
-                raise PlatformError(
-                    title="Password change required",
-                    detail="Refresh is unavailable until the password is changed.",
-                    status=403,
-                    code="AUTH_PASSWORD_CHANGE_REQUIRED",
+                self._raise_audited_failure(
+                    db,
+                    audit_context,
+                    action="REFRESH_FAILED",
+                    operation_id="refresh_platform_session",
+                    error=PlatformError(
+                        title="Password change required",
+                        detail="Refresh is unavailable until the password is changed.",
+                        status=403,
+                        code="AUTH_PASSWORD_CHANGE_REQUIRED",
+                    ),
+                    actor_id=user.user_id,
+                    target_user_id=user.user_id,
+                    session_id=old.session_id,
                 )
             if old.credential_version != credential.credential_version:
-                raise self._session_revoked()
+                self._raise_audited_failure(
+                    db,
+                    audit_context,
+                    action="REFRESH_FAILED",
+                    operation_id="refresh_platform_session",
+                    error=self._session_revoked(),
+                    actor_id=user.user_id,
+                    target_user_id=user.user_id,
+                    session_id=old.session_id,
+                )
             replacement, refresh_token = self._create_session(
                 db,
                 credential,
-                source_context,
+                audit_context,
                 family_id=old.family_id,
+                operation_id="refresh_platform_session",
+                actor_id=user.user_id,
                 expires_at=old.expires_at,
                 enforce_limit=False,
             )
@@ -273,6 +483,16 @@ class AuthenticationService:
             old.replaced_by_session_id = replacement.session_id
             old.row_version += 1
             current_user = self._current_user(db, user, credential)
+            self._audit.append(
+                db,
+                audit_context,
+                action="REFRESH_SUCCEEDED",
+                operation_id="refresh_platform_session",
+                result_code="SUCCESS",
+                actor_id=user.user_id,
+                target_user_id=user.user_id,
+                session_id=replacement.session_id,
+            )
             db.commit()
         return self._result(
             user.user_id,
@@ -288,15 +508,16 @@ class AuthenticationService:
         operation_id: str,
         permission_code: str,
         context: AuthorizationContext,
+        audit_context: AuditContext,
     ) -> AuthenticatedIdentity:
         """Intersect realtime permission, project membership, data scope and object state."""
-        identity, _ = self.authenticate_access(token, operation_id)
+        identity, _ = self.authenticate_access(token, operation_id, audit_context)
         if context.scope_type not in FROZEN_DATA_SCOPE_TYPES:
-            self._raise_permission_denied()
+            self._raise_permission_denied(identity, operation_id, audit_context)
         if context.scope_type in PROJECT_ID_SCOPE_TYPES and (
             context.project_id is None or context.scope_id != context.project_id
         ):
-            self._raise_permission_denied()
+            self._raise_permission_denied(identity, operation_id, audit_context)
         allowed = False
         with self._session_factory() as db:
             now = utc_now()
@@ -370,7 +591,7 @@ class AuthenticationService:
                 applicable.append((role_code, decision))
 
             if any(decision in {"DENIED", "FORBIDDEN"} for _, decision in applicable):
-                self._raise_permission_denied()
+                self._raise_permission_denied(identity, operation_id, audit_context, db=db)
 
             project_member_id = None
             if context.project_id is not None:
@@ -398,7 +619,7 @@ class AuthenticationService:
                     allowed = True
                     break
         if not allowed:
-            self._raise_permission_denied()
+            self._raise_permission_denied(identity, operation_id, audit_context)
         return identity
 
     @staticmethod
@@ -410,24 +631,54 @@ class AuthenticationService:
         del actor_user_id, context
         if condition == GENERIC_RBAC_CONDITION:
             return True
-        # The review and super-admin conditions require an immutable audit record
-        # committed atomically with the protected business mutation. P1's frozen
-        # physical audit model cannot represent that evidence, so these conditions
-        # remain fail-closed instead of trusting caller-supplied booleans.
+        # REVIEW/SUPER_ADMIN还要求二次确认、原因及受保护业务变更与审计的原子证据;
+        # 当前认证审计表本身不能证明这些跨域前置条件, 因此继续失败关闭。
         if condition in {REVIEW_RBAC_CONDITION, SUPER_ADMIN_RBAC_CONDITION}:
             return False
         return False
 
-    @staticmethod
-    def _raise_permission_denied() -> None:
-        raise PlatformError(
+    def _raise_permission_denied(
+        self,
+        identity: AuthenticatedIdentity,
+        operation_id: str,
+        audit_context: AuditContext,
+        *,
+        db: Session | None = None,
+    ) -> NoReturn:
+        error = PlatformError(
             title="Permission denied",
             detail="The current identity is not permitted to perform this operation.",
             status=403,
             code="AUTH_PERMISSION_DENIED",
         )
+        if db is not None:
+            self._audit.append(
+                db,
+                audit_context,
+                action="PERMISSION_DENIED",
+                operation_id=operation_id,
+                result_code=error.code,
+                actor_id=identity.user.user_id,
+                target_user_id=identity.user.user_id,
+                session_id=identity.session.session_id,
+            )
+            db.commit()
+            raise error
+        with self._session_factory() as audit_db:
+            self._audit.append(
+                audit_db,
+                audit_context,
+                action="PERMISSION_DENIED",
+                operation_id=operation_id,
+                result_code=error.code,
+                actor_id=identity.user.user_id,
+                target_user_id=identity.user.user_id,
+                session_id=identity.session.session_id,
+            )
+            audit_db.commit()
+        raise error
 
-    def logout(self, token: str | None) -> None:
+    def logout(self, token: str | None, audit_context: AuditContext) -> None:
         if not token:
             return
         try:
@@ -440,12 +691,39 @@ class AuthenticationService:
                 .where(AuthRefreshSession.token_hash == token_digest)
                 .with_for_update()
             )
+            if refresh_session is None:
+                return
+            credential = db.get(PlatformUserCredential, refresh_session.credential_id)
+            user_id = credential.user_id if credential is not None else None
             if refresh_session is not None and refresh_session.lifecycle_status == ACTIVE:
                 refresh_session.lifecycle_status = "REVOKED"
                 refresh_session.revoked_at = utc_now()
                 refresh_session.revoke_reason = "LOGOUT"
                 refresh_session.row_version += 1
-                db.commit()
+                self._audit.append(
+                    db,
+                    audit_context,
+                    action="SESSION_REVOKED",
+                    operation_id="logout_platform_user",
+                    result_code="LOGOUT",
+                    actor_id=user_id,
+                    target_user_id=user_id,
+                    session_id=refresh_session.session_id,
+                )
+                result_code = "SUCCESS"
+            else:
+                result_code = "ALREADY_INACTIVE"
+            self._audit.append(
+                db,
+                audit_context,
+                action="LOGOUT",
+                operation_id="logout_platform_user",
+                result_code=result_code,
+                actor_id=user_id,
+                target_user_id=user_id,
+                session_id=refresh_session.session_id,
+            )
+            db.commit()
 
     def change_password(
         self,
@@ -453,10 +731,10 @@ class AuthenticationService:
         current_password: str,
         new_password: str,
         idempotency_key: str,
-        source_context: str | None,
+        audit_context: AuditContext,
     ) -> AuthenticationResult:
         claims = self._jwt.decode(access_token)
-        with self._session_factory.begin() as db:
+        with self._session_factory() as db:
             existing = db.get(IdempotencyRecord, idempotency_key)
             if existing is not None:
                 raise PlatformError(
@@ -466,7 +744,13 @@ class AuthenticationService:
                     code="AUTH_OPERATION_FORBIDDEN_FOR_STATE",
                 )
             try:
-                identity = self._load_access_identity(db, claims, for_update=True)
+                identity = self._load_access_identity(
+                    db,
+                    claims,
+                    for_update=True,
+                    audit_context=audit_context,
+                    operation_id="change_current_user_password",
+                )
             except PlatformError:
                 db.commit()
                 raise
@@ -504,9 +788,23 @@ class AuthenticationService:
             credential.locked_until = None
             credential.last_failed_at = None
             credential.row_version += 1
-            self._revoke_active_sessions(db, credential.credential_id, "PASSWORD_CHANGED", now)
+            self._revoke_active_sessions(
+                db,
+                credential,
+                "PASSWORD_CHANGED",
+                now,
+                audit_context,
+                actor_id=identity.user.user_id,
+                operation_id="change_current_user_password",
+            )
             replacement, refresh_token = self._create_session(
-                db, credential, source_context, family_id=None, enforce_limit=False
+                db,
+                credential,
+                audit_context,
+                family_id=None,
+                operation_id="change_current_user_password",
+                actor_id=identity.user.user_id,
+                enforce_limit=False,
             )
             db.add(
                 IdempotencyRecord(
@@ -521,6 +819,16 @@ class AuthenticationService:
                 )
             )
             current_user = self._current_user(db, identity.user, credential)
+            self._audit.append(
+                db,
+                audit_context,
+                action="PASSWORD_CHANGED",
+                operation_id="change_current_user_password",
+                result_code="SUCCESS",
+                actor_id=identity.user.user_id,
+                target_user_id=identity.user.user_id,
+                session_id=replacement.session_id,
+            )
             db.commit()
         return self._result(
             identity.user.user_id,
@@ -531,13 +839,28 @@ class AuthenticationService:
         )
 
     def _load_access_identity(
-        self, db: Session, claims: AccessClaims, *, for_update: bool = False
+        self,
+        db: Session,
+        claims: AccessClaims,
+        *,
+        audit_context: AuditContext,
+        operation_id: str,
+        for_update: bool = False,
     ) -> AuthenticatedIdentity:
         user_query = select(PlatformUser).where(PlatformUser.user_id == claims.user_id)
         if for_update:
             user_query = user_query.with_for_update()
         user = db.scalar(user_query)
         if user is None:
+            self._audit.append(
+                db,
+                audit_context,
+                action="SESSION_REVOKED",
+                operation_id=operation_id,
+                result_code="AUTH_IDENTITY_NOT_FOUND",
+                target_user_id=claims.user_id,
+                session_id=claims.session_id,
+            )
             raise PlatformError(
                 title="Identity not found",
                 detail="The authenticated identity no longer exists.",
@@ -557,12 +880,39 @@ class AuthenticationService:
             session_query = session_query.with_for_update()
         refresh_session = db.scalar(session_query)
         if credential is None or refresh_session is None:
+            self._audit.append(
+                db,
+                audit_context,
+                action="SESSION_REVOKED",
+                operation_id=operation_id,
+                result_code="AUTH_SESSION_REVOKED",
+                actor_id=user.user_id,
+                target_user_id=user.user_id,
+                session_id=claims.session_id,
+            )
             raise self._session_revoked()
-        self._require_login_user_state(user, db, credential)
+        self._require_login_user_state(
+            user,
+            db,
+            credential,
+            audit_context,
+            operation_id,
+            actor_id=user.user_id,
+        )
         now = utc_now()
         if refresh_session.lifecycle_status == ACTIVE and refresh_session.expires_at <= now:
             refresh_session.lifecycle_status = "EXPIRED"
             refresh_session.row_version += 1
+            self._audit.append(
+                db,
+                audit_context,
+                action="SESSION_REVOKED",
+                operation_id=operation_id,
+                result_code="EXPIRED",
+                actor_id=user.user_id,
+                target_user_id=user.user_id,
+                session_id=refresh_session.session_id,
+            )
             raise self._session_revoked()
         if (
             credential.lifecycle_status != ACTIVE
@@ -571,15 +921,40 @@ class AuthenticationService:
             or refresh_session.credential_version != credential.credential_version
             or refresh_session.lifecycle_status != ACTIVE
         ):
+            self._audit.append(
+                db,
+                audit_context,
+                action="SESSION_REVOKED",
+                operation_id=operation_id,
+                result_code="AUTH_SESSION_REVOKED",
+                actor_id=user.user_id,
+                target_user_id=user.user_id,
+                session_id=refresh_session.session_id,
+            )
             raise self._session_revoked()
         return AuthenticatedIdentity(user, credential, refresh_session)
 
     def _require_login_user_state(
-        self, user: PlatformUser, db: Session, credential: PlatformUserCredential
+        self,
+        user: PlatformUser,
+        db: Session,
+        credential: PlatformUserCredential,
+        audit_context: AuditContext,
+        operation_id: str,
+        *,
+        actor_id: str | None,
     ) -> None:
         if user.lifecycle_status == ACTIVE:
             return
-        self._revoke_active_sessions(db, credential.credential_id, "USER_STATE_CHANGED", utc_now())
+        self._revoke_active_sessions(
+            db,
+            credential,
+            "USER_STATE_CHANGED",
+            utc_now(),
+            audit_context,
+            actor_id=actor_id,
+            operation_id=operation_id,
+        )
         mapping = {
             "LOCKED": ("Account locked", "AUTH_ACCOUNT_LOCKED"),
             "DISABLED": ("Account disabled", "AUTH_ACCOUNT_DISABLED"),
@@ -589,6 +964,15 @@ class AuthenticationService:
         title, code = mapping.get(
             user.lifecycle_status,
             ("Operation forbidden for account state", "AUTH_OPERATION_FORBIDDEN_FOR_STATE"),
+        )
+        self._audit.append(
+            db,
+            audit_context,
+            action="USER_DISABLED_OR_LOCKED",
+            operation_id=operation_id,
+            result_code=code,
+            actor_id=actor_id,
+            target_user_id=user.user_id,
         )
         raise PlatformError(title=title, detail=title + ".", status=403, code=code)
 
@@ -609,8 +993,10 @@ class AuthenticationService:
         self,
         db: Session,
         credential: PlatformUserCredential,
-        source_context: str | None,
+        audit_context: AuditContext,
         family_id: str | None,
+        operation_id: str,
+        actor_id: str,
         *,
         expires_at: datetime | None = None,
         enforce_limit: bool = True,
@@ -642,6 +1028,16 @@ class AuthenticationService:
                 oldest.revoked_at = now
                 oldest.revoke_reason = "SESSION_LIMIT"
                 oldest.row_version += 1
+                self._audit.append(
+                    db,
+                    audit_context,
+                    action="SESSION_REVOKED",
+                    operation_id=operation_id,
+                    result_code="SESSION_LIMIT",
+                    actor_id=actor_id,
+                    target_user_id=credential.user_id,
+                    session_id=oldest.session_id,
+                )
         raw_token = new_refresh_token()
         session_id = new_ulid()
         refresh_session = AuthRefreshSession(
@@ -659,7 +1055,7 @@ class AuthenticationService:
             revoked_at=None,
             revoke_reason=None,
             replaced_by_session_id=None,
-            client_context_hash=client_context_hash(source_context),
+            client_context_hash=client_context_hash(audit_context.source_context),
             row_version=0,
             created_at=now,
             updated_at=now,
@@ -667,36 +1063,77 @@ class AuthenticationService:
         db.add(refresh_session)
         return refresh_session, raw_token
 
-    def _compromise_family(self, db: Session, family_id: str, now: datetime) -> None:
-        current = now
-        db.execute(
-            update(AuthRefreshSession)
-            .where(AuthRefreshSession.family_id == family_id)
-            .values(
-                lifecycle_status="COMPROMISED",
-                revoked_at=current,
-                revoke_reason="REFRESH_REPLAY",
-                row_version=AuthRefreshSession.row_version + 1,
+    def _compromise_family(
+        self,
+        db: Session,
+        family_id: str,
+        now: datetime,
+        audit_context: AuditContext,
+        *,
+        actor_id: str,
+        operation_id: str,
+    ) -> None:
+        sessions = list(
+            db.scalars(
+                select(AuthRefreshSession)
+                .where(AuthRefreshSession.family_id == family_id)
+                .order_by(AuthRefreshSession.session_id)
+                .with_for_update()
             )
         )
+        for refresh_session in sessions:
+            refresh_session.lifecycle_status = "COMPROMISED"
+            refresh_session.revoked_at = now
+            refresh_session.revoke_reason = "REFRESH_REPLAY"
+            refresh_session.row_version += 1
+            self._audit.append(
+                db,
+                audit_context,
+                action="SESSION_REVOKED",
+                operation_id=operation_id,
+                result_code="REFRESH_REPLAY",
+                actor_id=actor_id,
+                target_user_id=actor_id,
+                session_id=refresh_session.session_id,
+            )
 
     def _revoke_active_sessions(
-        self, db: Session, credential_id: str, reason: str, now: datetime
+        self,
+        db: Session,
+        credential: PlatformUserCredential,
+        reason: str,
+        now: datetime,
+        audit_context: AuditContext,
+        *,
+        actor_id: str | None,
+        operation_id: str,
     ) -> None:
-        current = now
-        db.execute(
-            update(AuthRefreshSession)
-            .where(
-                AuthRefreshSession.credential_id == credential_id,
-                AuthRefreshSession.lifecycle_status == ACTIVE,
-            )
-            .values(
-                lifecycle_status="REVOKED",
-                revoked_at=current,
-                revoke_reason=reason,
-                row_version=AuthRefreshSession.row_version + 1,
+        sessions = list(
+            db.scalars(
+                select(AuthRefreshSession)
+                .where(
+                    AuthRefreshSession.credential_id == credential.credential_id,
+                    AuthRefreshSession.lifecycle_status == ACTIVE,
+                )
+                .order_by(AuthRefreshSession.session_id)
+                .with_for_update()
             )
         )
+        for refresh_session in sessions:
+            refresh_session.lifecycle_status = "REVOKED"
+            refresh_session.revoked_at = now
+            refresh_session.revoke_reason = reason
+            refresh_session.row_version += 1
+            self._audit.append(
+                db,
+                audit_context,
+                action="SESSION_REVOKED",
+                operation_id=operation_id,
+                result_code=reason,
+                actor_id=actor_id,
+                target_user_id=credential.user_id,
+                session_id=refresh_session.session_id,
+            )
 
     def _current_user(
         self, db: Session, user: PlatformUser, credential: PlatformUserCredential
@@ -756,6 +1193,34 @@ class AuthenticationService:
             AccessClaims(user_id, refresh_session.session_id, credential_version)
         )
         return AuthenticationResult(access_token, refresh_token, current_user)
+
+    def _raise_audited_failure(
+        self,
+        db: Session,
+        audit_context: AuditContext,
+        *,
+        action: AuthenticationAuditAction,
+        operation_id: str,
+        error: PlatformError,
+        actor_id: str | None = None,
+        target_user_id: str | None = None,
+        session_id: str | None = None,
+    ) -> NoReturn:
+        """Persist a synchronous failure audit before exposing the authentication error."""
+        if action not in {"LOGIN_FAILED", "REFRESH_FAILED"}:
+            raise ValueError("unsupported audited failure action")
+        self._audit.append(
+            db,
+            audit_context,
+            action=action,
+            operation_id=operation_id,
+            result_code=error.code,
+            actor_id=actor_id,
+            target_user_id=target_user_id,
+            session_id=session_id,
+        )
+        db.commit()
+        raise error
 
     @staticmethod
     def _invalid_credentials() -> PlatformError:

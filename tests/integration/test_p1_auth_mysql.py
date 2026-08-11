@@ -1,4 +1,4 @@
-"""Real MySQL 8.4 runtime gate for the implementable R4.2 P1 auth boundary."""
+"""Real MySQL 8.4 runtime gate for the current Living Authority P1 auth boundary."""
 
 from __future__ import annotations
 
@@ -8,31 +8,37 @@ from collections import defaultdict
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
 from platform_api.app import create_app
+from platform_api.audit import AuditContext
 from platform_api.auth_service import AuthenticationService, AuthorizationContext
-from platform_api.bootstrap import AdminBootstrapService
+from platform_api.bootstrap import BOOTSTRAP_KEY, AdminBootstrapService
 from platform_api.config import ApiSettings
 from platform_api.errors import PlatformError
-from platform_api.keygen import generate_development_keys
+from platform_api.keygen import generate_development_key_ring
 from platform_api.models import (
     Admin,
     AuthRefreshSession,
+    AuthSecurityAudit,
     DataScopeGrant,
+    IdempotencyRecord,
+    OutboxEvent,
     PermissionCode,
     PlatformUser,
     PlatformUserCredential,
     Project,
     ProjectMember,
     Role,
+    RoleBinding,
     RolePermission,
     UserRoleBinding,
 )
-from platform_api.security import PasswordService, new_ulid, utc_now
-from sqlalchemy import func, select, update
-from sqlalchemy.exc import IntegrityError
+from platform_api.security import PasswordService, new_refresh_token, new_ulid, utc_now
+from sqlalchemy import func, select, text, update
+from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 
@@ -45,6 +51,10 @@ def _database_url() -> str:
 
 def _password(label: str) -> str:
     return f"{label}-{secrets.token_hex(12)}-7"
+
+
+def _audit_context(label: str) -> AuditContext:
+    return AuditContext(f"{label}-{new_ulid()}", label)
 
 
 @pytest.fixture
@@ -224,12 +234,11 @@ def _create_normal_user(
 
 
 def test_p1_auth_rbac_real_mysql_runtime_gate(key_directory: Path) -> None:
-    private_key, public_key = generate_development_keys(key_directory)
+    key_ring = generate_development_key_ring(key_directory, kid="p1-mysql-rs256-v1")
     settings = ApiSettings(
         environment="test",
         database_url=_database_url(),
-        jwt_private_key_file=private_key,
-        jwt_public_key_file=public_key,
+        jwt_key_ring_file=key_ring.manifest_file,
     )
     app = create_app(settings)
     factory: sessionmaker[Session] = app.state.session_factory
@@ -238,11 +247,76 @@ def test_p1_auth_rbac_real_mysql_runtime_gate(key_directory: Path) -> None:
     changed_password = _password("Changed")
 
     bootstrap = AdminBootstrapService(factory, passwords)
+    bootstrap_failure_correlation = str(uuid4())
+    with factory.begin() as db:
+        db.execute(
+            text(
+                "CREATE TRIGGER trg_test_auth_audit_no_insert "
+                "BEFORE INSERT ON atp_auth_security_audit FOR EACH ROW "
+                "SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'test audit insert failure'"
+            )
+        )
+    try:
+        with pytest.raises(DBAPIError):
+            bootstrap.bootstrap(initial_password, bootstrap_failure_correlation)
+    finally:
+        with factory.begin() as db:
+            db.execute(text("DROP TRIGGER trg_test_auth_audit_no_insert"))
+    with factory() as db:
+        assert db.scalar(select(func.count()).select_from(Admin)) == 0
+        assert (
+            db.scalar(
+                select(func.count())
+                .select_from(PlatformUser)
+                .where(PlatformUser.username == "admin")
+            )
+            == 0
+        )
+        assert (
+            db.scalar(
+                select(func.count())
+                .select_from(PlatformUserCredential)
+                .join(PlatformUser, PlatformUser.user_id == PlatformUserCredential.user_id)
+                .where(PlatformUser.username == "admin")
+            )
+            == 0
+        )
+        assert db.get(IdempotencyRecord, BOOTSTRAP_KEY) is None
+        assert (
+            db.scalar(
+                select(func.count())
+                .select_from(RoleBinding)
+                .where(RoleBinding.display_name == "Default admin super-admin binding")
+            )
+            == 0
+        )
+        assert (
+            db.scalar(
+                select(func.count())
+                .select_from(OutboxEvent)
+                .where(
+                    OutboxEvent.event_type.in_(
+                        ["user.active", "admin.active", "role_binding.active"]
+                    )
+                )
+            )
+            == 0
+        )
+        assert (
+            db.scalar(
+                select(func.count())
+                .select_from(AuthSecurityAudit)
+                .where(AuthSecurityAudit.correlation_id == bootstrap_failure_correlation)
+            )
+            == 0
+        )
+
+    bootstrap_inputs = (f"gate-{new_ulid()}", f"gate-{new_ulid()}")
     with ThreadPoolExecutor(max_workers=2) as executor:
         concurrent_results = list(
             executor.map(
                 lambda correlation_id: bootstrap.bootstrap(initial_password, correlation_id),
-                (f"gate-{new_ulid()}", f"gate-{new_ulid()}"),
+                bootstrap_inputs,
             )
         )
     second = bootstrap.bootstrap(_password("Ignored"), f"gate-{new_ulid()}")
@@ -273,13 +347,82 @@ def test_p1_auth_rbac_real_mysql_runtime_gate(key_directory: Path) -> None:
         assert credential is not None
         assert credential.password_hash.startswith("$argon2id$v=19$m=65536,t=3,p=1$")
         assert credential.force_password_change is True
+        role_assigned_audits = list(
+            db.scalars(select(AuthSecurityAudit).where(AuthSecurityAudit.action == "ROLE_ASSIGNED"))
+        )
+        assert len(role_assigned_audits) == 1
+        assert role_assigned_audits[0].operation_id == "bootstrap_admin"
+        assert role_assigned_audits[0].result_code == "ROLE-SUPER-ADMIN"
+        assert role_assigned_audits[0].actor_id == credential.user_id
+        assert role_assigned_audits[0].target_user_id == credential.user_id
+        bootstrap_events = list(
+            db.scalars(
+                select(OutboxEvent).where(
+                    OutboxEvent.event_type.in_(
+                        ["user.active", "admin.active", "role_binding.active"]
+                    )
+                )
+            )
+        )
+        assert len(bootstrap_events) == 3
+        bootstrap_correlations = {
+            event.payload_json["correlation_id"] for event in bootstrap_events
+        }
+        bootstrap_correlations.add(role_assigned_audits[0].correlation_id)
+        assert len(bootstrap_correlations) == 1
+        stored_bootstrap_correlation = bootstrap_correlations.pop()
+        assert stored_bootstrap_correlation not in bootstrap_inputs
 
     auth = app.state.auth_service
     assert isinstance(auth, AuthenticationService)
     normal_username, normal_password, allowed, denied, project_id = _create_normal_user(
         factory, passwords
     )
-    normal = auth.login(normal_username, normal_password, "mysql-gate")
+    atomicity_correlation = str(uuid4())
+    with factory.begin() as db:
+        db.execute(
+            text(
+                "CREATE TRIGGER trg_test_auth_audit_no_insert "
+                "BEFORE INSERT ON atp_auth_security_audit FOR EACH ROW "
+                "SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'test audit insert failure'"
+            )
+        )
+    try:
+        with pytest.raises(DBAPIError):
+            auth.login(
+                normal_username,
+                normal_password,
+                AuditContext(atomicity_correlation, "atomicity-source"),
+            )
+    finally:
+        with factory.begin() as db:
+            db.execute(text("DROP TRIGGER trg_test_auth_audit_no_insert"))
+    with factory() as db:
+        untouched_credential = db.scalar(
+            select(PlatformUserCredential)
+            .join(PlatformUser, PlatformUser.user_id == PlatformUserCredential.user_id)
+            .where(PlatformUser.username == normal_username)
+        )
+        assert untouched_credential is not None
+        assert untouched_credential.row_version == 0
+        assert (
+            db.scalar(
+                select(func.count())
+                .select_from(AuthRefreshSession)
+                .where(AuthRefreshSession.credential_id == untouched_credential.credential_id)
+            )
+            == 0
+        )
+        assert (
+            db.scalar(
+                select(func.count())
+                .select_from(AuthSecurityAudit)
+                .where(AuthSecurityAudit.correlation_id == atomicity_correlation)
+            )
+            == 0
+        )
+
+    normal = auth.login(normal_username, normal_password, _audit_context("mysql-gate"))
     assert denied not in normal.current_user.permissions
     authorization_context = AuthorizationContext(
         project_id=project_id,
@@ -287,7 +430,13 @@ def test_p1_auth_rbac_real_mysql_runtime_gate(key_directory: Path) -> None:
         scope_id=project_id,
         object_state_allowed=True,
     )
-    auth.authorize_access(normal.access_token, "runtime_gate_allow", allowed, authorization_context)
+    auth.authorize_access(
+        normal.access_token,
+        "runtime_gate_allow",
+        allowed,
+        authorization_context,
+        _audit_context("runtime-gate-allow"),
+    )
     with factory() as db:
         ungranted_allowed = db.scalar(
             select(PermissionCode.permission_code)
@@ -310,6 +459,7 @@ def test_p1_auth_rbac_real_mysql_runtime_gate(key_directory: Path) -> None:
             "runtime_gate_missing_scope_grant",
             ungranted_allowed,
             authorization_context,
+            _audit_context("runtime-gate-missing-grant"),
         )
     assert missing_grant_denial.value.code == "AUTH_PERMISSION_DENIED"
     with factory.begin() as db:
@@ -342,11 +492,16 @@ def test_p1_auth_rbac_real_mysql_runtime_gate(key_directory: Path) -> None:
             "runtime_gate_null_project_scope_grant",
             ungranted_allowed,
             authorization_context,
+            _audit_context("runtime-gate-null-scope"),
         )
     assert null_scope_denial.value.code == "AUTH_PERMISSION_DENIED"
     with pytest.raises(PlatformError) as denial:
         auth.authorize_access(
-            normal.access_token, "runtime_gate_deny", denied, authorization_context
+            normal.access_token,
+            "runtime_gate_deny",
+            denied,
+            authorization_context,
+            _audit_context("runtime-gate-deny"),
         )
     assert getattr(denial.value, "status", None) == 403
     assert getattr(denial.value, "code", None) == "AUTH_PERMISSION_DENIED"
@@ -364,6 +519,7 @@ def test_p1_auth_rbac_real_mysql_runtime_gate(key_directory: Path) -> None:
                 "runtime_gate_scope_deny",
                 allowed,
                 denied_context,
+                _audit_context("runtime-gate-scope-deny"),
             )
         assert scoped_denial.value.code == "AUTH_PERMISSION_DENIED"
     with factory.begin() as db:
@@ -389,12 +545,17 @@ def test_p1_auth_rbac_real_mysql_runtime_gate(key_directory: Path) -> None:
             "runtime_gate_realtime_deny",
             allowed,
             authorization_context,
+            _audit_context("runtime-gate-realtime-deny"),
         )
     assert realtime_denial.value.code == "AUTH_PERMISSION_DENIED"
 
     newest_normal = normal
     for _ in range(5):
-        newest_normal = auth.login(normal_username, normal_password, "mysql-gate-session-limit")
+        newest_normal = auth.login(
+            normal_username,
+            normal_password,
+            _audit_context("mysql-gate-session-limit"),
+        )
     with factory() as db:
         assert normal_credential is not None
         active_sessions = db.scalar(
@@ -419,10 +580,15 @@ def test_p1_auth_rbac_real_mysql_runtime_gate(key_directory: Path) -> None:
         )
     with ThreadPoolExecutor(max_workers=2) as pool:
         refresh_future = pool.submit(
-            auth.refresh, newest_normal.refresh_token, "mysql-gate-concurrent-refresh"
+            auth.refresh,
+            newest_normal.refresh_token,
+            _audit_context("mysql-gate-concurrent-refresh"),
         )
         login_future = pool.submit(
-            auth.login, normal_username, normal_password, "mysql-gate-concurrent-login"
+            auth.login,
+            normal_username,
+            normal_password,
+            _audit_context("mysql-gate-concurrent-login"),
         )
         newest_normal = refresh_future.result(timeout=20)
         assert login_future.result(timeout=20).current_user.username == normal_username
@@ -432,13 +598,23 @@ def test_p1_auth_rbac_real_mysql_runtime_gate(key_directory: Path) -> None:
         assert session is not None
         session.expires_at = utc_now()
     with pytest.raises(PlatformError):
-        auth.authenticate_access(newest_normal.access_token, "runtime_gate_expired")
+        auth.authenticate_access(
+            newest_normal.access_token,
+            "runtime_gate_expired",
+            _audit_context("runtime-gate-expired"),
+        )
     with factory() as db:
         session = db.get(AuthRefreshSession, newest_session_id)
         assert session is not None
         assert session.lifecycle_status == "EXPIRED"
 
     with TestClient(app, base_url="http://localhost") as client:
+        with factory() as db:
+            unresolved_logout_count = db.scalar(
+                select(func.count())
+                .select_from(AuthSecurityAudit)
+                .where(AuthSecurityAudit.action == "LOGOUT")
+            )
         client.cookies.set("atp_refresh", "not-base64url", path="/api/v1/auth")
         invalid_refresh = client.post(
             "/api/v1/auth/refresh", headers={"Sec-Fetch-Site": "same-origin"}, json={}
@@ -450,6 +626,25 @@ def test_p1_auth_rbac_real_mysql_runtime_gate(key_directory: Path) -> None:
         )
         assert invalid_logout.status_code == 204
         client.cookies.clear()
+        missing_logout = client.post(
+            "/api/v1/auth/logout", headers={"Sec-Fetch-Site": "same-origin"}, json={}
+        )
+        assert missing_logout.status_code == 204
+        client.cookies.set("atp_refresh", new_refresh_token(), path="/api/v1/auth")
+        unresolved_logout = client.post(
+            "/api/v1/auth/logout", headers={"Sec-Fetch-Site": "same-origin"}, json={}
+        )
+        assert unresolved_logout.status_code == 204
+        client.cookies.clear()
+        with factory() as db:
+            assert (
+                db.scalar(
+                    select(func.count())
+                    .select_from(AuthSecurityAudit)
+                    .where(AuthSecurityAudit.action == "LOGOUT")
+                )
+                == unresolved_logout_count
+            )
 
         login = client.post(
             "/api/v1/auth/login",
@@ -497,17 +692,19 @@ def test_p1_auth_rbac_real_mysql_runtime_gate(key_directory: Path) -> None:
         )
 
         rotated_raw = client.cookies.get("atp_refresh")
+        assert rotated_raw is not None
         refreshed = client.post(
             "/api/v1/auth/refresh", headers={"Sec-Fetch-Site": "same-origin"}, json={}
         )
         assert refreshed.status_code == 200
         replacement_raw = client.cookies.get("atp_refresh")
+        assert replacement_raw is not None
         assert replacement_raw != rotated_raw
         with pytest.raises(PlatformError) as replay:
-            auth.refresh(rotated_raw, "mysql-gate-replay")
+            auth.refresh(rotated_raw, _audit_context("mysql-gate-replay"))
         assert getattr(replay.value, "code", None) == "AUTH_SESSION_REVOKED"
         with pytest.raises(PlatformError):
-            auth.refresh(replacement_raw, "mysql-gate-compromised")
+            auth.refresh(replacement_raw, _audit_context("mysql-gate-compromised"))
 
         fresh_login = client.post(
             "/api/v1/auth/login", json={"username": "admin", "password": changed_password}
@@ -521,7 +718,11 @@ def test_p1_auth_rbac_real_mysql_runtime_gate(key_directory: Path) -> None:
             object_state_allowed=True,
         )
         auth.authorize_access(
-            fresh_access, "runtime_gate_super_generic", "PROJECT_VIEW", super_context
+            fresh_access,
+            "runtime_gate_super_generic",
+            "PROJECT_VIEW",
+            super_context,
+            _audit_context("runtime-gate-super-generic"),
         )
         for special_permission in (
             "VERSION_REVIEW_APPROVE",
@@ -533,6 +734,7 @@ def test_p1_auth_rbac_real_mysql_runtime_gate(key_directory: Path) -> None:
                     "runtime_gate_special_fail_closed",
                     special_permission,
                     super_context,
+                    _audit_context("runtime-gate-special-deny"),
                 )
             assert special_denial.value.code == "AUTH_PERMISSION_DENIED"
         logout = client.post(
@@ -579,6 +781,74 @@ def test_p1_auth_rbac_real_mysql_runtime_gate(key_directory: Path) -> None:
         )
         assert all(session.lifecycle_status != "ACTIVE" for session in family_sessions)
         assert len({session.expires_at for session in family_sessions}) == 1
+
+        audits = list(db.scalars(select(AuthSecurityAudit)))
+        actions = {row.action for row in audits}
+        assert {
+            "LOGIN_SUCCEEDED",
+            "LOGIN_FAILED",
+            "REFRESH_SUCCEEDED",
+            "REFRESH_FAILED",
+            "LOGOUT",
+            "PASSWORD_CHANGED",
+            "SESSION_REVOKED",
+            "USER_DISABLED_OR_LOCKED",
+            "PERMISSION_DENIED",
+        }.issubset(actions)
+        assert all(row.operation_id and row.result_code for row in audits)
+        assert all(1 <= len(row.correlation_id) <= 128 for row in audits)
+        assert all(len(row.source_context_hash) == 32 for row in audits)
+        visible_audit = "\n".join(
+            "|".join(
+                filter(
+                    None,
+                    (
+                        row.action,
+                        row.operation_id,
+                        row.actor_id,
+                        row.target_user_id,
+                        row.session_id,
+                        row.result_code,
+                        row.correlation_id,
+                        row.source_context_hash.hex(),
+                    ),
+                )
+            )
+            for row in audits
+        )
+        for forbidden_secret in (
+            initial_password,
+            changed_password,
+            normal_password,
+            normal.access_token,
+            normal.refresh_token,
+            rotated_raw,
+            replacement_raw,
+        ):
+            assert forbidden_secret not in visible_audit
+        immutable_audit_id = audits[0].audit_id
+        logout_audits = [row for row in audits if row.action == "LOGOUT"]
+        assert len(logout_audits) == 1
+        assert logout_audits[0].result_code == "SUCCESS"
+        assert logout_audits[0].session_id is not None
+
+    with pytest.raises(DBAPIError), factory.begin() as db:
+        db.execute(
+            text(
+                "UPDATE atp_auth_security_audit SET result_code = 'TAMPERED' "
+                "WHERE audit_id = :audit_id"
+            ),
+            {"audit_id": immutable_audit_id},
+        )
+    with pytest.raises(DBAPIError), factory.begin() as db:
+        db.execute(
+            text("DELETE FROM atp_auth_security_audit WHERE audit_id = :audit_id"),
+            {"audit_id": immutable_audit_id},
+        )
+    with factory() as db:
+        immutable_audit = db.get(AuthSecurityAudit, immutable_audit_id)
+        assert immutable_audit is not None
+        assert immutable_audit.result_code != "TAMPERED"
 
     with pytest.raises(IntegrityError), factory.begin() as db:
         assert credential is not None

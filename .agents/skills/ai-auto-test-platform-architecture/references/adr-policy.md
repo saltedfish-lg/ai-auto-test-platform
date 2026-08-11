@@ -20,4 +20,4 @@ ARCH_HIGH 且满足至少一项：
 - 确立 Runner/Worker/Scheduler 的长期协作边界；
 - 确立统一故障恢复/并发协调模式。
 
-`solution_architect` 只输出候选决策内容，不写文件。主 Agent 只有在当前任务明确包含架构治理文档、且目标路径不是冻结 R4.2 基线时才允许落盘。
+`solution_architect` 只输出候选决策内容，不写文件。主 Agent 只有在当前任务明确包含架构治理文档、且目标路径不是冻结 当前 authority 基线时才允许落盘。

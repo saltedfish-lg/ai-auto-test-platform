@@ -1,63 +1,77 @@
 ---
 name: ai-auto-test-platform-feature-orchestrator
-description: AI自动化测试执行平台跨前后端功能编排Skill；按影响闭包、产品主权门、技术架构、契约、业务UI设计、后端、生成客户端、前端、闭环反查、浏览器验证和独立审查完成闭环。
+description: AI自动化测试执行平台跨前后端功能编排Skill；以 Single Full Impact Scan、Shared Task Context Pack、风险触发专家池和 Stage Checkpoint + Validated Resume 完成可中断恢复的产品、架构、实现与验证闭环。
 ---
 
 # Full-stack Feature Orchestrator
 
-## 适用
+## 核心模型
 
-一个任务同时涉及正式 API/数据库/前端页面，或用户要求“完整功能闭环”。
+本 Orchestrator 不是“让所有 Agent 依次过一遍”的固定流水线。正式模型是：
+
+`Single Full Impact Scan → Shared Task Context Pack → Risk Tier → Expert Selection Plan → Sparse Execution → Stage Checkpoint → Validated Resume → Incremental Closure`。
+
+Custom Agents 是 `RISK_TRIGGERED_EXPERT_POOL`；Skill 是按需能力库。普通任务允许 `0` 个子 Agent，高风险任务也只启动真实受影响的专家。详见 `references/expert-pool-routing.md`。
+
+## Stage Checkpoint + Validated Resume
+
+本 Orchestrator 同时是 `TASK_LIFECYCLE_OWNER`。长时间正式 Task 只维护**一套 Task-level checkpoint**，不为各 Agent 建独立 checkpoint，不保存模型 Chain-of-Thought。阶段为：
+
+`CP-0 TASK_INITIALIZED → CP-1 CONTEXT_READY → CP-2 DECISIONS_READY → CP-3 IMPLEMENTATION_READY → CP-4 IMPLEMENTATION_COMPLETE → CP-5 VERIFICATION_COMPLETE → CP-6 CLOSURE_COMPLETE`。
+
+- checkpoint 必须位于 workspace 外，使用 `scripts/task_checkpoint.py` 原子写入并带 SHA-256 checksum；
+- Resume 前必须经过 `RESUME_VALIDATION_GATE`，只允许 `RESUME_EXACT / RESUME_WITH_DELTA_REFRESH / RESUME_REJECTED / CHECKPOINT_CORRUPTED`；
+- `RESUME_EXACT`：复用 latest `COMPLETED + VALID` stage，从下一阶段继续；
+- `RESUME_WITH_DELTA_REFRESH`：只允许 `$ai-auto-test-platform-context-efficiency` 执行 `DELTA_REFRESH + TARGETED_REVERSE_LOOKUP`，按失效矩阵最小化回退阶段；**禁止 Full Scan #2**；
+- workspace identity / workspace root / authority root 不一致时 `RESUME_REJECTED`；`docs/authority` digest 变化只进入 `RESUME_WITH_DELTA_REFRESH`，不创建新 baseline；
+- `CP-4 IMPLEMENTATION_COMPLETE` 后恢复必须直接进入 Verification，不得重新实现；`CP-5` 的验证证据必须绑定 workspace fingerprint，代码再次变化则相应验证失效；
+- 详见 `references/task-checkpoint-resume.md`。
 
 ## 编排顺序
 
-1. **上下文与影响闭包**：在任何工作区写入之前，Git 可读时先用 `$ai-auto-test-platform-context-efficiency` 的 `workspace_snapshot.py capture` 在 workspace 外建立 task-start snapshot（`snapshot_version=2`，绑定 resolved root 与 repository identity；真实 Git index 只通过临时副本读取），并把引用/摘要写入 Task Context Pack；随后使用该 Skill 对任务分级为 LOCAL/CROSS_MODULE/HIGH_RISK。普通业务任务扫描 required/optional 活动范围；Agent/Skill/Orchestrator/Codex治理任务显式 `--include-governance` 扩张 `.agents/.codex`。`scope_status=INCOMPLETE` 时必须停止闭环声明并进入 `BLOCKED_BY_INCOMPLETE_SCOPE`；若 `scope_status=COMPLETE` 但 `closure_safe=false` 且原因为 Git metadata `UNAVAILABLE`，进入 `BLOCKED_BY_ENVIRONMENT`；跨模块/高风险先建立 Impact Map 与 Task Context Pack；只有影响不清或范围较大时才调度 `context_impact_analyst`，避免简单任务增加Agent开销；
-2. **事实与范围**：基于 Task Context Pack 精准读取 root AGENTS、core Skill、R4.2 权威事实，确定对象/权限/状态/验收边界；
-3. **产品主权门**：先检查 Task Context Pack 的 `product_authority`。若其 `freshness=CURRENT`、`assessed_pack_revision == pack_revision` 且未发生新的 Product/Authority `IMPACT_EXPANSION`，直接复用，禁止重复产品分析；若仅发生不改变用户可观察行为/业务规则/API数据事件/权限安全/Runner业务语义/验收结果的工程 delta，可做 product revision rebind，仅更新 `assessed_pack_revision`。否则使用 `$ai-auto-test-platform-product-sovereignty` 执行轻量 `PRODUCT_AUTHORITY_GATE`：只有 `PRODUCT_DECISION_NOT_REQUIRED / PRODUCT_FACT_FOUND` 且 `workflow_state=READY_FOR_ARCHITECTURE` 才允许继续。`PRODUCT_DECISION_REQUIRED / PRODUCT_CONFLICT_DETECTED / PRODUCT_SCOPE_CHANGE` 若 `user_decision_status=PENDING`，生成/复用 Product Decision Pack 并进入 `BLOCKED_BY_PRODUCT_DECISION`；若当前请求或既有明确用户裁决已经使其 `CONFIRMED`，禁止重复询问，且新增/修改/删除产品事实、解决冲突或范围变化时必须进入 `AUTHORITY_UPDATE_ONLY`。该阶段只允许按用户授权同步受治理当前权威事实，禁止 Architecture/Implementation；同步完成后重新执行产品门，得到 `PRODUCT_FACT_FOUND` 才继续。推荐方案不等于用户批准，`CONFIRMED` 也不等于权威事实已更新；
-4. **架构风险门禁**：先检查 Task Context Pack 的 `architecture_decision`。若 delta refresh 仅递增 `pack_revision` 且没有新增 state owner / transaction / consistency / concurrency / Runner-Worker / dependency domain，则先执行 **revision rebind**：保持 `freshness=CURRENT`、`recheck_required=false`，并把 `assessed_pack_revision` 更新到当前 `pack_revision`，禁止因此重跑架构裁决。完成 rebind 后，若 `freshness=CURRENT`、`assessed_pack_revision == pack_revision` 且未发生新的架构域 `IMPACT_EXPANSION`，直接复用现有 `ARCH_RISK / Architecture Check / Architecture Decision`，禁止重复判级。否则使用 `$ai-auto-test-platform-architecture` 判定 `ARCH_LOW / ARCH_MEDIUM / ARCH_HIGH`：ARCH_LOW 不调用架构 Agent；ARCH_MEDIUM 由当前实现 Agent 内嵌轻量 Architecture Check；只有 ARCH_HIGH 才调度只读 `solution_architect` 输出 Architecture Decision，并把状态/引用写回 Task Context Pack。架构裁决没有产品主权；发现产品/状态/契约/权限/恢复语义未决时进入 `BLOCKED_BY_PRODUCT_DECISION`；
-5. **契约守卫**：使用 `$ai-auto-test-platform-api-contract` 确认 OpenAPI/DDL/权限/状态有正式来源；
-6. **后端**：使用 `$ai-auto-test-platform-backend`；涉及 P1 认证/RBAC 时追加 `$ai-auto-test-platform-auth-rbac-security`；
-7. **数据库**：需要持久化/事务时使用 `$ai-auto-test-platform-database`；
-8. **业务UI设计门禁**：存在用户可见页面变更时使用 `$ai-auto-test-platform-business-ui-ux`。UI_LOW/UI_MEDIUM由`frontend_implementer`内嵌完成；UI_HIGH 的现有页面重设计先调用 `$ai-auto-test-platform-ui-quality` 的 `BASELINE_CAPTURE`；若成功则使用真实 Pre-change Browser Baseline，若因环境阻断则标记 `BLOCKED_BY_ENVIRONMENT + SOURCE_BASED_CURRENT_UI_BASELINE + VISUAL_BASELINE_CONFIDENCE = LIMITED` 并保留 `POST_CHANGE_BROWSER_VERIFY = REQUIRED`，不得伪造 Before；随后再调度`business_ui_ux_designer`输出Business UX Spec；新页面明确 baseline N/A；
-9. **客户端生成**：从正式 OpenAPI 生成/校验 `apps/web/src/generated/**`，禁止手改；
-10. **前端**：使用 `$ai-auto-test-platform-frontend`，按Business UX Spec/轻量设计决策实现，不套通用卡片墙模板；
-11. **修改后影响闭环**：先用 task-start snapshot 计算 `task_delta_paths`，明确本任务相对原有 dirty workspace 真正新增/继续修改/清除的路径；后端/DB/契约/权限/状态等阶段若已使 Task Context Pack 失效，再基于 `task_delta_paths` + 真实 diff 做 delta refresh 并递增 `pack_revision`；若真实 delta 新增用户可观察行为、业务规则/API数据事件、权限安全、Runner业务/恢复语义或验收影响，则先把 `product_authority.freshness=STALE` 并回到产品主权门；未新增产品域时可对 CURRENT product_authority 做 revision rebind。若 delta 未引入新的架构域，则对 CURRENT Architecture Decision 做 **revision rebind**，只更新 `assessed_pack_revision`，不得重复调用 Architect；若引入新架构域则标记 `STALE / recheck_required=true`。随后再次使用 `$ai-auto-test-platform-context-efficiency` 从真实改动提取旧/新符号并全局反查。发现新消费者必须标记`IMPACT_EXPANSION`并返回实现阶段，直到`IMPACT_CLOSURE_PASS`；
-12. **代码质量审查**：使用 `$ai-auto-test-platform-code-quality` 的 Review Mode，由 `code_quality_reviewer` 只读检查结构、hack、回归、测试、注释和可维护性；
-13. **UI功能验证**：有可运行页面时使用 `$ai-auto-test-platform-ui-quality` / `ui_verifier`；
-14. **业务UI/UX独立审查**：UI_HIGH或用户明确要求时调度`ui_ux_reviewer`，消费Business UX Spec和浏览器证据，不重复功能验证；
-15. **独立审查**：使用 `$ai-auto-test-platform-code-review`，优先消费当前workspace状态下已有的Impact Closure与专项review结果，不无条件重复调度；
-16. **Custom Agent兼容回退**：若运行时不能可靠选择 `.codex/agents/*.toml` 中的命名 Agent，禁止把 generic subagent 当作对应 Custom Agent 已生效；改由当前主 Agent 显式读取 `.agents/agent-roles/<role>.md` + 对应 Skill 串行执行，并在结果中标记 `CUSTOM_AGENT_ROUTING = FALLBACK_SERIAL`；
-17. **DoD**：运行与改动范围相符的 `tools/dev.py` / npm / pytest 验证，区分工程测试与正式 acceptance evidence。
+1. **CP-0 / CP-1 上下文与影响闭包**：任何写入前，用 `$ai-auto-test-platform-context-efficiency` 的 filesystem-only `workspace_snapshot.py capture` 在 workspace 外建立 task-start snapshot；Codex 不调用 Git。本 Orchestrator 是正式 Task 的 **FULL_IMPACT_SCAN 唯一调度 Owner**，**唯一执行者固定为当前主 Agent**，不再委托独立 Context Analyst Agent。正式扫描使用 `--formal-task --task-id <task-id> --scan-state <仓库外路径>`；每个 Task `FULL_IMPACT_SCAN_MAX_SUCCESSFUL_RUNS=1`，`workspace_root + task_id` canonical guard 阻断更换 state 路径后的第二次成功 Full Scan；第二次必须返回 `IMPACT_SCAN_ALREADY_COMPLETED`。第一次失败不占成功额度。成功后只形成一个 Shared Task Context Pack。
+2. **产品主权门**（CP-2 决策阶段）：精准消费 Pack 的 authority/product slice。`PRODUCT_DECISION_NOT_REQUIRED / PRODUCT_FACT_FOUND + READY_FOR_ARCHITECTURE` 才继续；PENDING 进入 `BLOCKED_BY_PRODUCT_DECISION`；已由用户明确 `CONFIRMED` 但权威未同步时进入 `AUTHORITY_UPDATE_ONLY`，同步后重新 Product Gate。`PRODUCT_DECISION_REQUIRED / PRODUCT_CONFLICT_DETECTED / PRODUCT_SCOPE_CHANGE` 只能按既有状态机处理；推荐方案/recommendation 不等于用户批准。若 `CONFIRMED + authority_update_required=true`，只允许 `AUTHORITY_UPDATE_ONLY`，**禁止 Architecture/Implementation**；完成权威同步后必须**重新执行产品门**，取得 `PRODUCT_FACT_FOUND` 才能继续。
+3. **CP-2 决策阶段 / Task Risk Tier + Expert Selection Plan**：在 Pack 中写入 `expert_selection`。按 `LOCAL / MEDIUM / HIGH` 选择最少必要专家：LOCAL 默认 0 个子 Agent；MEDIUM 默认 1-3；HIGH 推荐 4-7 但禁止为了填预算全选。超过预算必须 `EXPERT_POOL_ESCALATION_JUSTIFICATION`。
+4. **架构风险门禁**（CP-2 决策阶段）：使用 `$ai-auto-test-platform-architecture`。若 `freshness=CURRENT`、`assessed_pack_revision == pack_revision` 且没有新架构域，则做/复用 `revision rebind`，保持 `recheck_required=false` 并**禁止重复判级**；仅新增架构域才 recheck。ARCH_LOW 不调用 Architect；ARCH_MEDIUM 当前实现 Agent 内嵌 Architecture Check；**只有 ARCH_HIGH** 才选中 `solution_architect`。未定义产品语义必须 `BLOCKED_BY_PRODUCT_DECISION`。
+5. **CP-3 / CP-4 实现阶段**：只有真实写入域被影响才选择 `backend_implementer` / `frontend_implementer`；纯 LOCAL 修改可由当前主 Agent 内嵌对应 Skill 完成，不强制创建实现子 Agent。
+6. **专项 Reviewer 稀疏触发**：
+   - `contract_guardian`：仅 contract/API/DTO/status/event/permission/generated-client 影响；
+   - `database_integrity_reviewer`：仅 DB/Migration/transaction/idempotency/concurrency persistence 影响；
+   - `security_rbac_reviewer`：仅 auth/RBAC/session/secret/security 影响；
+   无风险信号则必须 skip，并在 `skipped_agents` 记录理由。
+7. **业务 UI/UX**：UI_LOW/UI_MEDIUM 由当前 `frontend_implementer` 或主 Agent 内嵌 `$ai-auto-test-platform-business-ui-ux`。仅 UI_HIGH/核心工作台/大规模重设计/用户明确要求时选择 `business_ui_ux_specialist`：改造前以 `DESIGN_MODE` 产出 Business UX Spec，实现后需要独立体验审查时以 `REVIEW_MODE` 复用同一专家角色；功能验证仍由 `ui_verifier`。现有页面 UI_HIGH 需 `BASELINE_CAPTURE`；环境阻断时使用 `SOURCE_BASED_CURRENT_UI_BASELINE + VISUAL_BASELINE_CONFIDENCE = LIMITED + POST_CHANGE_BROWSER_VERIFY = REQUIRED`，禁止伪造 Before。
+8. **代码质量**：`$ai-auto-test-platform-code-quality` 的 Implementation Standards Mode 始终可由实现者内嵌使用；只有 MEDIUM/HIGH 且存在非平凡结构/维护性/测试质量风险时才选中 `code_quality_reviewer`。LOCAL 不默认启动。
+9. **真实 UI 验证**：只有存在可运行用户可见页面/会话/权限/错误态且需要浏览器证据时选择 `ui_verifier`。
+10. **CP-5 验证阶段 / 最终独立审查**：`independent_code_reviewer` **仅 HIGH、正式里程碑/final gate 或用户明确要求**时选中；不得作为每个任务的默认最后一步。优先消费已有专项 review 与 Impact Closure。
+11. **CP-5 / CP-6 Incremental Closure**：实现后基于 filesystem task-start snapshot 得到 `task_delta_paths`；只允许 `DELTA_REFRESH + TARGETED_REVERSE_LOOKUP`，严禁再次运行 `impact_scan.py`，即禁止 Full Scan #2。`IMPACT_EXPANSION` 只扩充同一个 Pack、递增 `pack_revision`，并按新增风险域更新 `expert_selection`；不得重新全仓扫描或默认重启所有专家。
+12. **Validated Resume**：如果当前 Task 已有仓库外 checkpoint，任何继续执行前先用 `scripts/task_checkpoint.py resume-validate` 验证 task_id、workspace root、filesystem workspace identity、固定 `docs/authority` root、authority digest、checksum 与当前 workspace fingerprint。`RESUME_EXACT` 从下一阶段继续；`RESUME_WITH_DELTA_REFRESH` 先增量刷新并只失效受影响阶段；`RESUME_REJECTED / CHECKPOINT_CORRUPTED` 禁止继续旧 Task。不得因 Codex/Agent 重启重复已经完成且仍有效的 Product/Architecture/Implementation/Verification 阶段。
+13. **Custom Agent fallback**：命名路由不可靠时，主 Agent 只对 `selected_agents` 中的角色读取 `.agents/agent-roles/<role>.md` + 对应 Skill 串行执行，并标记 `CUSTOM_AGENT_ROUTING = FALLBACK_SERIAL`；禁止 generic subagent 冒充，也禁止 fallback 时把全部 Role Card 都加载。
+14. **DoD**：只运行与真实改动/风险域相符的工程验证、专项 Reviewer 与 acceptance evidence；正确性优先于 Token，但禁止以“更保险”为理由重复专家、重复 Full Scan 或全量加载所有 Skill。
 
-## Multi-agent
+## Expert Pool（10）
 
-项目级 Custom Agents：
+- `backend_implementer`：后端写入；
+- `frontend_implementer`：前端写入；
+- `solution_architect`：仅 ARCH_HIGH；
+- `contract_guardian`：仅契约影响；
+- `database_integrity_reviewer`：仅数据库完整性影响；
+- `security_rbac_reviewer`：仅安全/RBAC影响；
+- `business_ui_ux_specialist`：仅 UI_HIGH/明确要求；支持 `DESIGN_MODE / REVIEW_MODE`；
+- `ui_verifier`：真实浏览器功能/状态证据；
+- `code_quality_reviewer`：MEDIUM/HIGH 非平凡代码质量风险；
+- `independent_code_reviewer`：仅 HIGH / final gate / 明确要求。
 
-- `context_impact_analyst`：只读影响检索/Task Context Pack；仅跨模块、高风险或影响不清时调用；
-- `solution_architect`：仅 ARCH_HIGH 触发的只读技术架构裁决；ARCH_LOW禁止调用、ARCH_MEDIUM默认内嵌Skill；
-- `contract_guardian`：只读契约守卫；
-- `backend_implementer`：后端正式实现；
-- `database_integrity_reviewer`：只读数据库完整性审查；
-- `security_rbac_reviewer`：只读认证/RBAC/安全审查；
-- `business_ui_ux_designer`：只读业务UI设计；仅UI_HIGH/核心工作台；
-- `frontend_implementer`：前端正式实现；
-- `ui_verifier`：真实浏览器功能验证；
-- `ui_ux_reviewer`：只读业务UI/UX审查；仅UI_HIGH/明确要求；
-- `code_quality_reviewer`：只读代码质量多Lane审查；
-- `independent_code_reviewer`：最终只读独立审查。
+## Shared Context / Token 治理
 
-
-- task-start snapshot 的 `snapshot_version`、resolved root 或 repository identity 与 current 不一致时，`task_delta=UNAVAILABLE`（`SNAPSHOT_VERSION_MISMATCH / SNAPSHOT_ROOT_MISMATCH / SNAPSHOT_REPOSITORY_MISMATCH`）并进入 `BLOCKED_BY_ENVIRONMENT`；禁止跨仓库复用 snapshot。
-
-## Token治理
-
-- 主编排只生成一次 Task Context Pack，并保留 task-start/current/task_delta workspace fingerprint；各子Agent按职责消费切片；`solution_architect` 只消费 architecture slice，默认不重新全仓探索；
-- 子Agent不得无条件重复读取完整AGENTS/基线/OpenAPI/DDL/仓库；
-- Reviewer优先消费同一workspace状态的专项结果与浏览器证据；
-- 若 Task Context Pack 不完整、过期或发现新消费者，必须增量检索，不能为了Token强行复用；
-- 命名 Custom Agent 路由不可用/不确定时必须走 Role Card 串行 fallback；不得用 generic Agent 冒充自定义角色已加载；
-- Token优化只能减少上下文重复，不能减少业务/工程/契约搜索覆盖、风险扩张、测试或审查；普通业务任务不无条件扫描整个治理目录，治理任务必须显式扩张治理 scope；CURRENT 的 Architecture Decision 必须复用，禁止重复判级/重复调度。
+- `1 × FULL_IMPACT_SCAN + 1 × SHARED_TASK_CONTEXT_PACK + N × DELTA_REFRESH + N × TARGETED_REVERSE_LOOKUP`。
+- 所有被选中的子 Agent `MUST_CONSUME_TASK_CONTEXT_PACK`；正式跨模块/高风险 Pack 缺失时返回 `TASK_CONTEXT_PACK_REQUIRED`。
+- 未被 `expert_selection.selected_agents` 选中的 Agent 不应启动；若误启动且 Pack 明确未选中，返回 `EXPERT_NOT_SELECTED`。
+- 子 Agent 不得递归启动其它 Custom Agent，不得建立第二条专家链。
+- Skill 按风险/职责渐进加载；禁止每个 Agent 默认加载全部 14 个 Skill。
+- Reviewer 不重复其它 Reviewer 已完成的事实裁决；专项结果 CURRENT 时复用。
+- 已完成阶段同样遵循复用原则：`COMPLETED + VALID → REUSE`；Agent 重启不是阶段失效理由。
+- Checkpoint 只存事实/状态/路径/hash/验证结果索引，不保存完整 grep 输出、完整文件正文或模型思考过程。
 
 ## 自主权
 
-遵循 Engineering Autonomy：纯工程/视觉实现自行决定；产品级语义由 `$ai-auto-test-platform-product-sovereignty` 先查当前权威事实，真实缺口/冲突/范围变化才生成 Decision Pack 并升级用户裁决。
+纯工程/视觉实现继续使用 Engineering Autonomy；产品级语义由 `$ai-auto-test-platform-product-sovereignty` Gate 处理。Product Sovereignty 是 Skill，不增加 Product Manager Agent。

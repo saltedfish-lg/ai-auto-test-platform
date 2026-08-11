@@ -1,193 +1,223 @@
 ---
 name: ai-auto-test-platform-context-efficiency
-description: AI自动化测试执行平台上下文效率与影响闭包Skill；通过全局影响检索、精准上下文加载和修改后闭环验证降低Codex Token消耗，同时保持跨模块修改完整性。
+description: AI自动化测试执行平台上下文效率与影响闭包Skill；在Single Living Authority和Git隔离前提下，通过一次全局影响扫描、共享Task Context Pack、文件系统快照和增量闭包降低重复探索。
 ---
 
-# Context Efficiency & Impact Closure
+# Context Efficiency
 
-## 目标
+不再设置独立 Context Analyst Agent；正式 Full Impact Scan 的唯一执行者是 Orchestrator 当前主 Agent。 & Impact Closure
 
-降低模型上下文中的无关正文和重复探索，不降低检索覆盖率、契约完整性、跨模块影响分析、测试强度或最终审查强度。
-
-核心原则：
+## 核心原则
 
 > **全局检索不缩水，模型加载才收敛。**
->
-> Context Efficiency ≠ Less Investigation。
 
-本 Skill 只优化“进入模型的上下文载荷”，不得把 Token 节省作为漏检、跳过验证、跳过事实源或缩小测试范围的理由。
+本 Skill 只减少重复加载和重复推理，不得缩小事实检索、契约验证、测试或跨模块影响覆盖。
 
-## 何时使用
+当前权威模型固定为：
 
-所有正式编码、修复、重构、契约联动、数据库联动、UI功能变更和代码审查都可使用本 Skill。
+```text
+SINGLE_LIVING_AUTHORITY
+root = docs/authority
+versioned_baseline_copies = false
+Git access for Codex = DISABLED
+```
 
-- **LOCAL**：单文件/单组件/单函数且外部契约不变；由当前 Agent 内嵌执行，不额外启动子 Agent。
-- **CROSS_MODULE**：涉及两个及以上模块、API/DB/generated/权限/状态/事件/Runner/Worker；必须完成 Pre-change Impact Closure。
-- **HIGH_RISK**：认证、RBAC、状态机、事务、并发、锁/租约/fencing、Runner调度、正式OpenAPI/DDL/事件契约、高风险UI操作；必须扩大检索半径并完成 Post-change Closure Verification。
+不存在 `CURRENT → R4.x` 解析；不得创建 R4.3/R4.4/R4.5 等整套 authority 副本，也不得依赖 Manifest/Release Snapshot 判断当前事实。
 
-若父编排已提供同一 workspace 状态、同一 scope 的 `Task Context Pack`，优先复用；只有缺失、过期或发现新影响时才重新探索。
+## 与 Stage Checkpoint 的边界
 
-## 一、Pre-change Impact Closure
+- `feature-orchestrator` 是唯一 `TASK_LIFECYCLE_OWNER`。
+- 本 Skill 是 `CONTEXT_STATE_PROVIDER`，只提供 workspace identity、authority digest、Task Context Pack、filesystem snapshot、task delta 与 freshness。
+- 本 Skill 不推进 stage、不维护第二套 checkpoint。
+- `RESUME_EXACT` 直接复用仍有效证据。
+- `RESUME_WITH_DELTA_REFRESH` 只允许 `DELTA_REFRESH + TARGETED_REVERSE_LOOKUP`。
+- workspace/root/authority-root 身份不兼容时由 Orchestrator `RESUME_REJECTED`。
+- authority digest 变化不是新版本，也不是默认 Resume Reject；它触发 Authority/Product/下游的最小增量重验证。
 
-### 0. 任务起点 Workspace Snapshot
+## Shared Task Context Pack
 
-正式修改开始前、任何工作区写入之前，若当前目录是可读 Git workspace，先使用 `scripts/workspace_snapshot.py capture` 建立 task-start snapshot（`snapshot_version=2`，绑定 resolved root 与 repository identity）。快照只读采集任务开始时已有的 tracked dirty、untracked、tracked-but-deleted 路径，并对已有 dirty/untracked 文件做内容指纹；必须写到仓库外临时/任务制品路径；脚本会拒绝位于 workspace 内的 snapshot/delta 输出，禁止为了记录快照制造新的仓库 untracked 文件。Git workspace 查询通过临时 `GIT_INDEX_FILE` 副本执行，真实 repository/worktree index 必须保持字节不变。
+父编排已有同 Task 且 `freshness=CURRENT` 的 Pack 时，所有子 Agent：
 
-- 无 `.git`：`git_workspace.status=NOT_APPLICABLE`；
-- 有 `.git` 且 Git metadata 可读：`COMPLETE`；
-- 有 `.git` 但 Git 命令/metadata 读取失败：`UNAVAILABLE`，不得伪造 fingerprint。
+```text
+MUST_CONSUME_TASK_CONTEXT_PACK
+```
 
-`CROSS_MODULE/HIGH_RISK` 必须建立 task-start snapshot；正式 LOCAL 修改在 Git 可用时也默认建立。后续 Review/Impact Closure 只把相对 task-start 新发生的 workspace 变化归因给当前任务。
+禁止：
 
-### 1. 建立检索种子
+- 自行建立第二个完整 Impact Map；
+- 再次执行 `impact_scan.py`；
+- 无条件重复通读完整 authority/OpenAPI/DDL/仓库；
+- 以“独立审查”为理由重新 Full Scan。
 
-从用户任务、当前代码和权威事实中提取：
+正式 CROSS_MODULE/HIGH_RISK Pack 缺失或身份无效时返回 `TASK_CONTEXT_PACK_REQUIRED`。
 
-- 对象名、类名、函数名、字段名；
-- API path / operationId / DTO / ProblemDetails；
-- 表、列、索引、FK、Migration；
-- permission code、角色、状态枚举、事件名；
-- 路由、页面、Store、Composable、generated type；
-- Runner/Worker/Lease/Lock/Fencing/Idempotency/Outbox 等技术词；
-- 旧符号与拟引入的新符号。
+## Task-start Filesystem Snapshot
 
-### 2. 宽检索，窄输出
+正式修改开始前、任何 workspace 写入前执行：
 
-优先运行 `scripts/impact_scan.py` 或等价的 `rg`/LSP/AST 引用检索。`impact_scan.py` 必须按 `schemas/context-policy.yaml` 的 `required_roots / optional_roots / governance_roots` 执行，动态解析 `docs/baseline/CURRENT`，对超大文本逐行流式扫描；不得用文件大小阈值静默跳过权威 YAML。required scope/CURRENT/活动文本扫描不完整时必须 fail-closed，`closure_safe=false` 并禁止 `IMPACT_CLOSURE_PASS`。若根目录存在 `.git` 但只读 Git metadata 无法读取，同样不得宣告 closure safe：扫描器必须输出 `git_workspace.status=UNAVAILABLE`、`closure_safe=false`。
+```bash
+python .agents/skills/ai-auto-test-platform-context-efficiency/scripts/workspace_snapshot.py \
+  capture --root . --out <workspace外>/task-start-workspace.json
+```
 
-检索覆盖必须包含当前活动实现、根级工程事实与当前权威基线：
+`snapshot_version=3`，采用 `FILESYSTEM_ONLY`：
 
-- `AGENTS.md`；
-- `package.json`、`package-lock.json`、`pyproject.toml`、`requirements-dev.lock`、`.env.example`、`.editorconfig`、`.gitattributes`、`.gitignore`；
-- `apps/**`、`services/**`、`workers/**`、`runner/**`、`packages/**`、`tests/**`、`tools/**`；
-- `db/**`、`.github/**`（存在时作为 optional scope）；
-- `docs/baseline/CURRENT` 标记及其指向的当前正式基线；
-- `.agents/**`、`.codex/**` 仅在 Agent/Skill/Orchestrator/Codex 治理任务时使用 `--include-governance` 条件扩张，普通业务任务不得无条件全量扫描治理目录。
+- 对受控工作树文件做 SHA-256 指纹；
+- 排除 `.git/node_modules/dist/build/.venv/__pycache__/.pytest_cache/.mypy_cache/.ruff_cache/.runtime/.tmp` 等噪声；
+- 不执行任何 Git 命令；
+- snapshot/delta 必须位于 workspace 外；
+- 绑定 resolved root + filesystem workspace identity。
 
-默认不把 `.git/**`、`node_modules/**`、构建产物、缓存、虚拟环境和历史父基线正文作为活动上下文；但必须搜索活动代码中对历史版本/路径的引用。迁移、溯源任务才按需加入历史基线。
+修改后执行：
 
-全局检索结果先只保留：`路径 + 命中数 + 行号 + 符号/短片段`，不要立即读取每个命中文件全文。扫描结果必须显式报告 `scope_status`、`closure_safe`、`current_baseline`、missing required/optional roots、large files streamed、binary skipped、scan errors，以及只读 Git workspace 的 `status / tracked_deleted / read_error`。任何 required scope/CURRENT 解析失败都不能静默当作“无命中”；即使工作树中 `.github/**` 等文件已删除，只要仍是 Git tracked-but-deleted，就必须作为 CI/构建/配置影响证据进入闭包判断。若存在 `.git` 但 Git metadata 为 `UNAVAILABLE`，tracked-deleted 证据链不完整，`closure_safe` 必须为 false；`CROSS_MODULE/HIGH_RISK` 或 CI/依赖/构建/部署/环境配置/工程工具类任务进入 `BLOCKED_BY_ENVIRONMENT`。
+```bash
+python .agents/skills/ai-auto-test-platform-context-efficiency/scripts/workspace_snapshot.py \
+  delta --root . --start <workspace外>/task-start-workspace.json --out <workspace外>/task-delta.json
+```
 
-### 3. 建立 Impact Map
+得到：
 
-至少按以下维度判断是否受影响：
+```text
+added
+removed
+modified
+task_delta_paths
+delta_digest
+```
 
-- Product / Authority
-- API / Contract / Generated Client
-- Database / Migration / Transaction
-- Backend / Domain / Application / Infrastructure
-- Frontend / Route / Store / Component / View
-- Auth / RBAC / Data Scope / Security
-- State / Event / Concurrency / Runner / Worker
-- Tests / Fixtures / E2E
-- Observability / Audit / Artifact
-- Architecture / Ownership / Transaction / Consistency
+因此历史 Git dirty state 不再属于 Codex 上下文；Codex 只关心当前 Task 在文件系统上真正产生的变化。
 
-发现高风险信号时按 `references/risk-escalation.md` 自动扩张影响图，不得因为初始任务描述只提到一个文件就停止。
+## Pre-change Impact Closure
 
-### 4. 形成 Task Context Pack
+正式 CROSS_MODULE/HIGH_RISK Task 在首次写入前必须建立 Pre-change Impact Closure。`feature-orchestrator` 是唯一 Full Scan 调度 Owner，当前主 Agent 使用：
 
-按 `references/task-context-pack.md` 输出最小任务上下文。Task Context Pack 是“索引”，不是权威事实本身；`CROSS_MODULE/HIGH_RISK` 必须带 workspace fingerprint，并引用 task-start snapshot。正式修改在 Git 可用时应记录 `workspace_fingerprint.task_start/current/task_delta`。后端/DB/契约/权限/状态等阶段产生实质变更后，先用 `workspace_snapshot.py delta` 计算相对任务起点的 `task_delta_paths`，再基于这些真实任务变化做 delta refresh 并递增 `pack_revision`；任何 Agent 怀疑其不完整或发现 `STALE` 时必须增量检索。
+```bash
+python .agents/skills/ai-auto-test-platform-context-efficiency/scripts/impact_scan.py \
+  <seed...> --risk HIGH_RISK --formal-task \
+  --task-id <task-id> --scan-state <workspace外>/impact-scan.json --json
+```
 
-## 二、Precision Context Loading
+### Single Full Impact Scan
 
-按以下顺序加载：
+每个正式 Task：
 
-1. 路径、符号、标题、局部命中；
-2. 相关函数/类/组件/配置块；
-3. 直接上下游调用点；
-4. 对应权威事实片段；
-5. 只有在局部信息无法证明正确性时才升级读取整文件；
-6. 只有跨文档冲突/完整状态机/完整契约验证需要时才扩大到完整文档。
+```text
+FULL_IMPACT_SCAN_MAX_SUCCESSFUL_RUNS = 1
+```
 
-禁止设置会截断正确性的硬 Token 上限。Token Budget 只能是软预算；**Correctness Wins**。
+- 第一次成功后 `full_rescan_allowed=false`；
+- canonical guard 由 `workspace_root + task_id` 派生，更换 state 路径也不能绕过；
+- 第二次必须 `IMPACT_SCAN_ALREADY_COMPLETED`；
+- 首次扫描因 required scope/scan error 失败时 `successful_run_count=0`，修复后允许重试；
+- 禁止通过更换 task_id 为同一个任务制造第二次额度。
 
-子 Agent 只接收与职责直接相关的 Task Context Pack 切片，并携带：
+## Search Scope
 
-- authority_refs
-- affected_paths
-- affected_symbols
-- invariants
-- forbidden_changes
-- validation_targets
-- unresolved_risks
+`schemas/context-policy.yaml` 的 required scope 默认包含：
 
-禁止所有子 Agent 无条件重复通读 AGENTS、完整基线、完整 OpenAPI 和全仓库源码。
+- root engineering facts；
+- apps/services/workers/runner/packages/tests/tools；
+- **唯一 `docs/authority`**；
+- `.agents/.codex` 仅治理任务显式扩张；
+- `.github/db` 存在则纳入。
 
-## 三、Post-change Closure Verification
+required root 或 `docs/authority` 缺失、活动文本扫描错误时：
 
-完成修改后，先用 task-start snapshot 计算 `task_delta_paths`，再结合真实 diff / changed files 重新提取。`task_delta_paths` 用于区分“任务开始前已存在的 dirty workspace”与“当前任务真正新增/继续修改的变化”；如果某文件任务开始前已 dirty，但本任务再次改变其内容，内容指纹变化仍必须把它纳入本任务 delta。随后提取：
+```text
+closure_safe = false
+BLOCKED_BY_INCOMPLETE_SCOPE
+```
 
-- 被删除/重命名的旧符号；
-- 新增/修改的符号；
-- API path / DTO / schema；
-- DB 表列/约束；
-- permission/status/event；
-- route/store/component；
-- 配置键、环境变量和工具入口。
+不得把“不完整扫描”当作“无影响”。
 
-随后执行全局反查；若只读 Git metadata 显示 tracked-but-deleted 路径（尤其 `.github/**`、构建/环境/部署配置），即使当前文件系统无正文也必须评估其消费者/删除状态是否属于本次影响。不得把任务开始前已有的全部 `git diff` 无差别归因给当前任务；优先围绕 `task_delta_paths` 展开，再对旧/新符号做全局消费者闭包：
+## Broad Search, Narrow Load
 
-1. 搜旧符号是否仍有活动引用；
-2. 搜新符号是否所有消费者都已更新；
-3. 检查 generated client 与正式 OpenAPI 是否一致；
-4. 检查 DB mapping/Migration/测试是否闭合；
-5. 检查权限、状态、事件、Runner/Worker消费者；
-6. 检查前端路由、Store、组件、页面和E2E；
-7. 检查测试、fixture、工具脚本和审计/可观测入口；
-8. 运行与风险相称的 typecheck/lint/test/build/contract/integration/browser 验证。
+第一次 Full Scan 使用 `impact_scan.py` 搜索活动仓库。大文件按行流式扫描，不因体积静默跳过 authority YAML。
 
-如果发现初始 Impact Map 之外的新真实消费者，状态必须变为：
+全局搜索结果只保留：
 
-`IMPACT_EXPANSION`
+```text
+path + group + line + short preview
+```
 
-然后扩张 Task Context Pack、补改、重新验证，直到闭环。
+然后才按职责加载最小文件片段。不要把完整 OpenAPI、DDL、YAML、事件 schema 集合一次性塞入模型。
 
-## 四、完成状态
+## Living Authority
 
-只允许以下结论：
+`docs/authority/**` 是唯一活动事实源：
 
-- `IMPACT_CLOSURE_PASS`：影响面、修改、反查和验证闭合；
-- `IMPACT_EXPANSION`：发现新消费者，必须继续处理；
-- `BLOCKED_BY_PRODUCT_DECISION`：产品主权门发现 `PRODUCT_DECISION_REQUIRED / PRODUCT_CONFLICT_DETECTED / PRODUCT_SCOPE_CHANGE` 且 `user_decision_status=PENDING`，需要用户裁决；
-- `AUTHORITY_UPDATE_ONLY`：用户已经明确裁决产品缺口/冲突/范围变化，但受治理当前权威事实尚未同步；只允许权威事实更新并重新执行产品门，禁止 Architecture/Implementation，也禁止重复询问同一决定；
-- `BLOCKED_BY_ENVIRONMENT`：验证因环境缺失无法执行，或存在 `.git` 但 Git metadata 无法读取导致 tracked-deleted/task-start 证据链不完整；必须列出未验证项，禁止冒充通过；
-- `BLOCKED_BY_INCOMPLETE_SCOPE`：required scope/CURRENT/活动文本扫描不完整，禁止以不完整检索结果宣告闭环。
+- 产品事实明确：直接引用；
+- 用户明确要求改变事实，或 Product Decision 已 `CONFIRMED`：进入 `AUTHORITY_UPDATE_ONLY`，直接修改受影响源文档；
+- 修改后运行 authority validators，再重新 Product Gate；
+- `PRODUCT_FACT_FOUND` 后才进入 Architecture/Implementation；
+- 不创建版本目录、不生成 Manifest、不把代码反向当成产品事实源。
 
-## 五、与其它 Skill / Agent 的关系
+Authority digest 只用于 freshness/Resume，不用于制造不可变版本。
 
-- `feature-orchestrator`：负责调用本 Skill 的前置和后置门禁；
-- `$ai-auto-test-platform-product-sovereignty`：消费 Impact Map 的 Product/Authority slice，在 Architecture 前判断现有权威事实、真实缺口/冲突/范围变化；本 Skill 只负责检索和 freshness，不替产品门批准需求；
-- `backend_implementer` / `frontend_implementer`：默认内嵌使用，不为简单任务额外启动 Agent；
-- `context_impact_analyst`：仅 CROSS_MODULE/HIGH_RISK 或当前代码陌生、影响面不清时独立运行；若当前 Codex 运行时不能可靠选择命名 Custom Agent，则不得用 generic subagent 冒充成功，必须由当前 Agent 显式读取 `.agents/agent-roles/context-impact-analyst.md` + 本 Skill 串行执行同职责；
-- `solution_architect` / `$ai-auto-test-platform-architecture`：复用同一个 Task Context Pack 的 architecture slice 与当前 `architecture_decision`；若决策仍为 CURRENT 则禁止无条件重新全仓探索或重复裁决；
-- Contract/DB/Security/CodeQuality/UI Reviewer：优先消费 Task Context Pack，再在自身职责域增量检索；
-- Reviewer 不得把 Task Context Pack 当成不可质疑结论。
+## Incremental Closure
 
-## 六、禁止事项
+Pack `STALE`、实现完成或发现新消费者时，只允许：
 
-- 通过缩小业务/工程/契约搜索覆盖省 Token；
-- 普通业务任务无条件扫描整个 `.agents/**` / `.codex/**` 制造治理噪声；治理变更却未显式 `--include-governance`；
-- 忽略 `scope_status=INCOMPLETE` / `closure_safe=false` 继续宣告 Impact Closure；
-- 仓库存在 `.git` 且 `git_workspace.status=UNAVAILABLE` 时把 tracked-deleted 缺失当作“无影响”；
-- 在 dirty workspace 中只看全量 `git diff` 就把任务开始前已有变化全部冒充当前任务改动；
-- 通过最大文件大小阈值静默跳过当前权威事实源；
-- 使用截断的命中列表直接宣告 Impact Closure（若限制输出，必须保留/可展开完整索引）；
-- 因命中多而只处理前几个文件；
-- 只看 diff 不查外部消费者；
-- 只看源码不查契约/DB/权限/状态/测试；
-- 只读摘要就声称完整理解复杂契约；
-- 用 mock/build 成功替代真实集成闭环；
-- 多 Agent 重复读取相同大文档却没有新增证据。
+```text
+DELTA_REFRESH
++
+TARGETED_REVERSE_LOOKUP
+```
 
-## 参考
+Targeted lookup 必须有明确 seed，例如：
 
-- `references/impact-discovery.md`
-- `references/precision-loading.md`
-- `references/risk-escalation.md`
-- `references/task-context-pack.md`
-- `references/closure-verification.md`
-- `references/search-playbook.md`
-- `schemas/context-policy.yaml`
+- old/new symbol；
+- operationId / DTO；
+- table / column / migration；
+- permission / state / event；
+- route / store / component；
+- config key / Runner capability。
 
-- task-start snapshot 的 `snapshot_version`、resolved root 或 repository identity 与 current 不一致时，`task_delta=UNAVAILABLE`（`SNAPSHOT_VERSION_MISMATCH / SNAPSHOT_ROOT_MISMATCH / SNAPSHOT_REPOSITORY_MISMATCH`）并进入 `BLOCKED_BY_ENVIRONMENT`；禁止跨仓库复用 snapshot。
+可以多次执行 targeted lookup，但不得调用 `impact_scan.py`，不得退化成无种子第二次全仓探索。
+
+`IMPACT_EXPANSION` 只扩充现有 Pack、递增 `pack_revision`、更新 `expert_selection`，不会获得新的 Full Scan。
+
+## Architecture / Product Freshness
+
+- Product/Authority 影响新增 → `product_authority.freshness=STALE`，重新 Product Gate；
+- 新 state owner / transaction / consistency / concurrency / Runner-Worker domain → Architecture 标 STALE 并 recheck；
+- 普通非架构 delta 仅做 revision rebind，不重复 Architecture Risk 判级；
+- 已完成且 CURRENT 的专项 Reviewer 结果继续复用。
+
+## Post-change Closure
+
+实现后：
+
+1. filesystem snapshot 计算 `task_delta_paths`；
+2. 从真实变化提取 changed symbols/contracts；
+3. 做 targeted reverse lookup；
+4. 必要时 `IMPACT_EXPANSION`；
+5. 运行与风险域相符的 contract/database/security/UI/code-quality 验证；
+6. 得到 `IMPACT_CLOSURE_PASS` 或显式 blocker。
+
+不得用任务开始前的历史状态、Git diff 或外部提交记录冒充当前 Task delta。
+
+## Git 边界
+
+Git 完全由用户在 IDEA 中负责。Codex、Custom Agent 和 Skill：
+
+```text
+MUST_NOT_INVOKE_GIT
+```
+
+包括只读和写入命令，例如 `git status/diff/log/show/add/commit/push/pull/fetch/checkout/reset/tag`。Git branch、commit、tag、remote、index、tracked-deleted 不进入 Context Pack、Checkpoint、Impact Closure 或 DoD。
+
+## 完成状态
+
+- `IMPACT_CLOSURE_PASS`
+- `IMPACT_EXPANSION`
+- `BLOCKED_BY_PRODUCT_DECISION`
+- `BLOCKED_BY_ENVIRONMENT`
+- `BLOCKED_BY_INCOMPLETE_SCOPE`
+
+环境阻断只描述真实无法执行的验证，不再使用 Git metadata 缺失作为环境 blocker。
+
+
+## Product Authority 同步边界
+
+`CONFIRMED + authority_update_required=true` 时只允许 `AUTHORITY_UPDATE_ONLY`，禁止 Architecture/Implementation；authority digest 更新并重新 Product Gate 后才继续。
