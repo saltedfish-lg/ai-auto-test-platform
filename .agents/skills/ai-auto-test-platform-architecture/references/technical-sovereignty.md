@@ -2,7 +2,7 @@
 
 架构师拥有的是**技术实现自主权**，不是产品主权。
 
-## Freeze Wins
+## Current Authority Wins
 
 以下已有正式来源时只允许服从：
 

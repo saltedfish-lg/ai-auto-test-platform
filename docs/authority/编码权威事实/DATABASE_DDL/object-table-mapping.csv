@@ -83,7 +83,6 @@ OBJ-081,保留策略,AGGREGATE_ROOT,AGG-027,TABLE,atp_retention_policy,retention
 OBJ-082,保留冻结,RELATIONSHIP_ENTITY,AGG-027,TABLE,atp_legal_hold,legal_hold_id,LC-082,lifecycle_status
 OBJ-083,受控清理请求,AGGREGATE_ROOT,AGG-028,TABLE,atp_controlled_purge_request,controlled_purge_request_id,LC-083,lifecycle_status
 OBJ-084,技术告警接入端点,AGGREGATE_ROOT,AGG-029,TABLE,atp_technical_alert_endpoint,technical_alert_endpoint_id,LC-084,lifecycle_status
-OBJ-085,平台设计基线发布,AGGREGATE_ROOT,AGG-030,TABLE,atp_platform_design_baseline_release,platform_design_baseline_release_id,LC-085,release_status|readiness_status|lifecycle_status
 OBJ-086,AI候选修订,VERSION_ENTITY,AGG-020,TABLE,atp_ai_candidate_revision,ai_candidate_revision_id,LC-086,lifecycle_status
 OBJ-087,角色绑定,RELATIONSHIP_ENTITY,AGG-001,TABLE,atp_role_binding,role_binding_id,LC-087,lifecycle_status
 OBJ-088,技术告警接入批次,EXECUTION_ENTITY,AGG-029,TABLE,atp_technical_alert_ingestion_batch,technical_alert_ingestion_batch_id,LC-088,lifecycle_status
@@ -97,3 +96,5 @@ OBJ-095,浏览器会话,EXTERNAL_REFERENCE,,SERVICE_OR_EXTERNAL_NOT_PERSISTED,,,
 OBJ-096,项目执行配置,CONFIGURATION_ENTITY,AGG-003,TABLE,atp_project_execution_configuration,project_execution_configuration_id,LC-096,lifecycle_status
 AUTH-OBJ-001,平台用户凭据,AUTHENTICATION_SUPPORT,OBJ-001,TABLE,atp_platform_user_credential,credential_id,AUTH-LC-001,lifecycle_status|force_password_change|credential_version|locked_until
 AUTH-OBJ-002,认证Refresh Session,AUTHENTICATION_SUPPORT,AUTH-OBJ-001,TABLE,atp_auth_refresh_session,session_id,AUTH-LC-002,lifecycle_status|session_version|credential_version
+AUTH-OBJ-003,认证安全审计,AUTHENTICATION_SUPPORT,OBJ-001,TABLE,atp_auth_security_audit,audit_id,AUTH-LC-003,occurred_at
+AUTH-OBJ-004,认证来源限流窗口,AUTHENTICATION_SUPPORT,OBJ-001,TABLE,atp_auth_source_rate_limit,source_key_hash|operation_id|window_started_at,AUTH-LC-004,request_count|expires_at|row_version

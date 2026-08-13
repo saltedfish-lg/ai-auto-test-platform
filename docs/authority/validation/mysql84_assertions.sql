@@ -1,16 +1,34 @@
--- R4.2 MySQL 8.4 runtime assertions
+-- Current Living Authority MySQL 8.4 V3 → V4 → V5 → V6 → V7 → V8 runtime assertions
 DELIMITER //
-CREATE PROCEDURE assert_r4_contract()
+CREATE PROCEDURE assert_current_contract()
 BEGIN
   DECLARE got_error BOOLEAN DEFAULT FALSE;
 
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name='atp_platform_design_baseline_release') THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Retired atp_platform_design_baseline_release must not exist at the current migration head';
+  END IF;
+
   IF (SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type='BASE TABLE') <> 85 THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Expected exactly 85 base tables';
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Expected exactly 85 base tables after V3 → V4 → V5 → V6 → V7 → V8';
   END IF;
   IF EXISTS (
     SELECT 1 FROM information_schema.columns
     WHERE table_schema=DATABASE() AND table_name='atp_permission_code' AND column_name='role_id'
   ) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='atp_permission_code.role_id must not exist';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema=DATABASE() AND table_name='atp_auth_source_rate_limit' AND table_type='BASE TABLE'
+  ) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='V7 table atp_auth_source_rate_limit missing';
+  END IF;
+  IF (SELECT COUNT(*) FROM information_schema.columns
+      WHERE table_schema=DATABASE() AND table_name='atp_idempotency_record'
+        AND column_name IN ('contract_version','principal_id','completed_at')) <> 3 THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='V7 idempotency compatibility columns missing';
+  END IF;
+  IF EXISTS (SELECT 1 FROM atp_idempotency_record WHERE idempotency_key='FULL_SCHEMA_GATE_LEGACY_V1')
+     AND NOT EXISTS (SELECT 1 FROM atp_idempotency_record WHERE idempotency_key='FULL_SCHEMA_GATE_LEGACY_V1' AND contract_version=1 AND principal_id IS NULL AND completed_at IS NULL) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='V7 failed to preserve pre-V7 idempotency row compatibility';
   END IF;
   IF (SELECT column_name FROM information_schema.key_column_usage
       WHERE table_schema=DATABASE() AND table_name='atp_credential_revision' AND constraint_name='PRIMARY'
@@ -144,8 +162,8 @@ BEGIN
   END;
   IF got_error = FALSE THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Refresh revoked-state coherence rejection failed'; END IF;
 END//
-CALL assert_r4_contract()//
-DROP PROCEDURE assert_r4_contract//
+CALL assert_current_contract()//
+DROP PROCEDURE assert_current_contract//
 DELIMITER ;
 
 SET @audit_update_trigger_count := (

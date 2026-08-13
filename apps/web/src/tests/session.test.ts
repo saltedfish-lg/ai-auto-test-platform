@@ -14,7 +14,7 @@ describe("Pinia 会话（组件/状态层测试）", () => {
   it("logs in and out without writing Access Token to Web Storage", async () => {
     const storageWrite = vi.spyOn(Storage.prototype, "setItem");
     vi.spyOn(apiClient, "login_platform_user").mockResolvedValue(authenticationResponse());
-    vi.spyOn(apiClient, "logout_platform_user").mockResolvedValue(null);
+    vi.spyOn(apiClient, "logout_platform_user").mockResolvedValue(undefined);
     const session = useSessionStore();
 
     await session.login({ username: "admin", password: "input-only" });
@@ -62,5 +62,29 @@ describe("Pinia 会话（组件/状态层测试）", () => {
     await session.loadCurrentUser();
     expect(session.currentUser?.display_name).toBe("更新后的名称");
     expect(session.hasPermission("USER_CREATE")).toBe(false);
+  });
+
+  it("clears only the in-memory session after a terminal password-change 204", async () => {
+    vi.spyOn(apiClient, "login_platform_user").mockResolvedValue(authenticationResponse());
+    const change = vi.spyOn(apiClient, "change_current_user_password").mockResolvedValue(undefined);
+    const refresh = vi.spyOn(apiClient, "refresh_platform_session");
+    const storageWrite = vi.spyOn(Storage.prototype, "setItem");
+    const session = useSessionStore();
+    await session.login({ username: "admin", password: "input-only" });
+
+    await session.changePassword(
+      { current_password: "input-only", new_password: "NewSecurePassword123" },
+      "password-change-terminal",
+    );
+
+    expect(change).toHaveBeenCalledWith(
+      { current_password: "input-only", new_password: "NewSecurePassword123" },
+      { headers: { "Idempotency-Key": "password-change-terminal" } },
+    );
+    expect(session.accessToken).toBeNull();
+    expect(session.currentUser).toBeNull();
+    expect(session.initialized).toBe(true);
+    expect(refresh).not.toHaveBeenCalled();
+    expect(storageWrite).not.toHaveBeenCalled();
   });
 });

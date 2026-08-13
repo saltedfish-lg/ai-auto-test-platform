@@ -62,6 +62,9 @@ def test_current_authority_has_no_active_release_manifest_or_frozen_baseline_dep
         "Release只决定成员和版本",
         "预置角色默认模板仍待正式冻结",
         "FULL_CODE_READY: 仅在冻结设计发布中",
+        "是当前正式代码输入基线",
+        "保持R4冻结结论",
+        "冻结契约实施",
     )
     for relative in governed:
         text = (authority / relative).read_text(encoding="utf-8")
@@ -102,3 +105,26 @@ def test_verify_authority_legacy_semantic_scan_is_fail_closed(tmp_path: Path) ->
     errors = module.find_legacy_active_semantics(authority, ["sample.yaml"])
     assert errors
     assert any("MANIFEST.sha256" in error or "current release manifest" in error for error in errors)
+
+
+def test_verify_authority_rejects_active_r4_current_baseline_wording(tmp_path: Path) -> None:
+    import importlib.util
+
+    module_path = ROOT / "tools/verify_authority.py"
+    spec = importlib.util.spec_from_file_location("verify_authority_r4_guard", module_path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    authority = tmp_path / "authority"
+    authority.mkdir()
+    sample = authority / "sample.yaml"
+    sample.write_text("statement: PDBR-2026.08.06-R4.1是当前正式代码输入基线。\n", encoding="utf-8")
+    errors = module.find_legacy_active_semantics(authority, ["sample.yaml"])
+    assert errors
+    assert any("当前正式代码输入基线" in error for error in errors)
+
+
+def test_governance_validator_rejects_active_r4_current_baseline_wording() -> None:
+    text = (ROOT / "docs/authority/validation/validate_governance.py").read_text(encoding="utf-8")
+    for token in ("是当前正式代码输入基线", "保持R4冻结结论", "冻结契约实施"):
+        assert token in text

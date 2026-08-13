@@ -6,8 +6,8 @@
 - authority_root: `docs/authority/**`
 - authority_status: `ACTIVE_CONTROLLED_MUTABLE`
 - code_readiness: `READY_FOR_P1_IMPLEMENTATION`
-- versioned_baseline_copies: `FORBIDDEN`
-- baseline_policy: `NO_VERSIONED_BASELINE_COPIES`
+- versioned_authority_copies: `FORBIDDEN`
+- authority_copy_policy: `NO_VERSIONED_AUTHORITY_COPIES`
 - manifest_or_release_snapshot: `NOT_REQUIRED`
 - codex_git_access: `DISABLED`
 - user_git_owner: `IDEA / 用户人工操作`
@@ -32,17 +32,17 @@ Codex不得创建任何按版本号复制整套 authority 的目录（例如把�
 
 ## P1认证编码强制规则
 
-- 使用 `docs/authority/编码权威事实/AUTHENTICATION_CONTRACT/authentication-contract.yaml`、当前 OpenAPI 和 V5 Migration。
+- 使用 `docs/authority/编码权威事实/AUTHENTICATION_CONTRACT/authentication-contract.yaml`、当前 OpenAPI 和由 `tools/current_facts.py` 机械发现的 Migration Head。
 - 不得自创认证 Operation、DTO、状态、Cookie、Token 或密码政策。
 - admin 初始化只能使用无回显 TTY 输入或 `ATP_BOOTSTRAP_ADMIN_PASSWORD_FILE`；不得写死、输出或记录密码。
 - Access Token 不得持久化到 Browser 存储；Refresh Token 不得进入 JSON、数据库原值、日志或仓库。
 - 权限不得写入 JWT 作为长期授权事实；每个受保护请求按数据库当前关系实时授权。
 - 不得使用 `if username == "admin"` 绕过正式 `ROLE-SUPER-ADMIN` Mapping。
-- Migration 顺序固定为 V3 → V4 → V5；admin 初始化在 Migration 和 RBAC Seed 后独立执行。
+- Migration 以 `docs/authority/编码权威事实/DATABASE_DDL/V<整数>__*.sql` 为 append-only 定义，当前 Head/完整执行链由 `tools/current_facts.py` 按数字版本机械发现；新增 V9/V10 等只追加 Migration，不得在治理文档复制当前上限。admin 初始化在完整 Migration 链和 RBAC Seed 后独立执行。
 
 ## Authority 更新规则
 
-`docs/authority/**` 是**受治理的可修改当前事实源**，不是只读冻结目录。
+`docs/authority/**` 是**受治理的可修改当前事实源**，不是只读历史副本目录。
 
 允许修改的来源：
 
@@ -66,6 +66,20 @@ CONFIRMED
 ```
 
 不得先改代码再用代码反向修正文档。
+
+
+## Authority 单写者与临时写事务
+
+`docs/authority/**` 虽然是受控可修改事实源，但物理写入实行 **Single Authority Writer**：
+
+- `feature-orchestrator` / 当前主 Agent 是唯一 `AUTHORITY_PHYSICAL_WRITE_OWNER`；所有 Custom Agent、Reviewer、fallback role 对 `docs/authority/**` 均为 `READ_ONLY`。
+- 子 Agent 只能返回 `AUTHORITY_CHANGE_REQUEST`；实现阶段发现 Authority 缺口必须退回 Orchestrator → Product Sovereignty → `AUTHORITY_UPDATE_ONLY`，禁止顺手修改后继续实现。
+- `AUTHORITY_UPDATE_ONLY` 写入前必须把 Product / Architecture / Security 等修改意图合并为一个 `authority_change_set`，按目标文件去重并记录 `expected_sha256`；同一大型 Authority 文件不得被多个阶段分别反复写入。
+- Authority 写事务使用 workspace 级互斥锁，不使用文件级锁；每次 acquire 必须绑定当前 Task Checkpoint 并由 Guard 生成新的唯一 `authority_transaction_id`；同一 Workspace 任一时刻只允许一个 ACTIVE Authority 写事务，但同一 Task 在前一事务合法终态化并释放 mutex 后可以开启下一笔顺序事务；锁和所有 change-set/before-image/write-state/prepared 内容必须位于 workspace 外。锁禁止 TTL 自动抢占。
+- apply 前必须再次校验 expected SHA-256；不一致返回 `AUTHORITY_STALE_WRITE_CONFLICT`，只允许 `DELTA_REFRESH + TARGETED_REVERSE_LOOKUP` 后重建 change-set，禁止旧上下文覆盖新内容。
+- 文件写入使用 temp + fsync + atomic replace；多文件写失败使用 before-image 回滚。写入后先运行 authority validators，验证通过才可关闭 Authority 写事务。
+- `authority_change_set` 是 Task 级临时事务数据：`CLOSURE_COMPLETE` 必须先把 Guard terminal attestation 写入既有 Task Checkpoint，再释放锁并删除整个临时目录；CP-6 必须自行重算当前 Authority digest，并要求**最新一笔 Authority transaction 本身为成功 `CLOSURE_COMPLETE`** 且其 closure digest 与当前 Authority 一致后才能完成。`TASK_ABORTED / TASK_ABANDONED` 必要时先回滚并把失败终态写入 checkpoint 后再清理；失败事务可由后续新的顺序事务解决，但不能以更早成功事务替最新失败事务兜底。`INTERRUPTED` 暂时保留以支持 Validated Resume。临时数据不得进入工作区、Authority 或 Git。
+- 机械实现见 `.agents/skills/ai-auto-test-platform-feature-orchestrator/scripts/authority_write_guard.py` 与 `references/authority-write-coordination.md`。
 
 ## Git 完全由用户负责
 
@@ -101,6 +115,9 @@ python tools/verify_authority.py
 python docs/authority/validation/validate_all.py --root docs/authority
 python docs/authority/validation/validate_governance.py --root docs/authority
 python docs/authority/validation/validate_auth_contract.py --root docs/authority
+python tools/authority_projection.py check
+python tools/current_facts.py check
+python tools/authority_referential_integrity.py check
 python tools/openapi_client.py check
 ```
 
@@ -108,7 +125,7 @@ python tools/openapi_client.py check
 
 ## 代码质量与注释规范
 
-正式实现必须同时满足正确性、契约一致性和长期可维护性。实现 Agent 使用 `$ai-auto-test-platform-code-quality` 的 Implementation Standards Mode；`code_quality_reviewer` 仅在风险触发时使用 Review Mode。
+正式实现必须同时满足正确性、契约一致性和长期可维护性。**所有正式代码写入都必须应用** `$ai-auto-test-platform-code-quality` 的 Implementation Standards Mode；LOCAL 任务也不能跳过，只是不默认启动 `code_quality_reviewer`。`code_quality_reviewer` 仅在风险触发时使用 Review Mode。
 
 - 注释解释业务不变量、状态转换原因、安全边界、事务/幂等/并发、重试/补偿、外部限制和非显然算法；不机械复述代码。
 - 复杂正式业务逻辑原则上提供必要中文原因型注释或 Docstring；简单 CRUD/赋值/框架样板不逐行注释。
@@ -117,18 +134,19 @@ python tools/openapi_client.py check
 - 过时注释、与实现矛盾注释、掩盖复杂度注释属于质量缺陷；generated 代码不得人工修改。
 - 不得用 TODO/FIXME、fallback、吞异常、硬编码、并行重复模型、无界重试或测试专用生产逻辑绕过正式能力。
 - 重大用户可见或跨层行为变化必须有与风险相称的 contract/integration/E2E 证据。
+- Implementation 完成后、进入 Verification 前，必须以 `workspace_snapshot.py delta` v4 机械产生的本 Task `changed_symbols / changed_line_ranges` 作为 `comment_quality_gate.py --task-delta ... --checkpoint ...` 的可信 scope evidence；禁止仅凭 `task_delta_paths` 对整个历史文件回溯扫描。仅对本 Task 真正改动的复杂符号强制原因型中文注释/Docstring，不以注释率为门禁。
 
 ## 上下文效率与跨模块影响闭包
 
 所有正式修改使用 `$ai-auto-test-platform-context-efficiency` 时遵循：
 
 - **业务/工程/契约检索不缩水，模型加载才收敛**。
-- 唯一活动 authority 是 `docs/authority/**`；不存在 CURRENT marker、R4.x 目录解析、历史 baseline 默认搜索。
-- 正式修改前、任何写入前建立 filesystem-only task-start snapshot（`snapshot_version=3`）；不调用 Git。
+- 唯一活动 authority 是 `docs/authority/**`；不存在 CURRENT marker、R4.x 目录解析、历史版本化 Authority 副本默认搜索。
+- 正式修改前、任何写入前建立 filesystem-only task-start snapshot（版本以 `workspace_snapshot.py::SNAPSHOT_VERSION` 为唯一事实）；不调用 Git。
 - snapshot/delta 制品必须位于 workspace 外；对受控工作树按 SHA-256 指纹比较，得到 `added/removed/modified/task_delta_paths`。
 - required scope 缺失、`docs/authority` 缺失或扫描错误时 `closure_safe=false`。
 - `.agents/.codex` 只在 Agent/Skill/Orchestrator 治理任务显式扩张。
-- LOCAL 简单任务由当前 Agent 内嵌执行，不额外启动分析 Agent。
+- LOCAL 简单任务由当前 Agent 内嵌执行，不额外启动分析 Agent。若 LOCAL 写正式代码，只创建 `LIGHTWEIGHT_LOCAL` CP-0 机械证据锚以绑定 task-start snapshot/Comment Gate，不运行完整 CP-1→CP-6；完成时使用 `local-complete` 写入轻量终态证据。不写正式代码的 LOCAL 不要求 checkpoint。若发现需要 Resume、Authority transaction、CROSS_MODULE/HIGH_RISK，必须先执行 `promote-local-to-full` 保留原 CP-0 后升级为 FULL；LIGHTWEIGHT_LOCAL 本身禁止 acquire Authority。
 - CROSS_MODULE/HIGH_RISK 必须建立 Pre-change Impact Closure。
 
 ### Single Full Impact Scan
@@ -154,7 +172,7 @@ python tools/openapi_client.py check
 
 ## Stage Checkpoint + Validated Resume
 
-长时间正式 Task 使用 Task-level Stage Checkpoint：
+MEDIUM/HIGH、需要 Resume 或进入 Authority 写事务的正式 Task 使用 FULL Task-level Stage Checkpoint；LOCAL 正式代码写入使用 LIGHTWEIGHT_LOCAL CP-0 evidence anchor：
 
 ```text
 TASK_INITIALIZED
@@ -166,6 +184,7 @@ TASK_INITIALIZED
 → CLOSURE_COMPLETE
 ```
 
+- LOCAL 正式代码写入：`task_checkpoint.py init --lifecycle-profile LIGHTWEIGHT_LOCAL` 只产生 CP-0 task-start evidence；Comment Gate 仍强制执行，但 `advance`/CP-1→CP-6 不适用；定向验证后使用 `task_checkpoint.py local-complete` 封存轻量终态。若范围升级，先 `promote-local-to-full`，然后才允许 FULL stage chain 或 Authority transaction。
 - `feature-orchestrator` 是唯一 `TASK_LIFECYCLE_OWNER`；`context-efficiency` 只提供 workspace identity、authority digest、Pack、filesystem delta 与 freshness。
 - Checkpoint 在 workspace 外，原子写入并带 SHA-256 checksum；不保存 Chain-of-Thought。
 - Resume 状态：`RESUME_EXACT / RESUME_WITH_DELTA_REFRESH / RESUME_REJECTED / CHECKPOINT_CORRUPTED`。
@@ -185,7 +204,7 @@ TASK_INITIALIZED
 - 候选事实冲突 → `PRODUCT_CONFLICT_DETECTED`。
 - 用户请求改变当前产品范围/业务规则/状态/权限/公开契约/验收行为 → `PRODUCT_SCOPE_CHANGE`。
 - 当前请求本身已经明确唯一方案时记录 `CONFIRMED / CURRENT_USER_REQUEST`，不得为形式重复询问。
-- `CONFIRMED + authority_update_required=true` 时只允许 `AUTHORITY_UPDATE_ONLY`；直接修改 `docs/authority/**` 并验证，不创建新 baseline 目录。
+- `CONFIRMED + authority_update_required=true` 时只允许 `AUTHORITY_UPDATE_ONLY`；直接修改 `docs/authority/**` 并验证，不创建新的版本化 Authority 副本目录。
 - Product Skill只有检索、差异、方案比较和推荐权；产品批准权属于用户。
 
 ## 风险触发专家池
@@ -240,3 +259,5 @@ Task Context Pack 已有 CURRENT Architecture Decision 且无新架构域时必�
 `context_impact_analyst` 已移除；Full Impact Scan 由 Orchestrator 授权当前主 Agent使用 Context Efficiency。`business_ui_ux_designer + ui_ux_reviewer` 已合并为 `business_ui_ux_specialist`。
 
 Task Context Pack 必须记录 `expert_selection`；未选 Agent 误启动时返回 `EXPERT_NOT_SELECTED`。Fallback Serial 只加载 `selected_agents` 对应 Role Card + Skill，禁止全量加载所有角色。
+
+- `COMMENT_GATE_ATTESTATION_REQUIRED`：所有正式代码写入的 Comment Quality Gate PASS 必须绑定 Task Checkpoint；LOCAL/FULL 终态不得仅凭调用约定跳过 Gate。

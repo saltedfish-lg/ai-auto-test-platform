@@ -7,7 +7,7 @@ export type LoginRequest = {
   password: string;
 };
 
-export type AuthCookieActionRequest = Record<string, unknown>;
+export type AuthCookieActionRequest = Record<string, never>;
 
 export type ChangePasswordRequest = {
   current_password: string;
@@ -41,7 +41,7 @@ export type CurrentUserResponse = {
   correlation_id: string;
 };
 
-export type AuthenticationErrorCode = "AUTH_REQUIRED" | "AUTH_INVALID_CREDENTIALS" | "AUTH_TOKEN_INVALID" | "AUTH_TOKEN_EXPIRED" | "AUTH_SESSION_REVOKED" | "AUTH_IDENTITY_NOT_FOUND" | "AUTH_PERMISSION_DENIED" | "AUTH_ACCOUNT_LOCKED" | "AUTH_ACCOUNT_DISABLED" | "AUTH_ACCOUNT_ARCHIVED" | "AUTH_ACCOUNT_TEMPORARILY_LOCKED" | "AUTH_PASSWORD_CHANGE_REQUIRED" | "AUTH_OPERATION_FORBIDDEN_FOR_STATE";
+export type AuthenticationErrorCode = "AUTH_REQUIRED" | "AUTH_REQUEST_VALIDATION_FAILED" | "AUTH_INVALID_CREDENTIALS" | "AUTH_TOKEN_INVALID" | "AUTH_TOKEN_EXPIRED" | "AUTH_SESSION_REVOKED" | "AUTH_IDENTITY_NOT_FOUND" | "AUTH_PERMISSION_DENIED" | "AUTH_ACCOUNT_LOCKED" | "AUTH_ACCOUNT_DISABLED" | "AUTH_ACCOUNT_ARCHIVED" | "AUTH_ACCOUNT_TEMPORARILY_LOCKED" | "AUTH_PASSWORD_CHANGE_REQUIRED" | "AUTH_OPERATION_FORBIDDEN_FOR_STATE" | "AUTH_IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_REQUEST" | "AUTH_ADMIN_IMMUTABLE" | "AUTH_ROLE_BINDING_PROTECTED" | "AUTH_CONCURRENCY_CONFLICT" | "AUTH_SOURCE_RATE_LIMITED" | "AUTH_RATE_LIMIT_STATE_UNAVAILABLE";
 
 export type AuthenticationProblemDetails = ProblemDetails & {
   code?: AuthenticationErrorCode;
@@ -850,19 +850,6 @@ export type TechnicalAlertEndpointResource = {
   updated_at: string;
 };
 
-export type PlatformDesignBaselineReleaseResource = {
-  platform_design_baseline_release_id: string;
-  display_name?: string | null;
-  row_version: number;
-  created_at: string;
-  updated_at: string;
-  release_id?: string | null;
-  data_dictionary_id?: string | null;
-  release_status: "DRAFT" | "FROZEN" | "SUPERSEDED";
-  readiness_status: "CONDITIONAL_CODE_READY" | "FULL_CODE_READY" | "NOT_CODE_READY";
-  lifecycle_status: "CREATED" | "DRAFT" | "ACTIVE" | "DISABLED" | "RECOVERED" | "ARCHIVED" | "LOGICALLY_DELETED";
-};
-
 export type AiCandidateRevisionResource = {
   ai_candidate_revision_id: string;
   display_name?: string | null;
@@ -975,16 +962,14 @@ export type ListUserResponse = {
 };
 
 export type CreateUserRequest = {
-  expected_version?: number;
+  display_name: string;
+  username: string;
+  role_bindings: Array<UserRoleBindingAssignmentInput>;
   reason?: string | null;
-  user_id?: string;
-  display_name?: string | null;
-  username?: string | null;
-  role_binding_id?: string | null;
 };
 
 export type CreateUserResponse = {
-  data: UserResource;
+  data: OneTimeCredentialDeliveryResource;
   correlation_id: string;
 };
 
@@ -997,12 +982,73 @@ export type UpdateUserRequest = {
   expected_version: number;
   reason?: string | null;
   display_name?: string | null;
-  username?: string | null;
-  role_binding_id?: string | null;
 };
 
 export type UpdateUserResponse = {
   data: UserResource;
+  correlation_id: string;
+};
+
+export type DataScopeGrantInput = {
+  scope_type: string;
+  scope_id?: string | null;
+  permission_code?: string | null;
+};
+
+export type UserRoleBindingAssignmentInput = {
+  role_id: string;
+  project_id?: string | null;
+  data_scope_grants?: Array<DataScopeGrantInput>;
+};
+
+export type OneTimeCredentialDeliveryResource = {
+  user: UserResource;
+  delivery_status: "ISSUED" | "ALREADY_DELIVERED";
+  temporary_password?: string;
+  force_password_change: true;
+};
+
+export type OneTimeCredentialDeliveryResponse = {
+  data: OneTimeCredentialDeliveryResource;
+  correlation_id: string;
+};
+
+export type ResetUserCredentialRequest = {
+  expected_version: number;
+  reason?: string | null;
+};
+
+export type UserStateCommandRequest = {
+  expected_version: number;
+  reason?: string | null;
+};
+
+export type CreateUserRoleBindingRequest = {
+  user_id: string;
+  role_id: string;
+  project_id?: string | null;
+  data_scope_grants?: Array<DataScopeGrantInput>;
+  expected_user_version: number;
+  reason?: string | null;
+};
+
+export type RevokeUserRoleBindingRequest = {
+  expected_version: number;
+  reason?: string | null;
+};
+
+export type UserRoleBindingResource = {
+  binding_id: string;
+  user_id: string;
+  role_id: string;
+  project_id?: string | null;
+  valid_from: string;
+  valid_to?: string | null;
+  row_version: number;
+};
+
+export type UserRoleBindingResponse = {
+  data: UserRoleBindingResource;
   correlation_id: string;
 };
 
@@ -2902,43 +2948,6 @@ export type UpdateTechnicalAlertEndpointRequest = {
 
 export type UpdateTechnicalAlertEndpointResponse = {
   data: TechnicalAlertEndpointResource;
-  correlation_id: string;
-};
-
-export type ListPlatformDesignBaselineReleaseResponse = {
-  items: Array<PlatformDesignBaselineReleaseResource>;
-  page: PageMeta;
-};
-
-export type CreatePlatformDesignBaselineReleaseRequest = {
-  expected_version?: number;
-  reason?: string | null;
-  platform_design_baseline_release_id?: string;
-  display_name?: string | null;
-  release_id?: string | null;
-  data_dictionary_id?: string | null;
-};
-
-export type CreatePlatformDesignBaselineReleaseResponse = {
-  data: PlatformDesignBaselineReleaseResource;
-  correlation_id: string;
-};
-
-export type GetPlatformDesignBaselineReleaseResponse = {
-  data: PlatformDesignBaselineReleaseResource;
-  correlation_id: string;
-};
-
-export type UpdatePlatformDesignBaselineReleaseRequest = {
-  expected_version: number;
-  reason?: string | null;
-  display_name?: string | null;
-  release_id?: string | null;
-  data_dictionary_id?: string | null;
-};
-
-export type UpdatePlatformDesignBaselineReleaseResponse = {
-  data: PlatformDesignBaselineReleaseResource;
   correlation_id: string;
 };
 

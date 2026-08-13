@@ -11,12 +11,13 @@ authority:
   model: SINGLE_LIVING_AUTHORITY
   root: docs/authority
   digest: <当前 authority 内容摘要>
-  versioned_baseline_copies: false
+  versioned_authority_copies: false
   git_access: DISABLED
   freshness: CURRENT | STALE
 
 task_lifecycle:
-  checkpoint_schema_version: 2
+  checkpoint_schema_source: ai-auto-test-platform-feature-orchestrator/scripts/task_checkpoint.py::SCHEMA_VERSION
+  lifecycle_profile: FULL | LIGHTWEIGHT_LOCAL
   checkpoint_ref: <workspace外 checkpoint.json>
   current_stage: TASK_INITIALIZED | CONTEXT_READY | DECISIONS_READY | IMPLEMENTATION_READY | IMPLEMENTATION_COMPLETE | VERIFICATION_COMPLETE | CLOSURE_COMPLETE
   resume_status: NOT_EVALUATED | RESUME_EXACT | RESUME_WITH_DELTA_REFRESH | RESUME_REJECTED | CHECKPOINT_CORRUPTED
@@ -40,13 +41,13 @@ workspace_fingerprint:
   git_access: DISABLED
   freshness: CURRENT | STALE
   task_start:
-    snapshot_version: 3
+    snapshot_version_source: ai-auto-test-platform-context-efficiency/scripts/workspace_snapshot.py::SNAPSHOT_VERSION
     workspace_identity_digest: <filesystem workspace identity>
     workspace_root_identity: <resolved root摘要>
     snapshot_ref: <workspace外快照>
     workspace_digest: <受控文件内容摘要>
   current:
-    snapshot_version: 3
+    snapshot_version_source: ai-auto-test-platform-context-efficiency/scripts/workspace_snapshot.py::SNAPSHOT_VERSION
     workspace_identity_digest: <必须与task_start一致>
     workspace_digest: <当前受控文件摘要>
   task_delta:
@@ -121,7 +122,7 @@ python .agents/skills/ai-auto-test-platform-context-efficiency/scripts/workspace
 - 对受控工作树文件做 SHA-256 指纹；
 - 排除 `.git/node_modules/dist/build/.venv/__pycache__/.pytest_cache/.mypy_cache/.ruff_cache/.runtime/.tmp` 等噪声；
 - snapshot 必须位于 workspace 外；
-- `snapshot_version=3`，绑定 resolved root + filesystem workspace identity。
+- Snapshot 版本以 `workspace_snapshot.py::SNAPSHOT_VERSION` 为唯一事实，绑定 resolved root + filesystem workspace identity。
 
 修改后：
 

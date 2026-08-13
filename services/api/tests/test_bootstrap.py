@@ -7,7 +7,13 @@ from typing import cast
 from uuid import UUID
 
 from platform_api.bootstrap import AdminBootstrapService
-from platform_api.models import AuthSecurityAudit, OutboxEvent, Role
+from platform_api.models import (
+    AuthSecurityAudit,
+    OutboxEvent,
+    Role,
+    RoleBinding,
+    UserRoleBinding,
+)
 from platform_api.security import PasswordService, new_ulid
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -70,9 +76,14 @@ def test_bootstrap_uses_one_canonical_correlation_for_outbox_and_audit() -> None
 
     outbox_events = [value for value in db.added if isinstance(value, OutboxEvent)]
     audits = [value for value in db.added if isinstance(value, AuthSecurityAudit)]
+    authorization_bindings = [value for value in db.added if isinstance(value, UserRoleBinding)]
+    legacy_bindings = [value for value in db.added if isinstance(value, RoleBinding)]
     assert result.status == "INITIALIZED"
-    assert len(outbox_events) == 3
+    assert len(outbox_events) == 2
     assert len(audits) == 1
+    assert len(authorization_bindings) == 1
+    assert legacy_bindings == []
+    assert {event.event_type for event in outbox_events} == {"user.active", "admin.active"}
     correlations = {cast(str, event.payload_json["correlation_id"]) for event in outbox_events}
     correlations.add(audits[0].correlation_id)
     assert len(correlations) == 1

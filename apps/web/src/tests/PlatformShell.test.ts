@@ -65,7 +65,7 @@ describe("身份工作台（组件测试，API 为 mock）", () => {
     vi.spyOn(apiClient, "get_current_user").mockResolvedValue(
       currentUserResponse(currentUser({ display_name: "最新名称" })),
     );
-    vi.spyOn(apiClient, "logout_platform_user").mockResolvedValue(null);
+    vi.spyOn(apiClient, "logout_platform_user").mockResolvedValue(undefined);
 
     await fireEvent.click(screen.getByRole("button", { name: "刷新身份" }));
     expect(await screen.findByText("欢迎回来，最新名称")).toBeTruthy();

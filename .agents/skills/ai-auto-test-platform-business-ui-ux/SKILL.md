@@ -22,26 +22,26 @@ description: AI自动化测试执行平台业务驱动UI/UX设计与审查Skill�
 - **UI_MEDIUM**：新增常规页面、较大信息架构调整、复杂表格/表单/详情；生成紧凑 Business UX Spec，通常仍由当前 Agent 内嵌完成。
 - **UI_HIGH**：新建核心工作台、AI探索/录制/执行/Runner/报告等复杂页面，或大规模重设计；才按需调用 `business_ui_ux_specialist`：修改前使用 `DESIGN_MODE` 产出 Business UX Spec，实现后确需独立体验审查时复用同一角色的 `REVIEW_MODE`。
 
-所有 UI Agent 优先消费 `$ai-auto-test-platform-context-efficiency` 生成的 Task Context Pack，不重复通读完整基线。
+所有 UI Agent 优先消费 `$ai-auto-test-platform-context-efficiency` 生成的 Task Context Pack，不重复通读完整当前 Authority。
 
-### UI_HIGH 现有页面改造：Pre-change Browser Baseline
+### UI_HIGH 现有页面改造：Pre-change Browser Evidence
 
-UI_HIGH 若是**现有页面重设计/美化**，在 Designer 产出方案前必须先用 `$ai-auto-test-platform-ui-quality` 的 `BASELINE_CAPTURE` 模式记录当前真实页面：
+UI_HIGH 若是**现有页面重设计/美化**，在 Designer 产出方案前必须先用 `$ai-auto-test-platform-ui-quality` 的 `PRE_CHANGE_CAPTURE` 模式记录当前真实页面：
 
 - 固定常用桌面 viewport；
 - 记录主工作台首屏、一个核心业务状态、当前主要操作路径；
 - 记录信息层级、密度、溢出/遮挡、Console/Network 明显问题；
 - 只保存紧凑证据/截图索引，不把整页 DOM 或大量截图文本塞入上下文。
 
-新建页面没有可比较的旧页面时标记 `PRE_CHANGE_BASELINE = NOT_APPLICABLE_NEW_PAGE`，禁止伪造 before 证据。
+新建页面没有可比较的旧页面时标记 `PRE_CHANGE_EVIDENCE = NOT_APPLICABLE_NEW_PAGE`，禁止伪造 before 证据。
 
 如果因为后端/MySQL/认证/测试账号/浏览器依赖/旧页面自身故障导致真实 Before 页面无法取得，标记：
 
-- `PRE_CHANGE_BASELINE = BLOCKED_BY_ENVIRONMENT`
-- `CURRENT_UI_BASELINE = SOURCE_BASED_CURRENT_UI_BASELINE`
-- `VISUAL_BASELINE_CONFIDENCE = LIMITED`
+- `PRE_CHANGE_EVIDENCE = BLOCKED_BY_ENVIRONMENT`
+- `CURRENT_UI_EVIDENCE = SOURCE_BASED_CURRENT_UI_EVIDENCE`
+- `VISUAL_EVIDENCE_CONFIDENCE = LIMITED`
 
-此时允许基于当前 Vue 源码、路由、组件、已有测试/截图和业务事实继续设计与实现，但**禁止把源码推断冒充真实 Before 截图**；同时登记 `POST_CHANGE_BROWSER_VERIFY = REQUIRED`，环境恢复后必须补真实浏览器验证。`business_ui_ux_specialist` 的 `REVIEW_MODE` 在这种状态下审查“源码基线 + Post-change 真实证据 + LIMITED 置信度”，不得强制要求一个不存在的 Before screenshot。
+此时允许基于当前 Vue 源码、路由、组件、已有测试/截图和业务事实继续设计与实现，但**禁止把源码推断冒充真实 Before 截图**；同时登记 `POST_CHANGE_BROWSER_VERIFY = REQUIRED`，环境恢复后必须补真实浏览器验证。`business_ui_ux_specialist` 的 `REVIEW_MODE` 在这种状态下审查“变更前源码证据 + Post-change 真实证据 + LIMITED 置信度”，不得强制要求一个不存在的 Before screenshot。
 
 
 ## 一、设计前必须回答的业务问题
@@ -171,7 +171,7 @@ UI_LOW 默认不额外调度 Reviewer；UI_MEDIUM 由 `ui_verifier` + 内嵌清�
 
 UI_HIGH 必须具备：
 
-- 现有页面重设计时的 Pre-change Browser Baseline；若因环境阻断则必须有 `SOURCE_BASED_CURRENT_UI_BASELINE + VISUAL_BASELINE_CONFIDENCE = LIMITED + POST_CHANGE_BROWSER_VERIFY = REQUIRED`（新页面明确 N/A）；
+- 现有页面重设计时的 Pre-change Browser Evidence；若因环境阻断则必须有 `SOURCE_BASED_CURRENT_UI_EVIDENCE + VISUAL_EVIDENCE_CONFIDENCE = LIMITED + POST_CHANGE_BROWSER_VERIFY = REQUIRED`（新页面明确 N/A）；
 - Business UX Spec；
 - 可运行页面；
 - 关键状态浏览器证据；

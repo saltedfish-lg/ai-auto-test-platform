@@ -60,14 +60,6 @@ async function requestError(response: Response): Promise<ApiRequestError> {
   return new ApiRequestError(response.status, `请求失败（HTTP ${response.status}）`);
 }
 
-function normalizeEmptyResponse(response: Response): Response {
-  if (response.status !== 204) return response;
-  return new Response("null", {
-    status: 200,
-    headers: response.headers,
-  });
-}
-
 export function createPlatformFetcher(fetchImplementation: typeof fetch): typeof fetch {
   const execute = async (
     input: RequestInfo | URL,
@@ -88,7 +80,7 @@ export function createPlatformFetcher(fetchImplementation: typeof fetch): typeof
       credentials: "same-origin",
       headers,
     });
-    if (response.ok) return normalizeEmptyResponse(response);
+    if (response.ok) return response;
 
     const error = await requestError(response);
     if (

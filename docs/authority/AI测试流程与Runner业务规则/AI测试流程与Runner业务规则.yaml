@@ -416,7 +416,7 @@ external_actors:
   name: Codex编码环境
   actor_type: EXTERNAL_DEVELOPMENT_ENVIRONMENT
   relationship: 仅在当前Living Authority通过正式validators且code_readiness=READY_FOR_P1_IMPLEMENTATION时生成实现；历史BSL-CONSISTENCY-REPAIR-1.0.0仅作为建立阶段provenance，不构成当前运行依赖。
-  external_responsibility: 当前包不得直接编码；FULL准入时严格按冻结输入实现，不自行补充业务规则。
+  external_responsibility: 当前包不得直接编码；FULL准入时严格按当前 Living Authority 实现，不自行补充业务规则。
   failure_boundary: 非FULL准入、未获准输入、旧基线或hash漂移必须阻断代码生成。
   completion_status: DIRECTLY_SUPPORTED
 core_objects:
@@ -31332,8 +31332,8 @@ business_rules:
   - OBJ-086
   - OBJ-079
   completion_status: DIRECTLY_SUPPORTED
-  test_status: BLOCKED_BY_MISSING_DECISION
-  coding_status: BLOCKED_BY_MISSING_DECISION
+  test_status: TEST_READY_WITH_FIXTURE
+  coding_status: CONTRACT_SPECIFIED
   source_fact_ids:
   - UF-022903
   - UF-022904
@@ -83299,139 +83299,7 @@ decisions:
   scope:
   - DOM-025
   completion_status: DIRECTLY_SUPPORTED
-open_questions:
-- open_question_id: PEND-R3-001
-  decision_id: ADR-018
-  decision_type: PRODUCT_CAPACITY_DECISION
-  blocker_class: CODEX_BLOCKER
-  owner: PRODUCT_AND_ARCHITECTURE
-  question: 容量等级、并发用户和吞吐验收基线
-  recommended_direction: 决策已关闭，按对应ADR及PDBR-2026.08.06-R4.1冻结契约实施。
-  impact: 已关闭，不再阻断编码。
-  status: INCORPORATED
-  relevant_to_ai_runner: true
-  effective_release_id: PDBR-2026.08.06-R2
-- open_question_id: PEND-R3-002
-  decision_id: ADR-019
-  decision_type: ARCHITECTURE_DECISION
-  blocker_class: CODEX_BLOCKER
-  owner: ARCHITECTURE_AND_OPERATIONS
-  question: 对象存储实现、冗余、RPO/RTO与灾备责任
-  recommended_direction: 决策已关闭，按对应ADR及PDBR-2026.08.06-R4.1冻结契约实施。
-  impact: 已关闭，不再阻断编码。
-  status: INCORPORATED
-  relevant_to_ai_runner: true
-  effective_release_id: PDBR-2026.08.06-R2
-- open_question_id: PEND-R3-003
-  decision_id: ADR-020
-  decision_type: PRODUCT_SCOPE_DECISION
-  blocker_class: NON_BLOCKING_BACKLOG
-  owner: PRODUCT
-  question: CI/CD结果是否进入平台UI
-  recommended_direction: 决策已关闭，按对应ADR及PDBR-2026.08.06-R4.1冻结契约实施。
-  impact: 已关闭，不再阻断编码。
-  status: INCORPORATED
-  relevant_to_ai_runner: false
-  effective_release_id: PDBR-2026.08.06-R2
-- open_question_id: PEND-R3-004
-  decision_id: ADR-021
-  decision_type: PRODUCT_CONFIGURATION_DECISION
-  blocker_class: NON_BLOCKING_BACKLOG
-  owner: PRODUCT_AND_AI_GOVERNANCE
-  question: 模型供应商白名单与默认模型
-  recommended_direction: 决策已关闭，按对应ADR及PDBR-2026.08.06-R4.1冻结契约实施。
-  impact: 已关闭，不再阻断编码。
-  status: INCORPORATED
-  relevant_to_ai_runner: true
-  effective_release_id: PDBR-2026.08.06-R2
-- open_question_id: PEND-R3-005
-  decision_id: ADR-022
-  decision_type: SECURITY_DECISION
-  blocker_class: CODEX_BLOCKER
-  owner: SECURITY_ARCHITECTURE
-  question: 加密传输协议版本下限
-  recommended_direction: 决策已关闭，按对应ADR及PDBR-2026.08.06-R4.1冻结契约实施。
-  impact: 已关闭，不再阻断编码。
-  status: INCORPORATED
-  relevant_to_ai_runner: false
-  effective_release_id: PDBR-2026.08.06-R2
-- open_question_id: PEND-R3-006
-  decision_id: ADR-023
-  decision_type: PERMISSION_TEMPLATE_DECISION
-  blocker_class: CODEX_BLOCKER
-  owner: PRODUCT_AND_SECURITY
-  question: 11个预置系统角色默认权限模板
-  recommended_direction: 决策已关闭，按对应ADR及PDBR-2026.08.06-R4.1冻结契约实施。
-  impact: 已关闭，不再阻断编码。
-  status: INCORPORATED
-  relevant_to_ai_runner: false
-  effective_release_id: PDBR-2026.08.06-R2
-- open_question_id: PEND-R3-007
-  decision_id: ADR-024
-  decision_type: PERSONA_ASSIGNMENT_DECISION
-  blocker_class: NON_BLOCKING_BACKLOG
-  owner: PRODUCT
-  question: 平台运维人员画像默认角色组合
-  recommended_direction: 决策已关闭，按对应ADR及PDBR-2026.08.06-R4.1冻结契约实施。
-  impact: 已关闭，不再阻断编码。
-  status: INCORPORATED
-  relevant_to_ai_runner: false
-  effective_release_id: PDBR-2026.08.06-R2
-- open_question_id: PEND-R3-008
-  decision_id: ADR-025
-  decision_type: REVIEW_POLICY_DECISION
-  blocker_class: CODEX_BLOCKER
-  owner: PRODUCT_AND_SECURITY
-  question: 用例与资产版本审核是否双人复核
-  recommended_direction: 决策已关闭，按对应ADR及PDBR-2026.08.06-R4.1冻结契约实施。
-  impact: 已关闭，不再阻断编码。
-  status: INCORPORATED
-  relevant_to_ai_runner: false
-  effective_release_id: PDBR-2026.08.06-R2
-- open_question_id: PEND-R3-009
-  decision_id: ADR-026
-  decision_type: PERMISSION_TEMPLATE_DECISION
-  blocker_class: CODEX_BLOCKER
-  owner: PRODUCT_AND_SECURITY
-  question: 报告查看角色默认下载/分享权限
-  recommended_direction: 决策已关闭，按对应ADR及PDBR-2026.08.06-R4.1冻结契约实施。
-  impact: 已关闭，不再阻断编码。
-  status: INCORPORATED
-  relevant_to_ai_runner: true
-  effective_release_id: PDBR-2026.08.06-R2
-- open_question_id: PEND-R3-010
-  decision_id: ADR-027
-  decision_type: SECURITY_RUNTIME_DECISION
-  blocker_class: CODEX_BLOCKER
-  owner: SECURITY_AND_ARCHITECTURE
-  question: 人工录制中途撤权生效策略
-  recommended_direction: 决策已关闭，按对应ADR及PDBR-2026.08.06-R4.1冻结契约实施。
-  impact: 已关闭，不再阻断编码。
-  status: INCORPORATED
-  relevant_to_ai_runner: true
-  effective_release_id: PDBR-2026.08.06-R2
-- open_question_id: PEND-R3-011
-  decision_id: ADR-028
-  decision_type: PRODUCT_NAVIGATION_DECISION
-  blocker_class: NON_BLOCKING_BACKLOG
-  owner: PRODUCT
-  question: 任务/报告/制品/AI恢复统一入口
-  recommended_direction: 决策已关闭，按对应ADR及PDBR-2026.08.06-R4.1冻结契约实施。
-  impact: 已关闭，不再阻断编码。
-  status: INCORPORATED
-  relevant_to_ai_runner: true
-  effective_release_id: PDBR-2026.08.06-R2
-- open_question_id: PEND-R3-012
-  decision_id: ADR-029
-  decision_type: PACKAGE_EVIDENCE
-  blocker_class: DOMAIN_APPROVAL_BLOCKER
-  owner: DOCUMENT_GOVERNANCE
-  question: TERM-TOL-011当前包正式采用范围与来源证据
-  recommended_direction: 决策已关闭，按对应ADR及PDBR-2026.08.06-R4.1冻结契约实施。
-  impact: 已关闭，不再阻断编码。
-  status: INCORPORATED_REMOVED_AS_RESIDUE
-  relevant_to_ai_runner: false
-  effective_release_id: PDBR-2026.08.06-R2
+open_questions: []
 traceability_index:
 - trace_id: TR-PROC-PROC-001
   target_type: PROCESS
@@ -91553,7 +91421,7 @@ test_readiness:
     - 规则涉及的对象、状态、资源和故障注入
   - target_type: RULE
     target_id: BR-CASE-0060
-    status: BLOCKED_BY_MISSING_DECISION
+    status: TEST_READY_WITH_FIXTURE
     fixture_requirements:
     - 规则涉及的对象、状态、资源和故障注入
   - target_type: RULE
@@ -95100,17 +94968,15 @@ test_readiness:
     - 规则涉及的对象、状态、资源和故障注入
   summary:
     PROCESS_TEST_READY_WITH_FIXTURE: 216
-    TEST_READY_WITH_FIXTURE: 598
+    TEST_READY_WITH_FIXTURE: 599
     TEST_READY: 7
-    BLOCKED_BY_MISSING_DECISION: 1
 coding_readiness:
-  status: READY_WITH_RUNTIME_DB_VALIDATION_PENDING
+  status: READY_FOR_P1_IMPLEMENTATION
   direct_code_input: true
-  statement: PDBR-2026.08.06-R4.1是当前正式代码输入基线；允许工程初始化和分阶段编码，数据库模块正式合并仍受MySQL 8.4运行门禁约束。
+  statement: 当前 docs/authority Living Authority 是唯一正式代码输入事实源；允许工程初始化和分阶段编码。数据库模块正式合并按 SYSTEM_DESIGN.runtime_gate_contract 中 Full Schema Gate 的单源状态判定，本文件不复制运行状态。
   needs_refinement_record_count: 0
   open_decision_ids: []
 statistics:
-  source_file_count: 725
   logical_document_count: 9
   actor_count: 12
   system_actor_count: 13
@@ -95141,7 +95007,6 @@ statistics:
   active_conflict_count: 0
   open_decision_count: 0
   diagram_count: 14
-  source_file_count_scope: PACKAGE_FILES_INCLUDING_ROOT_MANIFEST
 conclusion:
   statement: 已形成独立、闭环、可测试的AI测试流程与Runner业务规则当前权威文档，可作为受控Living Authority输入。四类AI测试能力、Runner业务身份与Agent实例、能力与资源、项目绑定与任务租约、任务所有权与fencing、跨端上下文、重试历史和报告制品均已形成唯一业务边界；全部12项外部决策已关闭。
 format_governance:
@@ -95155,14 +95020,9 @@ format_governance:
     Mermaid: DIAGRAM_SOURCE
     SVG: DIAGRAM_DISPLAY_PROJECTION
   projection_scope: 人工版完整承载责任范围内的规范语义；机器版承载全量原子记录。机器版中的明细ID可以不逐条复制到人工表格，但不得缺失定义、聚合规则、例外、阻断语义和可追溯索引。
-  generator: consistency-repair-generator
-  generator_version: 1.1.0
-  upstream_release_id: BSL-CONSISTENCY-REPAIR-1.0.0
-  upstream_hash: null
-  output_hash: null
-  id_coverage_report: 基础文档发布清单.yaml
+  id_coverage_validation: python tools/verify_authority.py
 readiness_aggregation:
-  document_status: FROZEN_CODE_INPUT
+  document_status: CURRENT_AUTHORITY_CODE_INPUT
   rule: 当前流程规则均已由正式设计、状态、API/事件和验收规范闭合；MySQL运行门禁不阻断工程初始化。
   needs_refinement_record_count: 0
 historical_provenance:
@@ -95214,15 +95074,15 @@ historical_provenance:
     code_readiness: FULL_CODE_READY
 p1_authentication_actor_boundary:
   contract_id: P1-AUTH-ACTOR-001
-  status: FROZEN_IMPLEMENTABLE
+  status: CURRENT_AUTHORITY_IMPLEMENTABLE
   browser_user_authentication: 使用P1正式Bearer Access JWT与Refresh Session契约。
   runner_authentication: 保持既有Bootstrap Token与可撤销Agent Credential契约，不复用平台用户密码或Browser Session。
   worker_authentication: 内部服务身份不属于P1 Browser认证，不新增平台用户身份类型。
   cross_domain_change: NONE
-current_governance_release:
+current_governance_state:
   current_authority_model: SINGLE_LIVING_AUTHORITY
-  current_authority: CURRENT_FORMAL_CODE_INPUT_BASELINE
-  release_status: P1_AUTHENTICATION_CONTRACT_COMPLETED
+  current_authority: CURRENT_LIVING_AUTHORITY
+  governance_status: P1_AUTHENTICATION_CONTRACT_COMPLETED
   code_readiness: READY_FOR_P1_IMPLEMENTATION
-  implementation_release_readiness: NOT_EVALUATED_IMPLEMENTATION_NOT_PRESENT
+  implementation_status_source: 编码权威事实/SYSTEM_DESIGN.yaml#runtime_gate_contract.implementation_status
   pending_user_decisions: 0

@@ -13,7 +13,8 @@ description: AI自动化测试执行平台代码质量实施规范与独立只�
 
 - 本 Skill 作为实现质量规范，不改变父 Agent 的 `workspace-write` 权限；
 - 实现 Agent 可以在父任务已授权范围内正常修改代码、测试和配置；
-- 编码时主动满足结构、注释、测试、回归和可维护性要求；
+- 编码时主动满足结构、注释、测试、回归和可维护性要求；Implementation Standards Mode 对所有正式代码写入为 **MUST_APPLY**，LOCAL 任务也不能跳过；
+- Implementation 完成后、Verification 前，必须把 `workspace_snapshot.py delta` v4 的机械 `changed_symbols / changed_line_ranges` 通过 `--task-delta` 传给 `scripts/comment_quality_gate.py`，并以 `--checkpoint` 绑定 CP-0 的 task-start snapshot 证据；禁止用 path-only 模式扫描整个历史文件，只检查本 Task 真正改动的 complex symbols，不使用注释率；
 - 不得因为加载本 Skill 自行切换成只读 Reviewer。
 
 ### B. Review Mode
@@ -75,6 +76,10 @@ description: AI自动化测试执行平台代码质量实施规范与独立只�
 - `references/python-quality-rules.md`
 - `references/vue-typescript-quality-rules.md`
 - `references/comments-and-docstrings.md`
+- `references/comment-quality-gate.md`
 - `references/testing-quality-rules.md`
 - `references/report-format.md`
 - `references/design-provenance.md`
+
+
+正式 Gate 的 PASS 不是独立日志：Gate 必须通过 Feature Orchestrator Checkpoint 的私有进程内 API写入 `code_quality.comment_gate` attestation。该证据绑定 CP-0 task-start snapshot、当前 workspace digest 与 task-delta；LOCAL 完成、FULL Verification/Closure 必须机械消费它，Gate 后任何 workspace 改动都会使 attestation 失效并要求重新生成 delta/重新 Gate。

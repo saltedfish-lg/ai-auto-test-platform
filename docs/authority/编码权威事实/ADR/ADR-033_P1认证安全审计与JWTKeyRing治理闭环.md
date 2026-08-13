@@ -11,7 +11,7 @@ ACCEPTED / CURRENT LIVING AUTHORITY
 - `GOV-P1-001`：认证安全审计使用独立结构化、append-only技术表 `atp_auth_security_audit`。
 - `GOV-P1-004`：Access JWT使用 `ATP_JWT_KEY_RING_FILE` 加载JWT Key Ring，支持单一active signing key与previous verification keys的安全轮换。
 
-`GOV-P1-002`（临时凭据交付 / User-Admin-Role 写侧语义）、`GOV-P1-003`（Login/Refresh 来源级限流政策）、`GOV-P1-005`（Change Password 响应丢失后的幂等重放语义）仍保持待产品裁决；完整 Placeholder 以 Authentication Contract 为准，本ADR不得推导或实现这些未决事项。
+本ADR形成时尚未裁决的`GOV-P1-002/003/005`已由用户在后续 Living Authority 任务中确认；其当前事实与架构边界由 Authentication Contract 和`ADR-034`承接。本段仅保留决策演进关系，不再构成待决阻断。
 
 ## GOV-P1-001：不可变认证安全审计
 
@@ -34,8 +34,8 @@ ACCEPTED / CURRENT LIVING AUTHORITY
 ## 数据库与状态Owner
 
 - Migration链：`V3 -> V4 -> V5 -> V6__p1_auth_governance_closure.sql`。
-- 当前表总数：85，其中对象表79、技术表6；FK仍为174。
-- 认证状态Owner语义：7个，新增 `AUTH-STATE-007 / AUTH_SECURITY_AUDIT_IMMUTABILITY`。
+- 本ADR落地时表总数为85；后续V7新增来源限流技术表后的当前数量由 Database Schema 与 SYSTEM_DESIGN 维护。
+- 本ADR新增 `AUTH-STATE-007 / AUTH_SECURITY_AUDIT_IMMUTABILITY`；后续状态Owner扩展由 State Owner Registry 与`ADR-034`维护。
 
 ## 一致性要求
 

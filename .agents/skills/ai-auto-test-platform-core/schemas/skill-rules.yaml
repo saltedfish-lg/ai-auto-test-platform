@@ -4,7 +4,7 @@ metadata:
   authority_root: docs/authority
   authority_status: ACTIVE_CONTROLLED_MUTABLE
   code_readiness: READY_FOR_P1_IMPLEMENTATION
-  versioned_baseline_copies: FORBIDDEN
+  versioned_authority_copies: FORBIDDEN
   manifest_or_release_snapshot: NOT_REQUIRED
   codex_git_access: DISABLED
 must_read:
@@ -40,7 +40,7 @@ invariants:
   run_task_initial_final_result: UNKNOWN
   code_readiness: READY_FOR_P1_IMPLEMENTATION
 prohibited:
-- CREATE_VERSIONED_BASELINE_COPY
+- CREATE_VERSIONED_AUTHORITY_COPY
 - GENERIC_UNTYPED_API_PAYLOAD
 - JSON_AS_FORMAL_RELATION_OR_STATE
 - APPROVER_EQUALS_SUBMITTER
@@ -74,6 +74,7 @@ authority_model:
     adr_vs_authority: ADR必须先同步当前authority；未同步时不得仅凭ADR覆盖。
     code_vs_authority: 代码不得反向覆盖authority，先完成Product Decision与Authority Update。
 gates:
-- gate_id: MYSQL84_EMPTY_DATABASE_EXECUTION
-  status: RERUNNABLE
+- gate_id: FULL_SCHEMA_MYSQL84_RUNTIME_GATE
+  status_source: 编码权威事实/SYSTEM_DESIGN.yaml#runtime_gate_contract.gates[FULL_SCHEMA_MYSQL84_RUNTIME_GATE].status
   blocks_code_initialization: false
+runtime_gate_contract_ref: docs/authority/编码权威事实/SYSTEM_DESIGN.yaml#runtime_gate_contract

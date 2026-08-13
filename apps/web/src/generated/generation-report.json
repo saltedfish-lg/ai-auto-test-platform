@@ -1,8 +1,8 @@
 {
   "authority_model": "SINGLE_LIVING_AUTHORITY",
   "authority_root": "docs/authority",
-  "schema_types": 464,
-  "client_methods": 250,
+  "schema_types": 467,
+  "client_methods": 251,
   "outputs": [
     "types.ts",
     "client.ts"

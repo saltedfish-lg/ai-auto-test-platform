@@ -16,7 +16,7 @@ description: AI自动化测试执行平台 Vue 3 前端正式实现 Skill；适�
 5. 只加载当前任务相关的 当前 authority 权威角色/场景/菜单/对象/状态/权限/OpenAPI 片段；
 6. 检查 `apps/web` 当前代码和相关测试。
 
-不要无条件通读完整基线、完整OpenAPI或所有前端文件。
+不要无条件通读完整当前 Authority、完整OpenAPI或所有前端文件。
 
 ## 范围
 
@@ -29,6 +29,7 @@ Vue 3.5、TypeScript 5.9、Vite 7、Vue Router、Pinia、Element Plus、Zod、Vi
 ## 强制规则
 
 - 编码时同时遵循 `$ai-auto-test-platform-code-quality` 的 **Implementation Standards Mode**；
+- Implementation 完成后、进入 Verification 前，必须基于 `workspace_snapshot.py delta` v4 机械产生的本 Task `changed_symbols / changed_line_ranges` 运行 code-quality `scripts/comment_quality_gate.py --task-delta ... --checkpoint ...`；不得仅传 changed path 触发整文件历史扫描。只对本 Task 真正改动的复杂符号要求中文原因型注释/Docstring，简单 CRUD/generated 不强制；
 - 用户可见页面变更同时遵循 `$ai-auto-test-platform-business-ui-ux`；先理解业务，再设计UI；
 - `src/generated/**` 只由 `tools/openapi_client.py` 生成，禁止手改；
 - 前端只能消费正式 Operation/DTO/Schema/ProblemDetails；不能用 `any`、临时本地类型或硬编码字段绕过契约差异；
@@ -37,7 +38,7 @@ Vue 3.5、TypeScript 5.9、Vite 7、Vue Router、Pinia、Element Plus、Zod、Vi
 - 不写死 admin 特权，不把角色名直接当 permission code；
 - 页面必须处理必要的 loading/empty/error/forbidden/disabled/conflict/running/partial-failure 状态；
 - 不用 Mock API 掩盖正式 API 缺失；组件测试允许 mock，但不得冒充真实集成验收；
-- 基线未定义的纯 UI/视觉/工程实现按 Engineering Autonomy 自主决定；若页面变更暗含新的产品能力、业务/状态、权限、公开契约或验收语义，先使用 `$ai-auto-test-platform-product-sovereignty`，不得由前端交互设计反向创造产品规则；
+- 当前 Authority 未定义的纯 UI/视觉/工程实现按 Engineering Autonomy 自主决定；若页面变更暗含新的产品能力、业务/状态、权限、公开契约或验收语义，先使用 `$ai-auto-test-platform-product-sovereignty`，不得由前端交互设计反向创造产品规则；
 - 不得默认使用“欢迎语 + 英文Eyebrow + KPI卡片墙 + 表格”作为所有业务页面模板；
 - Element Plus 是组件库，不是信息架构。应按测试业务选择 table、split-pane、master-detail、editor、timeline、monitoring 等结构。
 
@@ -51,7 +52,7 @@ Vue 3.5、TypeScript 5.9、Vite 7、Vue Router、Pinia、Element Plus、Zod、Vi
 
 1. 用 Context Efficiency 确认当前页面的菜单、角色、权限、对象、Operation、状态和跨层消费者；
 2. 检查 generated client 是否已有正式 API；没有则判断生成物未同步还是契约确实未定义；
-3. UI_HIGH 且为现有页面重设计时，编码前先取得 `PRE_CHANGE_BASELINE`；若真实 Before 因环境阻断则使用 `SOURCE_BASED_CURRENT_UI_BASELINE` 并标记 `VISUAL_BASELINE_CONFIDENCE = LIMITED`、`POST_CHANGE_BROWSER_VERIFY = REQUIRED`，禁止伪造截图；随后使用 Business UI/UX Skill 回答 WHO/WHY/WHAT/FREQUENCY/RISK/PRIORITY/STATE/FLOW；
+3. UI_HIGH 且为现有页面重设计时，编码前先取得 `PRE_CHANGE_EVIDENCE`；若真实 Before 因环境阻断则使用 `SOURCE_BASED_CURRENT_UI_EVIDENCE` 并标记 `VISUAL_EVIDENCE_CONFIDENCE = LIMITED`、`POST_CHANGE_BROWSER_VERIFY = REQUIRED`，禁止伪造截图；随后使用 Business UI/UX Skill 回答 WHO/WHY/WHAT/FREQUENCY/RISK/PRIORITY/STATE/FLOW；
 4. 选择页面原型并形成轻量设计决策/Business UX Spec；
 5. 设计页面信息架构和组件边界；
 6. 实现路由、Store/Composable、页面和组件；

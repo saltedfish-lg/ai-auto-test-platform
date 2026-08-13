@@ -22,7 +22,10 @@ AuthenticationAuditAction = Literal[
     "CREDENTIAL_RESET",
     "SESSION_REVOKED",
     "USER_DISABLED_OR_LOCKED",
+    "USER_CREATED",
+    "USER_ENABLED",
     "ROLE_ASSIGNED",
+    "ROLE_REVOKED",
     "PERMISSION_DENIED",
 ]
 

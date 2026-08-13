@@ -28,7 +28,7 @@ description: 当前 authority P1 身份认证、默认admin、JWT/Refresh Sessio
 
 ## 可自主的工程实现
 
-可自行选择成熟维护的 JWT/Argon2/crypto 库、内部 Service/Repository 结构、依赖注入方式、测试 builder/fixture，只要严格满足冻结算法、参数和外部语义；依赖必须固定版本并加入项目依赖治理。
+可自行选择成熟维护的 JWT/Argon2/crypto 库、内部 Service/Repository 结构、依赖注入方式、测试 builder/fixture，只要严格满足当前 Authority 已确认的算法、参数和外部语义；依赖必须固定版本并加入项目依赖治理。
 
 ## 安全红线
 

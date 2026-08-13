@@ -21,7 +21,7 @@ description: AI自动化测试执行平台按风险触发的技术架构裁决Sk
 - 并发、锁、租约、fencing、恢复和一致性如何实现；
 - 当前方案是否产生循环依赖、双写、状态多主、旁路写入或不可恢复耦合。
 
-它**不得**改变 当前 authority 已冻结的产品语义、OpenAPI、DDL、权限、状态机、Runner 规则、验收规则或安全边界。
+它**不得**改变 当前 Living Authority 已确认的产品语义、OpenAPI、DDL、权限、状态机、Runner 规则、验收规则或安全边界。
 
 ## 一、先复用当前 Architecture Decision
 
@@ -155,7 +155,7 @@ ARCH_HIGH 使用 `references/architecture-decision.md` 的紧凑格式，至少�
 
 - 优先消费 `$ai-auto-test-platform-context-efficiency` 的 Task Context Pack；
 - ARCH_HIGH 只加载 architecture slice：authority、affected domains、state/event、DB/API边界、Runner/Worker、并发/事务、相关代码与历史有效 ADR；
-- 不重新无条件通读完整基线/完整仓库；
+- 不重新无条件通读完整当前 Authority/完整仓库；
 - ARCH_LOW 禁止为了“更稳”额外调用架构 Agent；
 - `ARCH_MEDIUM` 默认由当前 Agent 内嵌 Skill；
 - `ARCH_HIGH` 才调度 `solution_architect`；

@@ -7,6 +7,7 @@ import secrets
 import shutil
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
+from ipaddress import ip_network
 from pathlib import Path
 
 import jwt
@@ -23,6 +24,7 @@ from platform_api.auth_service import (
 )
 from platform_api.errors import PlatformError
 from platform_api.keygen import DevelopmentKeyRingPaths, generate_development_key_ring
+from platform_api.rate_limit import resolve_source_ip
 from platform_api.security import (
     AccessClaims,
     JwtKeyRing,
@@ -129,6 +131,36 @@ def test_refresh_token_is_32_random_bytes_and_only_sha256_is_persistable() -> No
 def test_refresh_token_hash_rejects_noncanonical_values(token: str) -> None:
     with pytest.raises(ValueError, match="invalid refresh token format"):
         refresh_token_hash(token)
+
+
+def test_untrusted_peer_cannot_spoof_forwarded_source() -> None:
+    source = resolve_source_ip(
+        "198.51.100.8",
+        "for=203.0.113.1",
+        "203.0.113.2",
+        (ip_network("10.0.0.0/8"),),
+    )
+    assert source == "198.51.100.8"
+
+
+def test_trusted_proxy_chain_uses_first_non_trusted_address_from_right() -> None:
+    source = resolve_source_ip(
+        "10.0.0.9",
+        "for=198.51.100.4, for=10.0.0.8",
+        None,
+        (ip_network("10.0.0.0/8"),),
+    )
+    assert source == "198.51.100.4"
+
+
+def test_invalid_forwarded_chain_falls_back_to_direct_peer() -> None:
+    source = resolve_source_ip(
+        "10.0.0.9",
+        "for=not-an-ip",
+        "198.51.100.5",
+        (ip_network("10.0.0.0/8"),),
+    )
+    assert source == "10.0.0.9"
 
 
 def test_logout_does_not_open_audit_transaction_until_session_resolves() -> None:
@@ -537,3 +569,76 @@ def test_rbac_frozen_conditions_are_exact_and_fail_closed_without_atomic_audit()
     assert not AuthenticationService._condition_satisfied(
         "unrecognized frozen condition", "actor", context
     )
+
+
+def test_project_scoped_role_binding_requires_matching_realtime_project_duty_role() -> None:
+    class CaptureSession:
+        statement: object | None = None
+
+        def scalar(self, statement: object) -> str:
+            self.statement = statement
+            return "project-member-id"
+
+    db = CaptureSession()
+    assert AuthenticationService._has_matching_project_duty(  # type: ignore[arg-type]
+        db, "user-1", "project-1", "role-1"
+    )
+    assert db.statement is not None
+    compiled = str(db.statement.compile(compile_kwargs={"literal_binds": True}))
+    assert "atp_project_member.user_id = 'user-1'" in compiled
+    assert "atp_project_member.project_id = 'project-1'" in compiled
+    assert "atp_project_member.role_id = 'role-1'" in compiled
+    assert "atp_project_member.lifecycle_status = 'ACTIVE'" in compiled
+
+
+def test_project_scoped_role_binding_denies_when_matching_project_duty_is_absent() -> None:
+    class EmptySession:
+        def scalar(self, statement: object) -> None:
+            del statement
+            return None
+
+    assert not AuthenticationService._has_matching_project_duty(  # type: ignore[arg-type]
+        EmptySession(), "user-1", "project-1", "role-1"
+    )
+
+
+def test_require_project_permissions_binds_every_permission_to_target_project(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[str, AuthorizationContext]] = []
+    sentinel = object()
+
+    def fake_authorize(
+        self: AuthenticationService,
+        token: str,
+        operation_id: str,
+        permission_code: str,
+        context: AuthorizationContext,
+        audit_context: AuditContext,
+    ) -> object:
+        del self, token, operation_id, audit_context
+        calls.append((permission_code, context))
+        return sentinel
+
+    monkeypatch.setattr(AuthenticationService, "authorize_access", fake_authorize)
+    service = object.__new__(AuthenticationService)
+    result = service.require_project_permissions(  # type: ignore[assignment]
+        "token",
+        "create_user_role_binding",
+        ("ROLE_BIND", "PROJECT_MEMBER_MANAGE"),
+        "project-target",
+        AuditContext("corr", "test"),
+    )
+
+    assert result is sentinel
+    assert [permission for permission, _ in calls] == ["ROLE_BIND", "PROJECT_MEMBER_MANAGE"]
+    assert all(context.project_id == "project-target" for _, context in calls)
+    assert all(context.scope_id == "project-target" for _, context in calls)
+    assert all(context.scope_type == "AUTHORIZED_PROJECT_ACTIVE" for _, context in calls)
+
+
+def test_role_binding_write_paths_use_target_project_authorization() -> None:
+    source = (Path(__file__).resolve().parents[1] / "src/platform_api/user_admin_service.py").read_text(encoding="utf-8")
+    assert source.count("require_project_permissions(") >= 3
+    assert '"create_user_role_binding"' in source
+    assert '"revoke_user_role_binding"' in source
+    assert 'binding.project_id' in source
+    assert 'body.project_id' in source

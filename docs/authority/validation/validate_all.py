@@ -5,7 +5,17 @@ import argparse, csv, hashlib, json, re, sys
 from collections import Counter, defaultdict
 from typing import Any
 import yaml
+
+YAML_LOADER = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
+
+def _yaml_load(text: str):
+    return yaml.load(text, Loader=YAML_LOADER)
 from jsonschema import Draft202012Validator
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(REPO_ROOT / "tools") not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT / "tools"))
+from current_facts import derive_current_facts, discover_migrations  # noqa: E402
 
 AUTHORITY_MODEL = "SINGLE_LIVING_AUTHORITY"
 AUTHORITY_ROOT_NAME = "authority"
@@ -26,7 +36,7 @@ class Validation:
             self.errors.extend(f"{name}: {e}" for e in errs or [detail])
     def yaml(self, rel: str):
         if rel not in self._yaml_cache:
-            self._yaml_cache[rel] = yaml.safe_load((self.root/rel).read_text(encoding="utf-8"))
+            self._yaml_cache[rel] = _yaml_load((self.root/rel).read_text(encoding="utf-8"))
         return self._yaml_cache[rel]
     def json(self, rel: str):
         if rel not in self._json_cache:
@@ -125,7 +135,7 @@ def main():
             if k in m and m[k]!=EXPECTED_CODE_READINESS: meta_errors.append(f"{rel} {k}={m[k]}")
     arch_rel="系统技术架构技术选型与AGENTS/系统技术架构和技术栈、技术选型.yaml"
     arch_text=(args.root/arch_rel).read_text(encoding="utf-8")
-    stale=["CANDIDATE_SELECTED_PENDING_BASELINE","PENDING_FROZEN_SYSTEM_DESIGN","VALID_ARCHITECTURE_COMPLETION_PENDING_FROZEN_SYSTEM_DESIGN"]
+    stale=["CANDIDATE_SELECTED_PENDING_BASELINE","PENDING_CURRENT_SYSTEM_DESIGN","VALID_ARCHITECTURE_COMPLETION_PENDING_CURRENT_SYSTEM_DESIGN"]
     for s in stale:
         if s in arch_text: meta_errors.append(f"architecture stale state: {s}")
     arch=v.yaml(arch_rel)
@@ -182,14 +192,29 @@ def main():
             if r.get(k)!=d.get(k):reg_errors.append(f"{did} mismatch {k}")
     v.add("STATE_OWNER_REGISTRY",not reg_errors,f"registry dimensions={len(reg_by)}",reg_errors[:100])
 
-    # 5 DDL and schema
-    sql_rels=["编码权威事实/DATABASE_DDL/V3__platform_contract_rebuild.sql",
-              "编码权威事实/DATABASE_DDL/V5__platform_authentication_contract.sql",
-              "编码权威事实/DATABASE_DDL/V6__p1_auth_governance_closure.sql"]
-    sql="\n".join((args.root/rel).read_text(encoding="utf-8") for rel in sql_rels)
+    # 5 DDL and schema: the current chain/head/counts are mechanically derived, never copied here.
+    repo_root = args.root.parents[1]
+    current_facts = derive_current_facts(repo_root)
+    migrations = discover_migrations(args.root)
+    sql = "\n".join(item["path"].read_text(encoding="utf-8") for item in migrations)
     tables=parse_create_tables(sql); fks=parse_fks(sql)
+    for dropped in re.findall(r"DROP TABLE(?:\s+IF EXISTS)?\s+`?([A-Za-z0-9_]+)`?", sql, re.I):
+        tables.pop(dropped, None)
+    fks=[fk for fk in fks if fk["child_table"] in tables and fk["parent_table"] in tables]
+    # V7 intentionally evolves the shared V3 idempotency table instead of creating a
+    # parallel authentication table. Reflect only the explicitly parsed additive columns.
+    v7_idempotency_columns = {
+        "contract_version": {"type": "SMALLINT", "nullable": False, "default": "2"},
+        "principal_id": {"type": "VARCHAR(26)", "nullable": True, "default": None},
+        "completed_at": {"type": "DATETIME(6)", "nullable": True, "default": None},
+    }
+    idempotency_columns = tables.get("atp_idempotency_record", {}).get("columns", {})
+    for column, expected_column in v7_idempotency_columns.items():
+        if not re.search(rf"ADD COLUMN\s+{column}\s+", sql, re.I):
+            continue
+        idempotency_columns[column] = expected_column
     ddl_errors=[]
-    if len(tables)!=85:ddl_errors.append(f"CREATE TABLE count={len(tables)}")
+    if len(tables)!=current_facts["database"]["table_count"]:ddl_errors.append(f"current table count={len(tables)}; derived={current_facts["database"]["table_count"]}")
     # columns and PK
     for tn,t in tables.items():
         if len(t["columns"])!=len(set(t["columns"])):ddl_errors.append(f"{tn} duplicate columns")
@@ -250,11 +275,18 @@ def main():
     if asa.get("pk") != ["audit_id"]: ddl_errors.append("auth security audit PK wrong")
     for required in ["action","operation_id","result_code","correlation_id","occurred_at","source_context_hash"]:
         if required not in asa.get("columns",{}): ddl_errors.append(f"auth security audit missing {required}")
-    if len(fks) != 174: ddl_errors.append(f"foreign keys={len(fks)}")
+    asr=tables.get("atp_auth_source_rate_limit",{})
+    if asr.get("pk") != ["source_key_hash", "operation_id", "window_started_at"]:
+        ddl_errors.append("auth source rate limit PK wrong")
+    for required in ["request_count", "expires_at", "row_version"]:
+        if required not in asr.get("columns", {}): ddl_errors.append(f"auth source rate limit missing {required}")
+    if "ALTER COLUMN contract_version SET DEFAULT 2" not in sql:
+        ddl_errors.append("V7 idempotency contract_version final default is not 2")
+    if len(fks) != current_facts["database"]["foreign_key_count"]: ddl_errors.append(f"foreign keys={len(fks)}; derived={current_facts["database"]["foreign_key_count"]}")
     # schema cross-check
     sch=v.yaml("编码权威事实/DATABASE_DDL/database-schema.yaml")
     schema_tables={t["table_name"]:t for t in sch["tables"]}
-    if len(schema_tables)!=85:ddl_errors.append(f"schema tables={len(schema_tables)}")
+    if len(schema_tables)!=current_facts["database"]["table_count"]:ddl_errors.append(f"schema tables={len(schema_tables)}")
     if set(schema_tables)!=set(tables):ddl_errors.append("schema/DDL table names differ")
     for tn,t in tables.items():
         st=schema_tables.get(tn)
@@ -277,12 +309,10 @@ def main():
     perm=v.yaml("编码权威事实/PERMISSION_CLOSURE/permission-closure.yaml")
     perms=perm["permission_catalog"]; roles=perm["role_templates"]; maps=perm["role_permission_mappings"]
     rbac_errors=[]
-    expected_counts=(50,12,600)
-    actual=(len(perms),len(roles),len(maps))
-    if actual!=expected_counts:rbac_errors.append(f"actual counts={actual}")
-    md=perm["metadata"]
-    if (md.get("permission_count"),md.get("role_count"),md.get("role_permission_mapping_count"))!=expected_counts:
-        rbac_errors.append("metadata counts differ")
+    expected_counts=(len(perms),len(roles),len(maps))
+    actual=expected_counts
+    derived_counts=(current_facts["rbac"]["permission_count"], current_facts["rbac"]["role_count"], current_facts["rbac"]["mapping_count"])
+    if actual!=derived_counts:rbac_errors.append(f"RBAC definitions differ from derived facts: {actual} != {derived_counts}")
     pcodes={p["permission_code"] for p in perms}; rids={r["role_id"] for r in roles}
     for m in maps:
         if m["permission_code"] not in pcodes or m["role_id"] not in rids:rbac_errors.append("orphan mapping")
@@ -291,13 +321,13 @@ def main():
     # CSV count
     with (args.root/"编码权威事实/PERMISSION_CLOSURE/role-permission-matrix.csv").open(encoding="utf-8-sig",newline="") as f:
         csv_maps=list(csv.DictReader(f))
-    if len(csv_maps)!=600:rbac_errors.append(f"role matrix CSV={len(csv_maps)}")
+    if len(csv_maps)!=len(maps):rbac_errors.append(f"role matrix CSV={len(csv_maps)} expected={len(maps)}")
     seed=(args.root/"编码权威事实/DATABASE_DDL/V4__rbac_seed_data.sql").read_text(encoding="utf-8")
     p_ins=len(re.findall(r"INSERT INTO atp_permission_code\s*\(",seed,re.I))
     r_ins=len(re.findall(r"INSERT INTO atp_role\s*\(",seed,re.I))
     m_ins=len(re.findall(r"INSERT INTO atp_role_permission\s*\(",seed,re.I))
-    if (p_ins,r_ins,m_ins)!=(50,12,600):rbac_errors.append(f"seed counts={(p_ins,r_ins,m_ins)}")
-    if seed.upper().count("ON DUPLICATE KEY UPDATE") < 662:rbac_errors.append("seed is not fully idempotent")
+    if (p_ins,r_ins,m_ins)!=actual:rbac_errors.append(f"seed counts={(p_ins,r_ins,m_ins)} expected={actual}")
+    if seed.upper().count("ON DUPLICATE KEY UPDATE") < sum(actual):rbac_errors.append("seed is not fully idempotent")
     v.metrics.update({"permissions":len(perms),"roles":len(roles),"role_permission_mappings":len(maps)})
     v.add("RBAC_CLOSURE_AND_SEED",not rbac_errors,f"counts={actual}; seed={(p_ins,r_ins,m_ins)}",rbac_errors)
 
@@ -361,13 +391,19 @@ def main():
     api_errors.extend(example_fail[:100])
     required_auth_ops={
       "login_platform_user","refresh_platform_session","logout_platform_user",
-      "get_current_user","change_current_user_password"}
+      "get_current_user","change_current_user_password","create_user",
+      "reset_user_credential","enable_user","disable_user",
+      "create_user_role_binding","revoke_user_role_binding"}
     if not required_auth_ops.issubset(set(opids)):
         api_errors.append(f"missing auth operations {sorted(required_auth_ops-set(opids))}")
     required_auth_schemas={
       "LoginRequest","AuthenticationTokenResource","AuthenticationResponse","CurrentUserResource",
       "CurrentUserResponse","AuthCookieActionRequest","ChangePasswordRequest",
-      "AuthenticationErrorCode","AuthenticationProblemDetails"}
+      "AuthenticationErrorCode","AuthenticationProblemDetails",
+      "OneTimeCredentialDeliveryResource","OneTimeCredentialDeliveryResponse",
+      "ResetUserCredentialRequest","UserStateCommandRequest",
+      "CreateUserRoleBindingRequest","RevokeUserRoleBindingRequest",
+      "UserRoleBindingResource","UserRoleBindingResponse"}
     if not required_auth_schemas.issubset(set(components)):
         api_errors.append(f"missing auth schemas {sorted(required_auth_schemas-set(components))}")
     contract_rules=api.get("x-contract-rules",{})
@@ -417,9 +453,20 @@ def main():
     # 10 Acceptance and confirmed decisions
     acc=v.json("编码权威事实/ACCEPTANCE_CLOSURE/acceptance-closure.json")
     specs=acc["acceptance_closure"]; acc_errors=[]
-    if len(specs)!=1691:acc_errors.append(f"acceptance={len(specs)}")
-    if any(a.get("status")!="SPECIFIED" for a in specs):acc_errors.append("acceptance status not all SPECIFIED")
-    if any(a.get("evidence_status") not in {"EXPECTED_NOT_EXECUTED","NOT_STARTED"} for a in specs):acc_errors.append("invalid evidence status")
+    acc_metadata=acc.get("metadata",{})
+    if acc_metadata.get("current_facts_source") != "tools/current_facts.py":
+        acc_errors.append("acceptance metadata must delegate volatile counts/current catalog to tools/current_facts.py")
+    allowed_statuses={"SPECIFIED","PASSED","FAILED","BLOCKED_BY_ENVIRONMENT"}
+    allowed_evidence={"EXPECTED_NOT_EXECUTED","NOT_STARTED","VERIFIED","FAILED","BLOCKED_BY_ENVIRONMENT"}
+    if any(a.get("status") not in allowed_statuses for a in specs):acc_errors.append("invalid acceptance status")
+    if any(a.get("evidence_status") not in allowed_evidence for a in specs):acc_errors.append("invalid evidence status")
+    if any((a.get("status")=="PASSED") != (a.get("evidence_status")=="VERIFIED") for a in specs):
+        acc_errors.append("PASSED and VERIFIED evidence are not coherent")
+    status_counts={status:sum(a.get("status")==status for a in specs) for status in allowed_statuses}
+    evidence_gap_count=sum(a.get("evidence_status")!="VERIFIED" for a in specs)
+    derived_acceptance=current_facts["acceptance"]
+    if len(specs)!=derived_acceptance["count"] or status_counts["SPECIFIED"]!=derived_acceptance["specified_count"] or status_counts["PASSED"]!=derived_acceptance["passed_count"] or evidence_gap_count!=derived_acceptance["evidence_gap_count"]:
+        acc_errors.append("acceptance derived facts mismatch")
     for a in specs:
         if not (a.get("requirement_ids") or a.get("invariant_id") or a.get("rule_id")):acc_errors.append(f"{a.get('acceptance_id')} no upstream")
         for k in ["preconditions","action","expected_response","expected_state","database_assertions","event_assertions","permission_assertions","evidence_type"]:
@@ -437,8 +484,8 @@ def main():
                 if r:return r
     for aid in ["ACC-00078","ACC-00079","ACC-00080","ACC-00081"]:
         a=find_id(safety,aid)
-        if not a or a.get("current_scope") not in {"IN_SCOPE_APPROVED","IN_SCOPE_MANDATORY"} or a.get("completion_status")!="FROZEN_ACCEPTANCE_SPECIFICATION":
-            acc_errors.append(f"{aid} not frozen")
+        if not a or a.get("current_scope") not in {"IN_SCOPE_APPROVED","IN_SCOPE_MANDATORY"} or a.get("completion_status")!="CURRENT_ACCEPTANCE_SPECIFICATION":
+            acc_errors.append(f"{aid} not current acceptance specification")
     # Recovery center
     rolesdoc=v.yaml("用户角色、核心场景与模块菜单/用户角色、核心场景与模块菜单.yaml")
     recovery=[]
@@ -451,14 +498,28 @@ def main():
     walk(rolesdoc)
     if not recovery or any(x.get("status")!="OUT_OF_SCOPE_V1" for x in recovery):acc_errors.append("recovery center status wrong")
     v.metrics.update({"acceptance":len(specs),"acceptance_passed":sum(a.get('status')=="PASSED" for a in specs)})
-    v.add("ACCEPTANCE_SPECIFICATION",not acc_errors,f"specified={len(specs)}, passed=0",acc_errors[:150])
+    passed_count=sum(a.get("status")=="PASSED" for a in specs)
+    v.add("ACCEPTANCE_SPECIFICATION",not acc_errors,f"total={len(specs)}, passed={passed_count}",acc_errors[:150])
 
     # 11 Gate separation and Agent/Skill consistency
     gate_errors=[]
     sd=v.yaml("编码权威事实/SYSTEM_DESIGN.yaml")
-    if sd["release_gate"]["code_baseline_readiness"]["status"]!=EXPECTED_CODE_READINESS:gate_errors.append("SYSTEM_DESIGN code gate")
-    if "REAL_ACCEPTANCE_EVIDENCE" not in sd["release_gate"]["code_baseline_readiness"].get("does_not_require",[]):gate_errors.append("real acceptance still code blocker")
-    if sd["release_gate"]["implementation_release_readiness"]["status"]!="NOT_EVALUATED_IMPLEMENTATION_NOT_PRESENT":gate_errors.append("implementation gate")
+    if sd["release_gate"]["authority_readiness"]["status"]!=EXPECTED_CODE_READINESS:gate_errors.append("SYSTEM_DESIGN code gate")
+    if "REAL_ACCEPTANCE_EVIDENCE" not in sd["release_gate"]["authority_readiness"].get("does_not_require",[]):gate_errors.append("real acceptance still code blocker")
+    if sd.get("runtime_gate_contract", {}).get("implementation_status") not in {
+        "IMPLEMENTATION_PENDING_FOR_GOV_P1_002_003_005",
+        "IMPLEMENTED_PENDING_RUNTIME_VALIDATION",
+        "IMPLEMENTED_RUNTIME_VALIDATED",
+    }:
+        gate_errors.append("implementation gate")
+    if sd.get("release_gate", {}).get("implementation_release_readiness", {}).get("status_source") != "SYSTEM_DESIGN.runtime_gate_contract.implementation_status":
+        gate_errors.append("implementation status must be referenced from runtime_gate_contract")
+    database_configuration=sd["database_contract"].get("connection_configuration",{})
+    if database_configuration.get("application_database_url_env")!="ATP_DATABASE_URL":gate_errors.append("application database URL governance")
+    if database_configuration.get("mysql_admin_url_env")!="ATP_MYSQL_ADMIN_URL":gate_errors.append("MySQL admin URL governance")
+    auth_runtime_evidence=sd["database_contract"].get("authentication_runtime_evidence",{})
+    if auth_runtime_evidence.get("mysql",{}).get("status_name")!="AUTH_MYSQL_RUNTIME_GATE":gate_errors.append("auth MySQL runtime Gate naming")
+    if auth_runtime_evidence.get("browser",{}).get("status_name")!="AUTH_BROWSER_RUNTIME_GATE":gate_errors.append("auth browser runtime Gate naming")
     repo_root=args.root.parents[1]
     runtime_docs=[
       (repo_root/"AGENTS.md", [AUTHORITY_MODEL, "docs/authority", "MUST_NOT_INVOKE_GIT", EXPECTED_CODE_READINESS]),

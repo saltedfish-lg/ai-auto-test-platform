@@ -21,7 +21,6 @@ from platform_api.models import (
     PlatformUser,
     PlatformUserCredential,
     Role,
-    RoleBinding,
     UserRoleBinding,
 )
 from platform_api.security import PasswordService, new_ulid, utc_now
@@ -98,27 +97,6 @@ class AdminBootstrapService:
                 db.add(user)
                 db.flush()
                 db.add(
-                    RoleBinding(
-                        role_binding_id=binding_id,
-                        project_id=None,
-                        subject_id=user_id,
-                        role_id=role.role_id,
-                        effective_at=now.replace(tzinfo=UTC).isoformat(),
-                        user_id=user_id,
-                        audit_log_id=None,
-                        lifecycle_status="ACTIVE",
-                        display_name="Default admin super-admin binding",
-                        row_version=1,
-                        created_at=now,
-                        updated_at=now,
-                        created_by=user_id,
-                        updated_by=user_id,
-                        extension_json=None,
-                    )
-                )
-                db.flush()
-                user.role_binding_id = binding_id
-                db.add(
                     UserRoleBinding(
                         binding_id=binding_id,
                         user_id=user_id,
@@ -179,7 +157,6 @@ class AdminBootstrapService:
                 for event_type, aggregate_id, object_id in (
                     ("user.active", user_id, user_id),
                     ("admin.active", admin_id, admin_id),
-                    ("role_binding.active", binding_id, binding_id),
                 ):
                     db.add(
                         self._outbox_event(
@@ -225,7 +202,6 @@ class AdminBootstrapService:
         object_field = {
             "user.active": "user_id",
             "admin.active": "admin_id",
-            "role_binding.active": "role_binding_id",
         }[event_type]
         envelope = {
             "event_id": event_id,

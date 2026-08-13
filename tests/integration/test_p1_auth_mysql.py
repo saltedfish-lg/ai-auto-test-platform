@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import base64
+import json
 import os
 import secrets
 from collections import defaultdict
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -38,14 +41,30 @@ from platform_api.models import (
 )
 from platform_api.security import PasswordService, new_refresh_token, new_ulid, utc_now
 from sqlalchemy import func, select, text, update
+from sqlalchemy.engine import make_url
 from sqlalchemy.exc import DBAPIError, IntegrityError
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+import sys
+sys.path.insert(0, str(REPO_ROOT / "tools"))
+from current_facts import derive_current_facts
+CURRENT_FACTS = derive_current_facts(REPO_ROOT)
 from sqlalchemy.orm import Session, sessionmaker
+
+DATABASE_URL_ENV = "ATP_DATABASE_URL"
+GATE_DATABASE_PREFIX = "ai_auto_test_platform_gate_auth_"
 
 
 def _database_url() -> str:
-    value = os.getenv("ATP_P1_TEST_DATABASE_URL")
+    value = os.getenv(DATABASE_URL_ENV)
     if value is None:
-        pytest.skip("ATP_P1_TEST_DATABASE_URL is required for the real MySQL P1 gate")
+        pytest.skip(f"{DATABASE_URL_ENV} is required for the real authentication MySQL Gate")
+    try:
+        database = make_url(value).database
+    except Exception:
+        pytest.skip(f"{DATABASE_URL_ENV} is not a valid SQLAlchemy URL")
+    if database is None or not database.startswith(GATE_DATABASE_PREFIX):
+        pytest.skip("authentication MySQL integration tests require an isolated Gate database")
     return value
 
 
@@ -57,11 +76,34 @@ def _audit_context(label: str) -> AuditContext:
     return AuditContext(f"{label}-{new_ulid()}", label)
 
 
+def _hmac_ring_file(directory: Path) -> Path:
+    path = directory / "auth-hmac-key-ring.json"
+    path.write_text(
+        json.dumps(
+            {
+                "ring_version": "auth-mysql-v1",
+                "active_key_id": "active",
+                "keys": [
+                    {
+                        "key_id": "active",
+                        "key_material": base64.urlsafe_b64encode(secrets.token_bytes(32))
+                        .rstrip(b"=")
+                        .decode(),
+                        "activated_at": "2025-01-01T00:00:00Z",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
 @pytest.fixture
 def key_directory() -> Iterator[Path]:
     runtime_root = (Path.cwd() / ".runtime").resolve()
     runtime_root.mkdir(parents=True, exist_ok=True)
-    directory = runtime_root / f"p1-mysql-test-{secrets.token_hex(8)}"
+    directory = runtime_root / f"auth-mysql-test-{secrets.token_hex(8)}"
     directory.mkdir(exist_ok=False)
     try:
         yield directory
@@ -116,9 +158,9 @@ def _create_normal_user(
         db.add(
             Project(
                 project_id=project_id,
-                project_code=f"P1-{project_id}",
+                project_code=f"AUTH-GATE-{project_id}",
                 lifecycle_status="ACTIVE",
-                display_name="P1 Runtime Gate Project",
+                display_name="Authentication Runtime Gate Project",
                 row_version=0,
                 created_at=now,
                 updated_at=now,
@@ -137,7 +179,7 @@ def _create_normal_user(
                     username=username,
                     role_binding_id=None,
                     lifecycle_status="ACTIVE",
-                    display_name="P1 Runtime Gate User",
+                    display_name="Authentication Runtime Gate User",
                     row_version=0,
                     created_at=now,
                     updated_at=now,
@@ -190,7 +232,7 @@ def _create_normal_user(
                     user_id=user_id,
                     role_id=role_ids[selected],
                     lifecycle_status="ACTIVE",
-                    display_name="P1 Runtime Gate Member",
+                    display_name="Authentication Runtime Gate Member",
                     row_version=0,
                     created_at=now,
                     updated_at=now,
@@ -233,15 +275,29 @@ def _create_normal_user(
     return username, password, allowed, denied, project_id
 
 
-def test_p1_auth_rbac_real_mysql_runtime_gate(key_directory: Path) -> None:
-    key_ring = generate_development_key_ring(key_directory, kid="p1-mysql-rs256-v1")
+def test_p1_auth_rbac_real_mysql_runtime_gate(
+    key_directory: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # 固定限流窗口, 避免长链路Gate恰好跨越五分钟边界后把合法计数重置误判为失败.
+    monkeypatch.setattr(
+        "platform_api.rate_limit.utc_now",
+        lambda: datetime(2026, 8, 11, 3, 22),
+    )
+    key_ring = generate_development_key_ring(key_directory, kid="auth-mysql-rs256-v1")
     settings = ApiSettings(
         environment="test",
         database_url=_database_url(),
         jwt_key_ring_file=key_ring.manifest_file,
+        auth_hmac_master_key_file=_hmac_ring_file(key_directory),
     )
     app = create_app(settings)
     factory: sessionmaker[Session] = app.state.session_factory
+    with factory() as db:
+        legacy_record = db.get(IdempotencyRecord, "AUTH_GATE_LEGACY_V1")
+        assert legacy_record is not None
+        assert legacy_record.contract_version == 1
+        assert legacy_record.principal_id is None
+        assert legacy_record.completed_at is None
     passwords = PasswordService()
     initial_password = _password("Initial")
     changed_password = _password("Changed")
@@ -327,9 +383,9 @@ def test_p1_auth_rbac_real_mysql_runtime_gate(key_directory: Path) -> None:
     assert second.status == "ALREADY_INITIALIZED"
 
     with factory() as db:
-        assert db.scalar(select(func.count()).select_from(PermissionCode)) == 50
-        assert db.scalar(select(func.count()).select_from(Role)) == 12
-        assert db.scalar(select(func.count()).select_from(RolePermission)) == 600
+        assert db.scalar(select(func.count()).select_from(PermissionCode)) == CURRENT_FACTS["rbac"]["permission_count"]
+        assert db.scalar(select(func.count()).select_from(Role)) == CURRENT_FACTS["rbac"]["role_count"]
+        assert db.scalar(select(func.count()).select_from(RolePermission)) == CURRENT_FACTS["rbac"]["mapping_count"]
         assert db.scalar(select(func.count()).select_from(Admin)) == 1
         assert (
             db.scalar(
@@ -347,6 +403,18 @@ def test_p1_auth_rbac_real_mysql_runtime_gate(key_directory: Path) -> None:
         assert credential is not None
         assert credential.password_hash.startswith("$argon2id$v=19$m=65536,t=3,p=1$")
         assert credential.force_password_change is True
+        admin_user = db.get(PlatformUser, credential.user_id)
+        assert admin_user is not None
+        assert admin_user.role_binding_id is None
+        assert db.scalar(select(func.count()).select_from(RoleBinding)) == 0
+        assert (
+            db.scalar(
+                select(func.count())
+                .select_from(UserRoleBinding)
+                .where(UserRoleBinding.user_id == credential.user_id)
+            )
+            == 1
+        )
         role_assigned_audits = list(
             db.scalars(select(AuthSecurityAudit).where(AuthSecurityAudit.action == "ROLE_ASSIGNED"))
         )
@@ -358,13 +426,11 @@ def test_p1_auth_rbac_real_mysql_runtime_gate(key_directory: Path) -> None:
         bootstrap_events = list(
             db.scalars(
                 select(OutboxEvent).where(
-                    OutboxEvent.event_type.in_(
-                        ["user.active", "admin.active", "role_binding.active"]
-                    )
+                    OutboxEvent.event_type.in_(["user.active", "admin.active"])
                 )
             )
         )
-        assert len(bootstrap_events) == 3
+        assert len(bootstrap_events) == 2
         bootstrap_correlations = {
             event.payload_json["correlation_id"] for event in bootstrap_events
         }
@@ -375,6 +441,59 @@ def test_p1_auth_rbac_real_mysql_runtime_gate(key_directory: Path) -> None:
 
     auth = app.state.auth_service
     assert isinstance(auth, AuthenticationService)
+    rate_limits = app.state.auth_rate_limit_service
+    for _ in range(60):
+        rate_limits.consume("login_platform_user", "203.0.113.60", _audit_context("login-boundary"))
+    with pytest.raises(PlatformError) as login_limited:
+        rate_limits.consume("login_platform_user", "203.0.113.60", _audit_context("login-boundary"))
+    assert login_limited.value.code == "AUTH_SOURCE_RATE_LIMITED"
+    assert 1 <= int(login_limited.value.headers["Retry-After"]) <= 300
+
+    for _ in range(300):
+        rate_limits.consume(
+            "refresh_platform_session", "203.0.113.61", _audit_context("refresh-boundary")
+        )
+    with pytest.raises(PlatformError) as refresh_limited:
+        rate_limits.consume(
+            "refresh_platform_session", "203.0.113.61", _audit_context("refresh-boundary")
+        )
+    assert refresh_limited.value.code == "AUTH_SOURCE_RATE_LIMITED"
+    assert 1 <= int(refresh_limited.value.headers["Retry-After"]) <= 300
+
+    def concurrent_consume(_: int) -> str:
+        try:
+            rate_limits.consume(
+                "login_platform_user",
+                "203.0.113.62",
+                _audit_context("login-concurrency"),
+            )
+        except PlatformError as error:
+            return error.code
+        return "ALLOWED"
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        concurrency_results = list(executor.map(concurrent_consume, range(61)))
+    assert concurrency_results.count("ALLOWED") == 60
+    assert concurrency_results.count("AUTH_SOURCE_RATE_LIMITED") == 1
+
+    with factory.begin() as db:
+        db.execute(
+            text(
+                "CREATE TRIGGER trg_test_rate_limit_no_insert "
+                "BEFORE INSERT ON atp_auth_source_rate_limit FOR EACH ROW "
+                "SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'test rate state failure'"
+            )
+        )
+    try:
+        with pytest.raises(PlatformError) as unavailable:
+            rate_limits.consume(
+                "login_platform_user", "203.0.113.63", _audit_context("rate-unavailable")
+            )
+        assert unavailable.value.code == "AUTH_RATE_LIMIT_STATE_UNAVAILABLE"
+        assert unavailable.value.status == 503
+    finally:
+        with factory.begin() as db:
+            db.execute(text("DROP TRIGGER trg_test_rate_limit_no_insert"))
     normal_username, normal_password, allowed, denied, project_id = _create_normal_user(
         factory, passwords
     )
@@ -393,6 +512,7 @@ def test_p1_auth_rbac_real_mysql_runtime_gate(key_directory: Path) -> None:
                 normal_username,
                 normal_password,
                 AuditContext(atomicity_correlation, "atomicity-source"),
+                "192.0.2.10",
             )
     finally:
         with factory.begin() as db:
@@ -422,7 +542,9 @@ def test_p1_auth_rbac_real_mysql_runtime_gate(key_directory: Path) -> None:
             == 0
         )
 
-    normal = auth.login(normal_username, normal_password, _audit_context("mysql-gate"))
+    normal = auth.login(
+        normal_username, normal_password, _audit_context("mysql-gate"), "192.0.2.11"
+    )
     assert denied not in normal.current_user.permissions
     authorization_context = AuthorizationContext(
         project_id=project_id,
@@ -555,6 +677,7 @@ def test_p1_auth_rbac_real_mysql_runtime_gate(key_directory: Path) -> None:
             normal_username,
             normal_password,
             _audit_context("mysql-gate-session-limit"),
+            "192.0.2.12",
         )
     with factory() as db:
         assert normal_credential is not None
@@ -583,12 +706,14 @@ def test_p1_auth_rbac_real_mysql_runtime_gate(key_directory: Path) -> None:
             auth.refresh,
             newest_normal.refresh_token,
             _audit_context("mysql-gate-concurrent-refresh"),
+            "192.0.2.13",
         )
         login_future = pool.submit(
             auth.login,
             normal_username,
             normal_password,
             _audit_context("mysql-gate-concurrent-login"),
+            "192.0.2.14",
         )
         newest_normal = refresh_future.result(timeout=20)
         assert login_future.result(timeout=20).current_user.username == normal_username
@@ -654,7 +779,7 @@ def test_p1_auth_rbac_real_mysql_runtime_gate(key_directory: Path) -> None:
         login_data = login.json()["data"]
         assert login_data["expires_in"] == 900
         assert login_data["current_user"]["force_password_change"] is True
-        assert len(login_data["current_user"]["permissions"]) == 50
+        assert len(login_data["current_user"]["permissions"]) == CURRENT_FACTS["rbac"]["permission_count"]
         cookie_header = login.headers["set-cookie"].lower()
         assert "httponly" in cookie_header
         assert "samesite=strict" in cookie_header
@@ -672,17 +797,39 @@ def test_p1_auth_rbac_real_mysql_runtime_gate(key_directory: Path) -> None:
         assert refresh_before_change.status_code == 403
         assert refresh_before_change.json()["code"] == "AUTH_PASSWORD_CHANGE_REQUIRED"
 
+        change_password_key = new_ulid()
         changed = client.post(
             "/api/v1/auth/change-password",
             headers={
                 "Authorization": f"Bearer {access_before_change}",
-                "Idempotency-Key": new_ulid(),
+                "Idempotency-Key": change_password_key,
             },
             json={"current_password": initial_password, "new_password": changed_password},
         )
-        assert changed.status_code == 200
-        changed_data = changed.json()["data"]
-        assert changed_data["current_user"]["force_password_change"] is False
+        assert changed.status_code == 204
+        assert changed.content == b""
+        assert client.cookies.get("atp_refresh") is None
+        changed_replay = client.post(
+            "/api/v1/auth/change-password",
+            headers={
+                "Authorization": f"Bearer {access_before_change}",
+                "Idempotency-Key": change_password_key,
+            },
+            json={"current_password": initial_password, "new_password": changed_password},
+        )
+        assert changed_replay.status_code == 204
+        changed_conflict = client.post(
+            "/api/v1/auth/change-password",
+            headers={
+                "Authorization": f"Bearer {access_before_change}",
+                "Idempotency-Key": change_password_key,
+            },
+            json={"current_password": initial_password, "new_password": _password("Different")},
+        )
+        assert changed_conflict.status_code == 409
+        assert (
+            changed_conflict.json()["code"] == "AUTH_IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_REQUEST"
+        )
         assert (
             client.get(
                 "/api/v1/auth/me",
@@ -691,6 +838,12 @@ def test_p1_auth_rbac_real_mysql_runtime_gate(key_directory: Path) -> None:
             == 401
         )
 
+        reauthenticated = client.post(
+            "/api/v1/auth/login", json={"username": "admin", "password": changed_password}
+        )
+        assert reauthenticated.status_code == 200
+        reauthenticated_data = reauthenticated.json()["data"]
+        assert reauthenticated_data["current_user"]["force_password_change"] is False
         rotated_raw = client.cookies.get("atp_refresh")
         assert rotated_raw is not None
         refreshed = client.post(
@@ -701,16 +854,172 @@ def test_p1_auth_rbac_real_mysql_runtime_gate(key_directory: Path) -> None:
         assert replacement_raw is not None
         assert replacement_raw != rotated_raw
         with pytest.raises(PlatformError) as replay:
-            auth.refresh(rotated_raw, _audit_context("mysql-gate-replay"))
+            auth.refresh(rotated_raw, _audit_context("mysql-gate-replay"), "192.0.2.15")
         assert getattr(replay.value, "code", None) == "AUTH_SESSION_REVOKED"
         with pytest.raises(PlatformError):
-            auth.refresh(replacement_raw, _audit_context("mysql-gate-compromised"))
+            auth.refresh(
+                replacement_raw,
+                _audit_context("mysql-gate-compromised"),
+                "192.0.2.16",
+            )
 
         fresh_login = client.post(
             "/api/v1/auth/login", json={"username": "admin", "password": changed_password}
         )
         assert fresh_login.status_code == 200
         fresh_access = fresh_login.json()["data"]["access_token"]
+        with factory() as db:
+            initial_role_id = db.scalar(
+                select(Role.role_id).where(Role.role_code == "ROLE-PLATFORM-ADMIN")
+            )
+            additional_role_id = db.scalar(
+                select(Role.role_id).where(Role.role_code == "ROLE-RUNNER-ADMIN")
+            )
+            admin_user = db.scalar(select(PlatformUser).where(PlatformUser.username == "admin"))
+            ordinary_outbox_before = db.scalar(
+                select(func.count())
+                .select_from(OutboxEvent)
+                .where(OutboxEvent.event_type.in_(["user.active", "role_binding.active"]))
+            )
+        assert initial_role_id is not None
+        assert additional_role_id is not None
+        assert admin_user is not None
+        create_key = new_ulid()
+        created = client.post(
+            "/api/v1/user",
+            headers={
+                "Authorization": f"Bearer {fresh_access}",
+                "Idempotency-Key": create_key,
+            },
+            json={
+                "username": f"managed-{new_ulid().lower()}",
+                "display_name": "Managed User",
+                "role_bindings": [{"role_id": initial_role_id}],
+            },
+        )
+        assert created.status_code == 201
+        created_data = created.json()["data"]
+        managed_user_id = created_data["user"]["user_id"]
+        assert created_data["delivery_status"] == "ISSUED"
+        assert created_data["temporary_password"]
+        create_replay = client.post(
+            "/api/v1/user",
+            headers={
+                "Authorization": f"Bearer {fresh_access}",
+                "Idempotency-Key": create_key,
+            },
+            json={
+                "username": created_data["user"]["username"],
+                "display_name": "Managed User",
+                "role_bindings": [{"role_id": initial_role_id}],
+            },
+        )
+        assert create_replay.status_code == 200
+        assert create_replay.json()["data"]["delivery_status"] == "ALREADY_DELIVERED"
+        assert "temporary_password" not in create_replay.json()["data"]
+
+        reset_key = new_ulid()
+        reset = client.post(
+            f"/api/v1/user/{managed_user_id}/credential-reset",
+            headers={
+                "Authorization": f"Bearer {fresh_access}",
+                "Idempotency-Key": reset_key,
+            },
+            json={"expected_version": 0},
+        )
+        assert reset.status_code == 200
+        reset_password = reset.json()["data"]["temporary_password"]
+        reset_replay = client.post(
+            f"/api/v1/user/{managed_user_id}/credential-reset",
+            headers={
+                "Authorization": f"Bearer {fresh_access}",
+                "Idempotency-Key": reset_key,
+            },
+            json={"expected_version": 0},
+        )
+        assert reset_replay.status_code == 200
+        assert "temporary_password" not in reset_replay.json()["data"]
+        managed_login = client.post(
+            "/api/v1/auth/login",
+            json={"username": created_data["user"]["username"], "password": reset_password},
+        )
+        assert managed_login.status_code == 200
+
+        binding_key = new_ulid()
+        binding_created = client.post(
+            "/api/v1/user-role-binding",
+            headers={
+                "Authorization": f"Bearer {fresh_access}",
+                "Idempotency-Key": binding_key,
+            },
+            json={
+                "user_id": managed_user_id,
+                "role_id": additional_role_id,
+                "expected_user_version": 0,
+            },
+        )
+        assert binding_created.status_code == 201
+        binding_data = binding_created.json()["data"]
+        revoked = client.post(
+            f"/api/v1/user-role-binding/{binding_data['binding_id']}/revoke",
+            headers={
+                "Authorization": f"Bearer {fresh_access}",
+                "Idempotency-Key": new_ulid(),
+            },
+            json={"expected_version": 0},
+        )
+        assert revoked.status_code == 200
+        assert revoked.json()["data"]["row_version"] == 1
+        disabled = client.post(
+            f"/api/v1/user/{managed_user_id}/disable",
+            headers={
+                "Authorization": f"Bearer {fresh_access}",
+                "Idempotency-Key": new_ulid(),
+            },
+            json={"expected_version": 1},
+        )
+        assert disabled.status_code == 200
+        enabled = client.post(
+            f"/api/v1/user/{managed_user_id}/enable",
+            headers={
+                "Authorization": f"Bearer {fresh_access}",
+                "Idempotency-Key": new_ulid(),
+            },
+            json={"expected_version": 2},
+        )
+        assert enabled.status_code == 200
+        protected_admin = client.post(
+            f"/api/v1/user/{admin_user.user_id}/disable",
+            headers={
+                "Authorization": f"Bearer {fresh_access}",
+                "Idempotency-Key": new_ulid(),
+            },
+            json={"expected_version": admin_user.row_version},
+        )
+        assert protected_admin.status_code == 409
+        assert protected_admin.json()["code"] == "AUTH_ADMIN_IMMUTABLE"
+        with factory() as db:
+            ordinary_outbox_after = db.scalar(
+                select(func.count())
+                .select_from(OutboxEvent)
+                .where(OutboxEvent.event_type.in_(["user.active", "role_binding.active"]))
+            )
+            managed_actions = set(
+                db.scalars(
+                    select(AuthSecurityAudit.action).where(
+                        AuthSecurityAudit.target_user_id == managed_user_id
+                    )
+                )
+            )
+        assert ordinary_outbox_after == ordinary_outbox_before
+        assert {"USER_CREATED", "CREDENTIAL_RESET", "ROLE_ASSIGNED", "ROLE_REVOKED"}.issubset(
+            managed_actions
+        )
+        relogin = client.post(
+            "/api/v1/auth/login", json={"username": "admin", "password": changed_password}
+        )
+        assert relogin.status_code == 200
+        fresh_access = relogin.json()["data"]["access_token"]
         super_context = AuthorizationContext(
             project_id=project_id,
             scope_type="AUTHORIZED_PROJECT_ACTIVE",
@@ -775,7 +1084,7 @@ def test_p1_auth_rbac_real_mysql_runtime_gate(key_directory: Path) -> None:
             db.scalars(
                 select(AuthRefreshSession).where(
                     AuthRefreshSession.family_id
-                    == auth._jwt.decode(changed_data["access_token"]).session_id
+                    == auth._jwt.decode(reauthenticated_data["access_token"]).session_id
                 )
             )
         )
@@ -795,6 +1104,7 @@ def test_p1_auth_rbac_real_mysql_runtime_gate(key_directory: Path) -> None:
             "USER_DISABLED_OR_LOCKED",
             "PERMISSION_DENIED",
         }.issubset(actions)
+        assert sum(row.action == "PASSWORD_CHANGED" for row in audits) == 1
         assert all(row.operation_id and row.result_code for row in audits)
         assert all(1 <= len(row.correlation_id) <= 128 for row in audits)
         assert all(len(row.source_context_hash) == 32 for row in audits)

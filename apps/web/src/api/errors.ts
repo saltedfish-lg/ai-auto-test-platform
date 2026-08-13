@@ -1,6 +1,6 @@
 import type { AuthenticationErrorCode, ProblemDetails } from "../generated/types";
 
-const authenticationErrorMessages: Record<AuthenticationErrorCode, string> = {
+const authenticationErrorMessages: Partial<Record<AuthenticationErrorCode, string>> = {
   AUTH_REQUIRED: "登录状态已失效，请重新登录。",
   AUTH_INVALID_CREDENTIALS: "用户名或密码不正确。",
   AUTH_TOKEN_INVALID: "登录凭证无效，请重新登录。",
@@ -43,9 +43,9 @@ export function isProblemDetails(value: unknown): value is ProblemDetails {
 export function getAuthenticationErrorMessage(error: unknown, fallback: string): string {
   if (!(error instanceof ApiRequestError)) return fallback;
   const code = error.problem?.code as AuthenticationErrorCode | undefined;
-  return code && code in authenticationErrorMessages
-    ? authenticationErrorMessages[code]
-    : (error.problem?.detail ?? fallback);
+  return (
+    (code ? authenticationErrorMessages[code] : undefined) ?? error.problem?.detail ?? fallback
+  );
 }
 
 export function getCorrelationId(error: unknown): string | undefined {

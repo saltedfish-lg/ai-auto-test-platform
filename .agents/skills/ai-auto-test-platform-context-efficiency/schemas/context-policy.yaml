@@ -4,59 +4,59 @@ correctness_over_token_budget: true
 authority_model:
   mode: SINGLE_LIVING_AUTHORITY
   root: docs/authority
-  versioned_baseline_copies: forbidden
+  versioned_authority_copies: forbidden
   manifest_or_release_snapshot_required: false
   history_owner: USER_MANAGED_GIT_OUTSIDE_CODEX
   codex_git_access: DISABLED
 search_scope:
   required_roots:
-    - AGENTS.md
-    - package.json
-    - package-lock.json
-    - pyproject.toml
-    - requirements-dev.lock
-    - .env.example
-    - .editorconfig
-    - .gitattributes
-    - .gitignore
-    - apps
-    - services
-    - workers
-    - runner
-    - packages
-    - tests
-    - tools
-    - docs/authority
+  - AGENTS.md
+  - package.json
+  - package-lock.json
+  - pyproject.toml
+  - requirements-dev.lock
+  - .env.example
+  - .editorconfig
+  - .gitattributes
+  - .gitignore
+  - apps
+  - services
+  - workers
+  - runner
+  - packages
+  - tests
+  - tools
+  - docs/authority
   optional_roots:
-    - db
-    - .github
+  - db
+  - .github
   governance_roots:
-    - .agents
-    - .codex
+  - .agents
+  - .codex
   governance_scope_mode: conditional_expansion
   authority_resolution: fixed_single_living_root
   large_file_strategy: stream_line_by_line_never_silent_skip
   fail_closed_on:
-    - missing_required_root
-    - missing_living_authority
-    - scan_error
-    - snapshot_version_mismatch
-    - snapshot_root_mismatch
-    - workspace_identity_mismatch
+  - missing_required_root
+  - missing_living_authority
+  - scan_error
+  - snapshot_version_mismatch
+  - snapshot_root_mismatch
+  - workspace_identity_mismatch
   exclude_runtime_noise:
-    - .git
-    - node_modules
-    - dist
-    - build
-    - .venv
-    - venv
-    - __pycache__
-    - .pytest_cache
-    - .mypy_cache
-    - .ruff_cache
-    - test-results
-    - .runtime
-    - .tmp
+  - .git
+  - node_modules
+  - dist
+  - build
+  - .venv
+  - venv
+  - __pycache__
+  - .pytest_cache
+  - .mypy_cache
+  - .ruff_cache
+  - test-results
+  - .runtime
+  - .tmp
 impact_scan_lifecycle:
   strategy: SINGLE_FULL_IMPACT_SCAN_SHARED_PACK_INCREMENTAL_CLOSURE
   full_impact_scan_max_successful_runs: 1
@@ -70,54 +70,53 @@ impact_scan_lifecycle:
   child_agent_pack_policy: MUST_CONSUME_TASK_CONTEXT_PACK
   missing_pack_for_formal_cross_module_or_high_risk: TASK_CONTEXT_PACK_REQUIRED
   stale_pack_refresh:
-    - DELTA_REFRESH
-    - TARGETED_REVERSE_LOOKUP
+  - DELTA_REFRESH
+  - TARGETED_REVERSE_LOOKUP
   impact_expansion_refresh:
-    - DELTA_REFRESH
-    - TARGETED_REVERSE_LOOKUP
+  - DELTA_REFRESH
+  - TARGETED_REVERSE_LOOKUP
   targeted_lookup_requires_seed: true
   targeted_lookup_must_not_invoke_impact_scan: true
 task_resume_validation:
   lifecycle_owner: feature_orchestrator
   context_state_provider: context_efficiency
-  checkpoint_schema_version: 2
   checkpoint_artifact_outside_workspace_required: true
   checkpoint_write_strategy: atomic_temp_fsync_replace
   checkpoint_checksum: sha256
   stage_progression:
-    - TASK_INITIALIZED
-    - CONTEXT_READY
-    - DECISIONS_READY
-    - IMPLEMENTATION_READY
-    - IMPLEMENTATION_COMPLETE
-    - VERIFICATION_COMPLETE
-    - CLOSURE_COMPLETE
+  - TASK_INITIALIZED
+  - CONTEXT_READY
+  - DECISIONS_READY
+  - IMPLEMENTATION_READY
+  - IMPLEMENTATION_COMPLETE
+  - VERIFICATION_COMPLETE
+  - CLOSURE_COMPLETE
   resume_statuses:
-    - RESUME_EXACT
-    - RESUME_WITH_DELTA_REFRESH
-    - RESUME_REJECTED
-    - CHECKPOINT_CORRUPTED
+  - RESUME_EXACT
+  - RESUME_WITH_DELTA_REFRESH
+  - RESUME_REJECTED
+  - CHECKPOINT_CORRUPTED
   resume_exact_action: continue_next_stage_without_replaying_completed_valid_stages
   resume_with_delta_refresh:
-    - DELTA_REFRESH
-    - TARGETED_REVERSE_LOOKUP
-    - MINIMAL_STAGE_INVALIDATION
+  - DELTA_REFRESH
+  - TARGETED_REVERSE_LOOKUP
+  - MINIMAL_STAGE_INVALIDATION
   full_impact_scan_on_resume: forbidden
   reject_on:
-    - task_id_mismatch
-    - workspace_root_mismatch
-    - workspace_identity_mismatch
-    - authority_root_mismatch
-    - checkpoint_schema_or_checksum_failure
+  - task_id_mismatch
+  - workspace_root_mismatch
+  - workspace_identity_mismatch
+  - authority_root_mismatch
+  - checkpoint_schema_or_checksum_failure
   authority_digest_change: RESUME_WITH_DELTA_REFRESH
   checkpoint_chain_of_thought: forbidden
   per_agent_checkpoint_state: forbidden
+  checkpoint_schema_source: ai-auto-test-platform-feature-orchestrator/scripts/task_checkpoint.py::SCHEMA_VERSION
 context_pack:
-  local_fingerprint: optional
+  local_fingerprint: required_for_formal_code_write
   cross_module_fingerprint: required
   high_risk_fingerprint: required
   task_start_workspace_snapshot:
-    snapshot_schema_version: 3
     formal_change_default: required
     helper: scripts/workspace_snapshot.py
     mode: FILESYSTEM_ONLY
@@ -125,23 +124,35 @@ context_pack:
     capture_before_first_workspace_write: true
     snapshot_artifacts_outside_workspace_required: true
     fingerprint_controlled_files_by_sha256: true
+    fingerprint_business_source_symbols: true
+    changed_symbol_scope_provenance: FILESYSTEM_SNAPSHOT_V4
+    caller_supplied_formal_changed_symbols: forbidden
     fail_closed_on_identity_mismatch: true
     identity_fields:
-      - resolved_workspace_root
-      - workspace_root_identity
-      - filesystem_identity_digest
+    - resolved_workspace_root
+    - workspace_root_identity
+    - filesystem_identity_digest
+    snapshot_schema_source: ai-auto-test-platform-context-efficiency/scripts/workspace_snapshot.py::SNAPSHOT_VERSION
   delta_refresh_on:
-    - authority_change
-    - api_contract_change
-    - database_change
-    - permission_or_security_change
-    - state_or_event_change
-    - runner_worker_concurrency_change
-    - newly_discovered_consumer
+  - authority_change
+  - api_contract_change
+  - database_change
+  - permission_or_security_change
+  - state_or_event_change
+  - runner_worker_concurrency_change
+  - newly_discovered_consumer
+  workspace_snapshot_version_source: ai-auto-test-platform-context-efficiency/scripts/workspace_snapshot.py::SNAPSHOT_VERSION
 modes:
   LOCAL:
     subagent_default: false
     post_change_global_reverse_search: true
+    formal_code_write_evidence_anchor: LIGHTWEIGHT_CP0_REQUIRED
+    full_stage_checkpoint_chain_required: false
+    comment_quality_gate_required: true
+    comment_quality_gate_attestation_required_for_terminal: true
+    authority_transaction_allowed: false
+    promote_to_full_before_authority_or_stage_resume: required
+    lightweight_terminal_command: local-complete
   CROSS_MODULE:
     impact_closure_required: true
     subagent: optional_when_context_unclear
@@ -150,8 +161,8 @@ modes:
     risk_escalation_required: true
     post_change_closure_required: true
 completion_states:
-  - IMPACT_CLOSURE_PASS
-  - IMPACT_EXPANSION
-  - BLOCKED_BY_PRODUCT_DECISION
-  - BLOCKED_BY_ENVIRONMENT
-  - BLOCKED_BY_INCOMPLETE_SCOPE
+- IMPACT_CLOSURE_PASS
+- IMPACT_EXPANSION
+- BLOCKED_BY_PRODUCT_DECISION
+- BLOCKED_BY_ENVIRONMENT
+- BLOCKED_BY_INCOMPLETE_SCOPE

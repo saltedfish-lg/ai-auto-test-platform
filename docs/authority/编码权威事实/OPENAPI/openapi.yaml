@@ -1,7 +1,8 @@
 openapi: 3.1.2
 info:
   title: AI自动化测试执行平台 API - 当前P1认证契约
-  version: 1.4.2-auth-contract-completion
+  version: 1.5.0-p1-living-authority-closure
+  x-artifact-id: OPENAPI-1.5.0
   x-authority-model: SINGLE_LIVING_AUTHORITY
 servers:
 - url: /
@@ -10,43 +11,79 @@ paths:
     post:
       operationId: login_platform_user
       summary: 平台用户登录
-      tags: [身份认证]
+      tags:
+      - 身份认证
       security: []
       parameters:
       - name: X-Correlation-Id
         in: header
         required: false
-        schema: {type: string, maxLength: 128}
+        schema:
+          type: string
+          maxLength: 128
       requestBody:
         required: true
         content:
           application/json:
-            schema: {$ref: '#/components/schemas/LoginRequest'}
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
       responses:
         '200':
           description: 登录成功；Refresh Token仅通过HttpOnly Cookie返回
           headers:
             Set-Cookie:
               description: atp_refresh HttpOnly Refresh Cookie；不得由JavaScript读取
-              schema: {type: string}
+              schema:
+                type: string
           content:
             application/json:
-              schema: {$ref: '#/components/schemas/AuthenticationResponse'}
+              schema:
+                $ref: '#/components/schemas/AuthenticationResponse'
         '400':
           description: 请求无效
-          content: {application/problem+json: {schema: {$ref: '#/components/schemas/AuthenticationProblemDetails'}}}
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationProblemDetails'
         '401':
           description: 用户不存在或密码错误
-          content: {application/problem+json: {schema: {$ref: '#/components/schemas/AuthenticationProblemDetails'}}}
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationProblemDetails'
         '403':
           description: 用户状态、临时锁或强制改密规则禁止
-          content: {application/problem+json: {schema: {$ref: '#/components/schemas/AuthenticationProblemDetails'}}}
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationProblemDetails'
         '429':
           description: 登录速率受限
-          content: {application/problem+json: {schema: {$ref: '#/components/schemas/AuthenticationProblemDetails'}}}
+          headers:
+            Retry-After:
+              required: true
+              schema:
+                type: integer
+                minimum: 1
+                maximum: 300
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationProblemDetails'
         '500':
           description: 内部错误
-          content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '503':
+          description: MySQL共享来源限流状态不可用；认证失败关闭
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationProblemDetails'
+        '422':
+          $ref: '#/components/responses/RequestValidationFailed'
       x-idempotency: NOT_REQUIRED
       x-audit: LOGIN_SUCCEEDED_OR_LOGIN_FAILED
       x-correlation-id: PROPAGATE_OR_GENERATE
@@ -54,40 +91,73 @@ paths:
     post:
       operationId: refresh_platform_session
       summary: 轮换Refresh Session并签发新Access Token
-      tags: [身份认证]
+      tags:
+      - 身份认证
       security: []
       parameters:
       - name: X-Correlation-Id
         in: header
         required: false
-        schema: {type: string, maxLength: 128}
+        schema:
+          type: string
+          maxLength: 128
       requestBody:
         required: false
         content:
           application/json:
-            schema: {$ref: '#/components/schemas/AuthCookieActionRequest'}
+            schema:
+              $ref: '#/components/schemas/AuthCookieActionRequest'
       responses:
         '200':
           description: Refresh轮换成功；旧Token立即变为ROTATED
           headers:
             Set-Cookie:
               description: 轮换后的atp_refresh HttpOnly Cookie
-              schema: {type: string}
+              schema:
+                type: string
           content:
             application/json:
-              schema: {$ref: '#/components/schemas/AuthenticationResponse'}
+              schema:
+                $ref: '#/components/schemas/AuthenticationResponse'
         '401':
           description: Refresh Token缺失、无效、过期、撤销或重放
-          content: {application/problem+json: {schema: {$ref: '#/components/schemas/AuthenticationProblemDetails'}}}
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationProblemDetails'
         '403':
           description: 用户状态或强制改密规则禁止刷新
-          content: {application/problem+json: {schema: {$ref: '#/components/schemas/AuthenticationProblemDetails'}}}
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationProblemDetails'
         '429':
           description: 刷新速率受限
-          content: {application/problem+json: {schema: {$ref: '#/components/schemas/AuthenticationProblemDetails'}}}
+          headers:
+            Retry-After:
+              required: true
+              schema:
+                type: integer
+                minimum: 1
+                maximum: 300
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationProblemDetails'
         '500':
           description: 内部错误
-          content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '503':
+          description: MySQL共享来源限流状态不可用；认证失败关闭
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationProblemDetails'
+        '422':
+          $ref: '#/components/responses/RequestValidationFailed'
       x-idempotency: ROTATION_REPLAY_SAFE_NO_IDEMPOTENCY_KEY
       x-csrf: SAME_ORIGIN_REQUIRED
       x-audit: SUCCESS_AND_REPLAY_OR_FAILURE
@@ -95,28 +165,38 @@ paths:
     post:
       operationId: logout_platform_user
       summary: 撤销当前Refresh Session并清除Cookie
-      tags: [身份认证]
+      tags:
+      - 身份认证
       security: []
       parameters:
       - name: X-Correlation-Id
         in: header
         required: false
-        schema: {type: string, maxLength: 128}
+        schema:
+          type: string
+          maxLength: 128
       requestBody:
         required: false
         content:
           application/json:
-            schema: {$ref: '#/components/schemas/AuthCookieActionRequest'}
+            schema:
+              $ref: '#/components/schemas/AuthCookieActionRequest'
       responses:
         '204':
           description: 已撤销或本来不存在；登出幂等
           headers:
             Set-Cookie:
               description: 清除atp_refresh Cookie
-              schema: {type: string}
+              schema:
+                type: string
         '500':
           description: 内部错误
-          content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          $ref: '#/components/responses/RequestValidationFailed'
       x-idempotency: IDEMPOTENT_204
       x-csrf: SAME_ORIGIN_REQUIRED
       x-audit: WHEN_SESSION_RESOLVED
@@ -124,80 +204,109 @@ paths:
     get:
       operationId: get_current_user
       summary: 获取当前平台用户及实时权限
-      tags: [身份认证]
+      tags:
+      - 身份认证
       security:
       - BearerAuth: []
       parameters:
       - name: X-Correlation-Id
         in: header
         required: false
-        schema: {type: string, maxLength: 128}
+        schema:
+          type: string
+          maxLength: 128
       responses:
         '200':
           description: 当前身份、角色和实时Permission集合
           content:
             application/json:
-              schema: {$ref: '#/components/schemas/CurrentUserResponse'}
+              schema:
+                $ref: '#/components/schemas/CurrentUserResponse'
         '401':
           description: Access Token或当前Session无效
-          content: {application/problem+json: {schema: {$ref: '#/components/schemas/AuthenticationProblemDetails'}}}
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationProblemDetails'
         '403':
           description: 当前身份状态禁止
-          content: {application/problem+json: {schema: {$ref: '#/components/schemas/AuthenticationProblemDetails'}}}
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationProblemDetails'
         '500':
           description: 内部错误
-          content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          $ref: '#/components/responses/RequestValidationFailed'
       x-permission-code: null
       x-audit: DENIAL_ONLY
   /api/v1/auth/change-password:
     post:
       operationId: change_current_user_password
       summary: 当前用户修改密码并撤销旧Session
-      tags: [身份认证]
+      tags:
+      - 身份认证
       security:
       - BearerAuth: []
       parameters:
       - name: X-Correlation-Id
         in: header
         required: false
-        schema: {type: string, maxLength: 128}
+        schema:
+          type: string
+          maxLength: 128
       - name: Idempotency-Key
         in: header
         required: true
-        schema: {type: string, minLength: 1, maxLength: 191}
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 191
       requestBody:
         required: true
         content:
           application/json:
-            schema: {$ref: '#/components/schemas/ChangePasswordRequest'}
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
       responses:
-        '200':
-          description: 密码修改成功；旧Session全部撤销并创建当前新Session
-          headers:
-            Set-Cookie:
-              description: 新的atp_refresh HttpOnly Cookie
-              schema: {type: string}
-          content:
-            application/json:
-              schema: {$ref: '#/components/schemas/AuthenticationResponse'}
+        '204':
+          description: 密码修改成功或相同幂等键与相同指纹的终态重放；全部Refresh Session已撤销，不签发新Token
         '400':
           description: 当前密码错误或新密码不符合策略
-          content: {application/problem+json: {schema: {$ref: '#/components/schemas/AuthenticationProblemDetails'}}}
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationProblemDetails'
         '401':
           description: Access Token或Session无效
-          content: {application/problem+json: {schema: {$ref: '#/components/schemas/AuthenticationProblemDetails'}}}
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationProblemDetails'
         '403':
           description: 当前状态禁止改密
-          content: {application/problem+json: {schema: {$ref: '#/components/schemas/AuthenticationProblemDetails'}}}
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationProblemDetails'
         '409':
           description: 幂等键冲突或并发版本冲突
-          content: {application/problem+json: {schema: {$ref: '#/components/schemas/AuthenticationProblemDetails'}}}
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationProblemDetails'
         '422':
-          description: 字段校验失败
-          content: {application/problem+json: {schema: {$ref: '#/components/schemas/AuthenticationProblemDetails'}}}
+          $ref: '#/components/responses/RequestValidationFailed'
         '500':
           description: 内部错误
-          content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
       x-idempotency: IDEMPOTENCY_KEY_REQUIRED
       x-audit: PASSWORD_CHANGED
   /api/v1/user:
@@ -277,11 +386,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -305,7 +410,7 @@ paths:
       - BearerAuth: []
     post:
       operationId: create_user
-      summary: 创建用户
+      summary: 创建普通平台用户、初始角色绑定并一次性交付临时凭据
       tags:
       - 用户
       parameters:
@@ -321,7 +426,13 @@ paths:
           type: string
       responses:
         '201':
-          description: Success
+          description: 首次成功；temporary_password仅在本响应出现一次
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateUserResponse'
+        '200':
+          description: 相同幂等键与相同非秘密请求指纹的终态重放；delivery_status为ALREADY_DELIVERED且不返回temporary_password
           content:
             application/json:
               schema:
@@ -357,11 +468,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -387,6 +494,12 @@ paths:
             schema:
               $ref: '#/components/schemas/CreateUserRequest'
       x-permission-code: USER_CREATE
+      x-additional-permission-codes:
+      - ROLE_BIND
+      x-conditional-permission-codes:
+      - PROJECT_MEMBER_MANAGE
+      x-idempotency: IDEMPOTENCY_KEY_REQUIRED_FIRST_DELIVERY_ONLY
+      x-audit: USER_CREATED_AND_ROLE_ASSIGNED
       security:
       - BearerAuth: []
   /api/v1/user/{id}:
@@ -445,11 +558,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -531,11 +640,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -563,6 +668,366 @@ paths:
       x-permission-code: USER_CREATE
       security:
       - BearerAuth: []
+  /api/v1/user/{id}/credential-reset:
+    post:
+      operationId: reset_user_credential
+      summary: 重置普通平台用户凭据并一次性交付临时密码
+      tags:
+      - 用户
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 26
+          maxLength: 26
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 128
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 191
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetUserCredentialRequest'
+      responses:
+        '200':
+          description: 首次响应delivery_status为ISSUED且含temporary_password；相同请求重放为ALREADY_DELIVERED且不含temporary_password
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OneTimeCredentialDeliveryResponse'
+        '400':
+          description: 请求无效
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationProblemDetails'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationProblemDetails'
+        '403':
+          description: 权限不足或admin保护
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationProblemDetails'
+        '404':
+          description: 用户不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationProblemDetails'
+        '409':
+          description: 幂等键、并发版本或保护约束冲突
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationProblemDetails'
+        '422':
+          $ref: '#/components/responses/RequestValidationFailed'
+      x-permission-code: USER_CREATE
+      x-idempotency: IDEMPOTENCY_KEY_REQUIRED_FIRST_DELIVERY_ONLY
+      x-audit: CREDENTIAL_RESET_AND_SESSION_REVOKED
+  /api/v1/user/{id}/enable:
+    post:
+      operationId: enable_user
+      summary: 启用普通平台用户
+      tags:
+      - 用户
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 26
+          maxLength: 26
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 128
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 191
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserStateCommandRequest'
+      responses:
+        '200':
+          description: 用户已启用
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateUserResponse'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationProblemDetails'
+        '403':
+          description: 权限不足或admin保护
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationProblemDetails'
+        '404':
+          description: 用户不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationProblemDetails'
+        '409':
+          description: 并发版本或保护约束冲突
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationProblemDetails'
+        '422':
+          $ref: '#/components/responses/RequestValidationFailed'
+      x-permission-code: USER_CREATE
+      x-idempotency: IDEMPOTENCY_KEY_REQUIRED
+      x-audit: USER_ENABLED
+  /api/v1/user/{id}/disable:
+    post:
+      operationId: disable_user
+      summary: 禁用普通平台用户并撤销全部Refresh Session
+      tags:
+      - 用户
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 26
+          maxLength: 26
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 128
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 191
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserStateCommandRequest'
+      responses:
+        '200':
+          description: 用户已禁用且Refresh Session已撤销
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateUserResponse'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationProblemDetails'
+        '403':
+          description: 权限不足或admin保护
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationProblemDetails'
+        '404':
+          description: 用户不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationProblemDetails'
+        '409':
+          description: 并发版本或保护约束冲突
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationProblemDetails'
+        '422':
+          $ref: '#/components/responses/RequestValidationFailed'
+      x-permission-code: USER_CREATE
+      x-idempotency: IDEMPOTENCY_KEY_REQUIRED
+      x-audit: USER_DISABLED_OR_LOCKED_AND_SESSION_REVOKED
+  /api/v1/user-role-binding:
+    post:
+      operationId: create_user_role_binding
+      summary: 为普通平台用户创建角色绑定及可选数据范围授权
+      tags:
+      - 用户
+      - 角色
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 128
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 191
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRoleBindingRequest'
+      responses:
+        '201':
+          description: 角色绑定已创建
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserRoleBindingResponse'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationProblemDetails'
+        '403':
+          description: 权限或数据范围不足
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationProblemDetails'
+        '404':
+          description: 用户或角色不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationProblemDetails'
+        '409':
+          description: 幂等键、重复绑定或并发版本冲突
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationProblemDetails'
+        '422':
+          $ref: '#/components/responses/RequestValidationFailed'
+      x-permission-code: ROLE_BIND
+      x-conditional-permission-codes:
+      - PROJECT_MEMBER_MANAGE
+      x-idempotency: IDEMPOTENCY_KEY_REQUIRED
+      x-audit: ROLE_ASSIGNED
+  /api/v1/user-role-binding/{id}/revoke:
+    post:
+      operationId: revoke_user_role_binding
+      summary: 撤销普通平台用户角色绑定
+      tags:
+      - 用户
+      - 角色
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 26
+          maxLength: 26
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 128
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 191
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RevokeUserRoleBindingRequest'
+      responses:
+        '200':
+          description: 角色绑定已撤销
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserRoleBindingResponse'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationProblemDetails'
+        '403':
+          description: 权限、数据范围或admin保护约束禁止
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationProblemDetails'
+        '404':
+          description: 角色绑定不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationProblemDetails'
+        '409':
+          description: 并发版本或保护约束冲突
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationProblemDetails'
+        '422':
+          $ref: '#/components/responses/RequestValidationFailed'
+      x-permission-code: ROLE_BIND
+      x-conditional-permission-codes:
+      - PROJECT_MEMBER_MANAGE
+      x-idempotency: IDEMPOTENCY_KEY_REQUIRED
+      x-audit: ROLE_REVOKED
   /api/v1/role:
     get:
       operationId: list_role
@@ -640,11 +1105,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -720,11 +1181,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -808,11 +1265,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -894,11 +1347,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -1003,11 +1452,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -1083,11 +1528,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -1171,11 +1612,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -1257,11 +1694,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -1366,11 +1799,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -1446,11 +1875,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -1534,11 +1959,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -1620,11 +2041,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -1729,11 +2146,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -1809,11 +2222,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -1897,11 +2306,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -1983,11 +2388,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -2092,11 +2493,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -2172,11 +2569,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -2260,11 +2653,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -2346,11 +2735,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -2455,11 +2840,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -2535,11 +2916,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -2623,11 +3000,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -2709,11 +3082,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -2818,11 +3187,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -2902,11 +3267,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -2994,11 +3355,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -3084,11 +3441,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -3197,11 +3550,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -3277,11 +3626,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -3365,11 +3710,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -3451,11 +3792,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -3560,11 +3897,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -3640,11 +3973,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -3728,11 +4057,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -3814,11 +4139,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -3923,11 +4244,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -4003,11 +4320,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -4091,11 +4404,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -4177,11 +4486,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -4286,11 +4591,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -4366,11 +4667,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -4454,11 +4751,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -4540,11 +4833,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -4649,11 +4938,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -4729,11 +5014,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -4817,11 +5098,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -4903,11 +5180,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -5012,11 +5285,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -5092,11 +5361,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -5180,11 +5445,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -5266,11 +5527,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -5375,11 +5632,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -5455,11 +5708,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -5543,11 +5792,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -5629,11 +5874,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -5738,11 +5979,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -5818,11 +6055,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -5906,11 +6139,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -5992,11 +6221,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -6101,11 +6326,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -6181,11 +6402,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -6269,11 +6486,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -6355,11 +6568,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -6464,11 +6673,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -6544,11 +6749,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -6632,11 +6833,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -6718,11 +6915,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -6827,11 +7020,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -6907,11 +7096,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -6995,11 +7180,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -7081,11 +7262,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -7190,11 +7367,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -7270,11 +7443,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -7358,11 +7527,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -7444,11 +7609,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -7553,11 +7714,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -7633,11 +7790,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -7721,11 +7874,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -7807,11 +7956,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -7916,11 +8061,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -7996,11 +8137,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -8084,11 +8221,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -8170,11 +8303,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -8279,11 +8408,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -8359,11 +8484,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -8447,11 +8568,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -8533,11 +8650,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -8642,11 +8755,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -8722,11 +8831,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -8810,11 +8915,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -8896,11 +8997,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -9005,11 +9102,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -9085,11 +9178,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -9173,11 +9262,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -9259,11 +9344,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -9368,11 +9449,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -9448,11 +9525,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -9536,11 +9609,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -9622,11 +9691,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -9731,11 +9796,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -9811,11 +9872,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -9899,11 +9956,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -9985,11 +10038,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -10094,11 +10143,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -10174,11 +10219,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -10262,11 +10303,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -10348,11 +10385,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -10457,11 +10490,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -10537,11 +10566,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -10625,11 +10650,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -10711,11 +10732,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -10820,11 +10837,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -10900,11 +10913,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -10988,11 +10997,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -11074,11 +11079,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -11183,11 +11184,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -11263,11 +11260,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -11351,11 +11344,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -11437,11 +11426,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -11546,11 +11531,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -11626,11 +11607,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -11714,11 +11691,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -11800,11 +11773,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -11909,11 +11878,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -11989,11 +11954,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -12077,11 +12038,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -12163,11 +12120,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -12272,11 +12225,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -12352,11 +12301,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -12440,11 +12385,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -12526,11 +12467,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -12635,11 +12572,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -12715,11 +12648,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -12803,11 +12732,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -12889,11 +12814,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -12998,11 +12919,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -13078,11 +12995,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -13166,11 +13079,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -13252,11 +13161,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -13361,11 +13266,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -13441,11 +13342,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -13529,11 +13426,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -13615,11 +13508,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -13724,11 +13613,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -13804,11 +13689,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -13892,11 +13773,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -13978,11 +13855,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -14087,11 +13960,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -14167,11 +14036,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -14255,11 +14120,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -14341,11 +14202,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -14450,11 +14307,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -14530,11 +14383,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -14618,11 +14467,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -14704,11 +14549,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -14813,11 +14654,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -14893,11 +14730,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -14981,11 +14814,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -15067,11 +14896,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -15176,11 +15001,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -15256,11 +15077,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -15344,11 +15161,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -15430,11 +15243,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -15539,11 +15348,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -15619,11 +15424,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -15707,11 +15508,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -15793,11 +15590,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -15902,11 +15695,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -15982,11 +15771,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -16070,11 +15855,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -16156,11 +15937,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -16265,11 +16042,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -16345,11 +16118,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -16433,11 +16202,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -16519,11 +16284,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -16628,11 +16389,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -16708,11 +16465,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -16796,11 +16549,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -16882,11 +16631,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -16991,11 +16736,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -17071,11 +16812,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -17159,11 +16896,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -17245,11 +16978,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -17354,11 +17083,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -17434,11 +17159,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -17522,11 +17243,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -17608,11 +17325,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -17717,11 +17430,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -17797,11 +17506,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -17885,11 +17590,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -17971,11 +17672,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -18080,11 +17777,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -18160,11 +17853,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -18248,11 +17937,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -18334,11 +18019,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -18443,11 +18124,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -18526,11 +18203,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -18617,11 +18290,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -18706,11 +18375,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -18741,369 +18406,6 @@ paths:
       x-resource-identity: technical_alert_endpoint_id
       x-business-unique-key:
       - endpoint_code
-  /api/v1/platform-design-baseline-release:
-    get:
-      operationId: list_platform_design_baseline_release
-      summary: 查询平台设计基线发布
-      tags:
-      - 平台设计基线发布
-      parameters:
-      - name: X-Correlation-Id
-        in: header
-        required: false
-        schema:
-          type: string
-      - name: page
-        in: query
-        required: false
-        schema:
-          type: integer
-          minimum: 1
-          default: 1
-      - name: page_size
-        in: query
-        required: false
-        schema:
-          type: integer
-          minimum: 1
-          maximum: 200
-          default: 50
-      - name: sort
-        in: query
-        required: false
-        schema:
-          type: string
-          maxLength: 128
-      - name: filter
-        in: query
-        required: false
-        schema:
-          type: string
-          maxLength: 1000
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ListPlatformDesignBaselineReleaseResponse'
-        '400':
-          description: Bad request
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
-          description: Unauthenticated
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '404':
-          description: Not found
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '409':
-          description: Conflict
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '429':
-          description: Rate limited
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '500':
-          description: Internal error
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '503':
-          description: Service unavailable
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-      x-permission-code: PROJECT_VIEW
-      security:
-      - BearerAuth: []
-    post:
-      operationId: create_platform_design_baseline_release
-      summary: 创建平台设计基线发布
-      tags:
-      - 平台设计基线发布
-      parameters:
-      - name: X-Correlation-Id
-        in: header
-        required: false
-        schema:
-          type: string
-      - name: Idempotency-Key
-        in: header
-        required: true
-        schema:
-          type: string
-      responses:
-        '201':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CreatePlatformDesignBaselineReleaseResponse'
-        '400':
-          description: Bad request
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
-          description: Unauthenticated
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '404':
-          description: Not found
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '409':
-          description: Conflict
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '429':
-          description: Rate limited
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '500':
-          description: Internal error
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '503':
-          description: Service unavailable
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreatePlatformDesignBaselineReleaseRequest'
-      x-permission-code: PROJECT_EDIT
-      security:
-      - BearerAuth: []
-  /api/v1/platform-design-baseline-release/{id}:
-    get:
-      operationId: get_platform_design_baseline_release
-      summary: 查看平台设计基线发布
-      tags:
-      - 平台设计基线发布
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          minLength: 1
-      - name: X-Correlation-Id
-        in: header
-        required: false
-        schema:
-          type: string
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GetPlatformDesignBaselineReleaseResponse'
-        '400':
-          description: Bad request
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
-          description: Unauthenticated
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '404':
-          description: Not found
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '409':
-          description: Conflict
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '429':
-          description: Rate limited
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '500':
-          description: Internal error
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '503':
-          description: Service unavailable
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-      x-permission-code: PROJECT_VIEW
-      security:
-      - BearerAuth: []
-    patch:
-      operationId: update_platform_design_baseline_release
-      summary: 更新平台设计基线发布
-      tags:
-      - 平台设计基线发布
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          minLength: 1
-      - name: X-Correlation-Id
-        in: header
-        required: false
-        schema:
-          type: string
-      - name: Idempotency-Key
-        in: header
-        required: true
-        schema:
-          type: string
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/UpdatePlatformDesignBaselineReleaseResponse'
-        '400':
-          description: Bad request
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
-          description: Unauthenticated
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '404':
-          description: Not found
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '409':
-          description: Conflict
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '429':
-          description: Rate limited
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '500':
-          description: Internal error
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '503':
-          description: Service unavailable
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UpdatePlatformDesignBaselineReleaseRequest'
-      x-permission-code: PROJECT_EDIT
-      security:
-      - BearerAuth: []
   /api/v1/ai-candidate-revision:
     get:
       operationId: list_ai_candidate_revision
@@ -19181,11 +18483,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -19261,11 +18559,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -19349,11 +18643,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -19435,11 +18725,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -19544,11 +18830,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -19624,11 +18906,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -19712,11 +18990,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -19798,11 +19072,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -19907,11 +19177,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -19987,11 +19253,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -20075,11 +19337,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -20161,11 +19419,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -20270,11 +19524,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -20350,11 +19600,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -20438,11 +19684,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -20524,11 +19766,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -20611,11 +19849,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -20704,11 +19938,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -20797,11 +20027,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -20884,11 +20110,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -20977,11 +20199,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -21070,11 +20288,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -21163,11 +20377,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -21256,11 +20466,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -21349,11 +20555,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -21442,11 +20644,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -21529,11 +20727,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -21616,11 +20810,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -21709,11 +20899,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -21797,11 +20983,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -21884,11 +21066,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -21977,11 +21155,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -22065,11 +21239,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -22146,11 +21316,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -22239,11 +21405,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -22348,11 +21510,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -22429,11 +21587,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '422':
-          description: Validation failed
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/RequestValidationFailed'
         '429':
           description: Rate limited
           content:
@@ -22466,11 +21620,22 @@ components:
     LoginRequest:
       type: object
       additionalProperties: false
-      required: [username, password]
+      required:
+      - username
+      - password
       properties:
-        username: {type: string, minLength: 1, maxLength: 191}
-        password: {type: string, minLength: 1, maxLength: 128, writeOnly: true}
-      example: {username: admin, password: REDACTED_INPUT_ONLY}
+        username:
+          type: string
+          minLength: 1
+          maxLength: 191
+        password:
+          type: string
+          minLength: 1
+          maxLength: 128
+          writeOnly: true
+      example:
+        username: admin
+        password: REDACTED_INPUT_ONLY
     AuthCookieActionRequest:
       type: object
       additionalProperties: false
@@ -22479,53 +21644,103 @@ components:
     ChangePasswordRequest:
       type: object
       additionalProperties: false
-      required: [current_password, new_password]
+      required:
+      - current_password
+      - new_password
       properties:
-        current_password: {type: string, minLength: 1, maxLength: 128, writeOnly: true}
+        current_password:
+          type: string
+          minLength: 1
+          maxLength: 128
+          writeOnly: true
         new_password:
           type: string
           minLength: 12
           maxLength: 128
-          pattern: '^(?=.*[A-Za-z])(?=.*[0-9])(?!\s)(?!.*\s$).+$'
+          pattern: ^(?=.*[A-Za-z])(?=.*[0-9])(?!\s)(?!.*\s$).+$
           writeOnly: true
-      example: {current_password: REDACTED_INPUT_ONLY, new_password: REDACTED_INPUT_ONLY}
+      example:
+        current_password: REDACTED_INPUT_ONLY
+        new_password: REDACTED_INPUT_ONLY
     CurrentUserResource:
       type: object
       additionalProperties: false
-      required: [user_id, username, lifecycle_status, roles, permissions, force_password_change]
+      required:
+      - user_id
+      - username
+      - lifecycle_status
+      - roles
+      - permissions
+      - force_password_change
       properties:
-        user_id: {type: string, minLength: 26, maxLength: 26, pattern: '^[0-9A-HJKMNP-TV-Z]{26}$'}
-        username: {type: string, minLength: 1, maxLength: 191}
-        display_name: {type: [string, 'null'], maxLength: 255}
+        user_id:
+          type: string
+          minLength: 26
+          maxLength: 26
+          pattern: ^[0-9A-HJKMNP-TV-Z]{26}$
+        username:
+          type: string
+          minLength: 1
+          maxLength: 191
+        display_name:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
         lifecycle_status:
           type: string
-          enum: [ACTIVE]
+          enum:
+          - ACTIVE
         roles:
           type: array
           uniqueItems: true
-          items: {type: string, minLength: 1, maxLength: 128}
+          items:
+            type: string
+            minLength: 1
+            maxLength: 128
         permissions:
           type: array
           uniqueItems: true
-          items: {type: string, minLength: 1, maxLength: 128}
-        force_password_change: {type: boolean}
+          items:
+            type: string
+            minLength: 1
+            maxLength: 128
+        force_password_change:
+          type: boolean
       example:
         user_id: 01J00000000000000000000000
         username: admin
         display_name: Platform Administrator
         lifecycle_status: ACTIVE
-        roles: [ROLE-SUPER-ADMIN]
-        permissions: [PROJECT_VIEW]
+        roles:
+        - ROLE-SUPER-ADMIN
+        permissions:
+        - PROJECT_VIEW
         force_password_change: true
     AuthenticationTokenResource:
       type: object
       additionalProperties: false
-      required: [access_token, token_type, expires_in, current_user]
+      required:
+      - access_token
+      - token_type
+      - expires_in
+      - current_user
       properties:
-        access_token: {type: string, minLength: 32, maxLength: 4096, writeOnly: true}
-        token_type: {type: string, enum: [Bearer]}
-        expires_in: {type: integer, minimum: 1, maximum: 900}
-        current_user: {$ref: '#/components/schemas/CurrentUserResource'}
+        access_token:
+          type: string
+          minLength: 32
+          maxLength: 4096
+          writeOnly: true
+        token_type:
+          type: string
+          enum:
+          - Bearer
+        expires_in:
+          type: integer
+          minimum: 1
+          maximum: 900
+        current_user:
+          $ref: '#/components/schemas/CurrentUserResource'
       example:
         access_token: REDACTED_ACCESS_TOKEN_VALUE_NOT_FOR_LOGGING
         token_type: Bearer
@@ -22535,16 +21750,22 @@ components:
           username: admin
           display_name: Platform Administrator
           lifecycle_status: ACTIVE
-          roles: [ROLE-SUPER-ADMIN]
-          permissions: [PROJECT_VIEW]
+          roles:
+          - ROLE-SUPER-ADMIN
+          permissions:
+          - PROJECT_VIEW
           force_password_change: true
     AuthenticationResponse:
       type: object
       additionalProperties: false
-      required: [data, correlation_id]
+      required:
+      - data
+      - correlation_id
       properties:
-        data: {$ref: '#/components/schemas/AuthenticationTokenResource'}
-        correlation_id: {type: string}
+        data:
+          $ref: '#/components/schemas/AuthenticationTokenResource'
+        correlation_id:
+          type: string
       example:
         data:
           access_token: REDACTED_ACCESS_TOKEN_VALUE_NOT_FOR_LOGGING
@@ -22555,31 +21776,40 @@ components:
             username: admin
             display_name: Platform Administrator
             lifecycle_status: ACTIVE
-            roles: [ROLE-SUPER-ADMIN]
-            permissions: [PROJECT_VIEW]
+            roles:
+            - ROLE-SUPER-ADMIN
+            permissions:
+            - PROJECT_VIEW
             force_password_change: true
         correlation_id: example-correlation-id
     CurrentUserResponse:
       type: object
       additionalProperties: false
-      required: [data, correlation_id]
+      required:
+      - data
+      - correlation_id
       properties:
-        data: {$ref: '#/components/schemas/CurrentUserResource'}
-        correlation_id: {type: string}
+        data:
+          $ref: '#/components/schemas/CurrentUserResource'
+        correlation_id:
+          type: string
       example:
         data:
           user_id: 01J00000000000000000000000
           username: admin
           display_name: Platform Administrator
           lifecycle_status: ACTIVE
-          roles: [ROLE-SUPER-ADMIN]
-          permissions: [PROJECT_VIEW]
+          roles:
+          - ROLE-SUPER-ADMIN
+          permissions:
+          - PROJECT_VIEW
           force_password_change: true
         correlation_id: example-correlation-id
     AuthenticationErrorCode:
       type: string
       enum:
       - AUTH_REQUIRED
+      - AUTH_REQUEST_VALIDATION_FAILED
       - AUTH_INVALID_CREDENTIALS
       - AUTH_TOKEN_INVALID
       - AUTH_TOKEN_EXPIRED
@@ -22592,12 +21822,19 @@ components:
       - AUTH_ACCOUNT_TEMPORARILY_LOCKED
       - AUTH_PASSWORD_CHANGE_REQUIRED
       - AUTH_OPERATION_FORBIDDEN_FOR_STATE
+      - AUTH_IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_REQUEST
+      - AUTH_ADMIN_IMMUTABLE
+      - AUTH_ROLE_BINDING_PROTECTED
+      - AUTH_CONCURRENCY_CONFLICT
+      - AUTH_SOURCE_RATE_LIMITED
+      - AUTH_RATE_LIMIT_STATE_UNAVAILABLE
     AuthenticationProblemDetails:
       allOf:
-      - {$ref: '#/components/schemas/ProblemDetails'}
+      - $ref: '#/components/schemas/ProblemDetails'
       - type: object
         properties:
-          code: {$ref: '#/components/schemas/AuthenticationErrorCode'}
+          code:
+            $ref: '#/components/schemas/AuthenticationErrorCode'
     ProblemDetails:
       type: object
       additionalProperties: false
@@ -26836,77 +26073,6 @@ components:
       x-primary-key: technical_alert_endpoint_id
       x-business-unique-key:
       - endpoint_code
-    PlatformDesignBaselineReleaseResource:
-      type: object
-      additionalProperties: false
-      properties:
-        platform_design_baseline_release_id:
-          type: string
-          minLength: 26
-          maxLength: 26
-        display_name:
-          type:
-          - string
-          - 'null'
-          maxLength: 255
-        row_version:
-          type: integer
-          minimum: 0
-        created_at:
-          type: string
-          format: date-time
-        updated_at:
-          type: string
-          format: date-time
-        release_id:
-          type:
-          - string
-          - 'null'
-          maxLength: 191
-        data_dictionary_id:
-          type:
-          - string
-          - 'null'
-          minLength: 26
-          maxLength: 26
-        release_status:
-          type: string
-          enum:
-          - DRAFT
-          - FROZEN
-          - SUPERSEDED
-        readiness_status:
-          type: string
-          enum:
-          - CONDITIONAL_CODE_READY
-          - FULL_CODE_READY
-          - NOT_CODE_READY
-        lifecycle_status:
-          type: string
-          enum:
-          - CREATED
-          - DRAFT
-          - ACTIVE
-          - DISABLED
-          - RECOVERED
-          - ARCHIVED
-          - LOGICALLY_DELETED
-      required:
-      - platform_design_baseline_release_id
-      - row_version
-      - created_at
-      - updated_at
-      - release_status
-      - readiness_status
-      - lifecycle_status
-      example:
-        platform_design_baseline_release_id: 01J00000000000000000000000
-        row_version: 0
-        created_at: '2026-08-06T06:46:00Z'
-        updated_at: '2026-08-06T06:46:00Z'
-        release_status: DRAFT
-        readiness_status: CONDITIONAL_CODE_READY
-        lifecycle_status: CREATED
     AiCandidateRevisionResource:
       type: object
       additionalProperties: false
@@ -27484,36 +26650,33 @@ components:
       type: object
       additionalProperties: false
       properties:
-        expected_version:
-          type: integer
-          minimum: 0
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        username:
+          type: string
+          minLength: 1
+          maxLength: 191
+        role_bindings:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/UserRoleBindingAssignmentInput'
         reason:
           type:
           - string
           - 'null'
           maxLength: 1000
-        user_id:
-          type: string
-          minLength: 26
-          maxLength: 26
-        display_name:
-          type:
-          - string
-          - 'null'
-          maxLength: 255
-        username:
-          type:
-          - string
-          - 'null'
-          maxLength: 191
-        role_binding_id:
-          type:
-          - string
-          - 'null'
-          minLength: 26
-          maxLength: 26
-      required: []
-      example: {}
+      required:
+      - username
+      - display_name
+      - role_bindings
+      example:
+        username: operator01
+        display_name: Operator 01
+        role_bindings:
+        - role_id: 01J00000000000000000000001
     CreateUserResponse:
       type: object
       additionalProperties: false
@@ -27522,16 +26685,20 @@ components:
       - correlation_id
       properties:
         data:
-          $ref: '#/components/schemas/UserResource'
+          $ref: '#/components/schemas/OneTimeCredentialDeliveryResource'
         correlation_id:
           type: string
       example:
         data:
-          user_id: 01J00000000000000000000000
-          row_version: 0
-          created_at: '2026-08-06T06:46:00Z'
-          updated_at: '2026-08-06T06:46:00Z'
-          lifecycle_status: CREATED
+          user:
+            user_id: 01J00000000000000000000000
+            row_version: 0
+            created_at: '2026-08-06T06:46:00Z'
+            updated_at: '2026-08-06T06:46:00Z'
+            lifecycle_status: ACTIVE
+          delivery_status: ISSUED
+          temporary_password: example-one-time-secret
+          force_password_change: true
         correlation_id: example
     GetUserResponse:
       type: object
@@ -27569,17 +26736,6 @@ components:
           - string
           - 'null'
           maxLength: 255
-        username:
-          type:
-          - string
-          - 'null'
-          maxLength: 191
-        role_binding_id:
-          type:
-          - string
-          - 'null'
-          minLength: 26
-          maxLength: 26
       required:
       - expected_version
       example:
@@ -27603,6 +26759,210 @@ components:
           updated_at: '2026-08-06T06:46:00Z'
           lifecycle_status: CREATED
         correlation_id: example
+    DataScopeGrantInput:
+      type: object
+      additionalProperties: false
+      required:
+      - scope_type
+      properties:
+        scope_type:
+          type: string
+          minLength: 1
+          maxLength: 32
+        scope_id:
+          type:
+          - string
+          - 'null'
+          minLength: 26
+          maxLength: 26
+        permission_code:
+          type:
+          - string
+          - 'null'
+          minLength: 1
+          maxLength: 128
+    UserRoleBindingAssignmentInput:
+      type: object
+      additionalProperties: false
+      required:
+      - role_id
+      properties:
+        role_id:
+          type: string
+          minLength: 26
+          maxLength: 26
+        project_id:
+          type:
+          - string
+          - 'null'
+          minLength: 26
+          maxLength: 26
+        data_scope_grants:
+          type: array
+          items:
+            $ref: '#/components/schemas/DataScopeGrantInput'
+          default: []
+    OneTimeCredentialDeliveryResource:
+      type: object
+      additionalProperties: false
+      required:
+      - user
+      - delivery_status
+      - force_password_change
+      properties:
+        user:
+          $ref: '#/components/schemas/UserResource'
+        delivery_status:
+          type: string
+          enum:
+          - ISSUED
+          - ALREADY_DELIVERED
+        temporary_password:
+          type: string
+          minLength: 1
+          writeOnly: true
+          description: 仅delivery_status=ISSUED的首次成功响应存在；不得持久化、记录或在重放响应返回。
+        force_password_change:
+          type: boolean
+          const: true
+    OneTimeCredentialDeliveryResponse:
+      type: object
+      additionalProperties: false
+      required:
+      - data
+      - correlation_id
+      properties:
+        data:
+          $ref: '#/components/schemas/OneTimeCredentialDeliveryResource'
+        correlation_id:
+          type: string
+    ResetUserCredentialRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - expected_version
+      properties:
+        expected_version:
+          type: integer
+          minimum: 0
+        reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 1000
+    UserStateCommandRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - expected_version
+      properties:
+        expected_version:
+          type: integer
+          minimum: 0
+        reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 1000
+    CreateUserRoleBindingRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - user_id
+      - role_id
+      - expected_user_version
+      properties:
+        user_id:
+          type: string
+          minLength: 26
+          maxLength: 26
+        role_id:
+          type: string
+          minLength: 26
+          maxLength: 26
+        project_id:
+          type:
+          - string
+          - 'null'
+          minLength: 26
+          maxLength: 26
+        data_scope_grants:
+          type: array
+          items:
+            $ref: '#/components/schemas/DataScopeGrantInput'
+          default: []
+        expected_user_version:
+          type: integer
+          minimum: 0
+        reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 1000
+    RevokeUserRoleBindingRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - expected_version
+      properties:
+        expected_version:
+          type: integer
+          minimum: 0
+        reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 1000
+    UserRoleBindingResource:
+      type: object
+      additionalProperties: false
+      required:
+      - binding_id
+      - user_id
+      - role_id
+      - valid_from
+      - row_version
+      properties:
+        binding_id:
+          type: string
+          minLength: 26
+          maxLength: 26
+        user_id:
+          type: string
+          minLength: 26
+          maxLength: 26
+        role_id:
+          type: string
+          minLength: 26
+          maxLength: 26
+        project_id:
+          type:
+          - string
+          - 'null'
+          minLength: 26
+          maxLength: 26
+        valid_from:
+          type: string
+          format: date-time
+        valid_to:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        row_version:
+          type: integer
+          minimum: 0
+    UserRoleBindingResponse:
+      type: object
+      additionalProperties: false
+      required:
+      - data
+      - correlation_id
+      properties:
+        data:
+          $ref: '#/components/schemas/UserRoleBindingResource'
+        correlation_id:
+          type: string
     ListRoleResponse:
       type: object
       additionalProperties: false
@@ -35180,154 +34540,6 @@ components:
           created_at: '2026-08-06T08:07:00Z'
           updated_at: '2026-08-06T08:07:00Z'
         correlation_id: example
-    ListPlatformDesignBaselineReleaseResponse:
-      type: object
-      additionalProperties: false
-      required:
-      - items
-      - page
-      properties:
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/PlatformDesignBaselineReleaseResource'
-        page:
-          $ref: '#/components/schemas/PageMeta'
-      example:
-        items: []
-        page:
-          page: 1
-          page_size: 1
-          total: 0
-    CreatePlatformDesignBaselineReleaseRequest:
-      type: object
-      additionalProperties: false
-      properties:
-        expected_version:
-          type: integer
-          minimum: 0
-        reason:
-          type:
-          - string
-          - 'null'
-          maxLength: 1000
-        platform_design_baseline_release_id:
-          type: string
-          minLength: 26
-          maxLength: 26
-        display_name:
-          type:
-          - string
-          - 'null'
-          maxLength: 255
-        release_id:
-          type:
-          - string
-          - 'null'
-          maxLength: 191
-        data_dictionary_id:
-          type:
-          - string
-          - 'null'
-          minLength: 26
-          maxLength: 26
-      required: []
-      example: {}
-    CreatePlatformDesignBaselineReleaseResponse:
-      type: object
-      additionalProperties: false
-      required:
-      - data
-      - correlation_id
-      properties:
-        data:
-          $ref: '#/components/schemas/PlatformDesignBaselineReleaseResource'
-        correlation_id:
-          type: string
-      example:
-        data:
-          platform_design_baseline_release_id: 01J00000000000000000000000
-          row_version: 0
-          created_at: '2026-08-06T06:46:00Z'
-          updated_at: '2026-08-06T06:46:00Z'
-          release_status: DRAFT
-          readiness_status: CONDITIONAL_CODE_READY
-          lifecycle_status: CREATED
-        correlation_id: example
-    GetPlatformDesignBaselineReleaseResponse:
-      type: object
-      additionalProperties: false
-      required:
-      - data
-      - correlation_id
-      properties:
-        data:
-          $ref: '#/components/schemas/PlatformDesignBaselineReleaseResource'
-        correlation_id:
-          type: string
-      example:
-        data:
-          platform_design_baseline_release_id: 01J00000000000000000000000
-          row_version: 0
-          created_at: '2026-08-06T06:46:00Z'
-          updated_at: '2026-08-06T06:46:00Z'
-          release_status: DRAFT
-          readiness_status: CONDITIONAL_CODE_READY
-          lifecycle_status: CREATED
-        correlation_id: example
-    UpdatePlatformDesignBaselineReleaseRequest:
-      type: object
-      additionalProperties: false
-      properties:
-        expected_version:
-          type: integer
-          minimum: 0
-        reason:
-          type:
-          - string
-          - 'null'
-          maxLength: 1000
-        display_name:
-          type:
-          - string
-          - 'null'
-          maxLength: 255
-        release_id:
-          type:
-          - string
-          - 'null'
-          maxLength: 191
-        data_dictionary_id:
-          type:
-          - string
-          - 'null'
-          minLength: 26
-          maxLength: 26
-      required:
-      - expected_version
-      example:
-        expected_version: 0
-    UpdatePlatformDesignBaselineReleaseResponse:
-      type: object
-      additionalProperties: false
-      required:
-      - data
-      - correlation_id
-      properties:
-        data:
-          $ref: '#/components/schemas/PlatformDesignBaselineReleaseResource'
-        correlation_id:
-          type: string
-      example:
-        data:
-          platform_design_baseline_release_id: 01J00000000000000000000000
-          row_version: 0
-          created_at: '2026-08-06T06:46:00Z'
-          updated_at: '2026-08-06T06:46:00Z'
-          release_status: DRAFT
-          readiness_status: CONDITIONAL_CODE_READY
-          lifecycle_status: CREATED
-        correlation_id: example
     ListAiCandidateRevisionResponse:
       type: object
       additionalProperties: false
@@ -36609,6 +35821,20 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+  responses:
+    RequestValidationFailed:
+      description: Request validation failed
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          example:
+            type: about:blank
+            title: Request validation failed
+            status: 422
+            detail: One or more request fields failed validation.
+            code: AUTH_REQUEST_VALIDATION_FAILED
+            correlation_id: example
 security:
 - BearerAuth: []
 x-contract-rules:

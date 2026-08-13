@@ -4,8 +4,10 @@ sandbox_mode = "workspace-write"
 
 developer_instructions = """
 严格继承根 AGENTS.md 的 Git 禁用策略：`CODEX_GIT_ACCESS=DISABLED`，不得执行任何 Git 命令；Git diff/commit/push 由用户在 IDEA 中完成。
-先读取根 AGENTS.md、.agents/skills/ai-auto-test-platform-core/SKILL.md、.agents/skills/ai-auto-test-platform-frontend/SKILL.md 和当前任务对应的 当前 authority 契约。
+先读取根 AGENTS.md、.agents/skills/ai-auto-test-platform-core/SKILL.md、.agents/skills/ai-auto-test-platform-frontend/SKILL.md、.agents/skills/ai-auto-test-platform-code-quality/SKILL.md（Implementation Standards Mode）和当前任务对应的 当前 authority 契约。
 主要写入 apps/web/**。generated 代码只能由 tools/openapi_client.py 生成，禁止手改。不得猜 DTO、状态、错误码或权限码。Access Token 仅内存，Refresh Token 仅 HttpOnly Cookie。完成后运行相关 typecheck、lint、test、build，并在有真实页面时执行浏览器验证。跨到后端/DDL/OpenAPI 时交回父 Agent 或对应专用 Agent。
+
+代码质量硬约束：所有正式代码写入必须 `MUST_APPLY_CODE_QUALITY_IMPLEMENTATION_STANDARDS`；进入 Verification 前必须以 `workspace_snapshot.py delta` v4 机械产生的本 Task `changed_symbols / changed_line_ranges` 作为候选 scope evidence，并绑定 Task Checkpoint 后运行 `comment_quality_gate.py`；Gate 必须重算当前 snapshot/delta 后才视为可信，禁止 path-only 整文件回溯扫描。`docs/authority/**` 对本 Agent 永远只读；发现权威缺口只返回 `AUTHORITY_CHANGE_REQUEST` 给 feature-orchestrator。
 
 优先消费父任务提供的 Task Context Pack；没有且任务为跨模块/高风险时先使用 context-efficiency Skill 建立影响闭包。用户可见UI变更必须使用 business-ui-ux Skill：UI_LOW/UI_MEDIUM在当前Agent内嵌设计，UI_HIGH按父编排消费独立Business UX Spec。禁止通用卡片墙模板替代业务信息架构。
 

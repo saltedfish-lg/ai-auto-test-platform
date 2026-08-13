@@ -1,7 +1,7 @@
 {
-  "name": "ai-auto-test-platform-r4-2-auth-contract-validation",
+  "name": "ai-auto-test-platform-living-authority-validation",
   "private": true,
-  "version": "1.4.2",
+  "version": "1.5.0",
   "type": "module",
   "scripts": {
     "generate": "python generate_ts_client.py",

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -66,4 +67,116 @@ class AuthenticationResponse(BaseModel):
 class CurrentUserResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
     data: CurrentUserResource
+    correlation_id: str
+
+
+class DataScopeGrantInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    scope_type: str = Field(min_length=1, max_length=32)
+    scope_id: str | None = Field(default=None, min_length=26, max_length=26)
+    permission_code: str | None = Field(default=None, min_length=1, max_length=128)
+
+
+class UserRoleBindingAssignmentInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    role_id: str = Field(min_length=26, max_length=26)
+    project_id: str | None = Field(default=None, min_length=26, max_length=26)
+    data_scope_grants: list[DataScopeGrantInput] = Field(default_factory=list)
+
+
+class CreateUserRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    username: str = Field(min_length=1, max_length=191)
+    display_name: str = Field(min_length=1, max_length=255)
+    role_bindings: list[UserRoleBindingAssignmentInput] = Field(min_length=1)
+    reason: str | None = Field(default=None, max_length=1000)
+
+
+class UserResource(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    user_id: str = Field(min_length=26, max_length=26)
+    display_name: str | None = Field(default=None, max_length=255)
+    row_version: int = Field(ge=0)
+    created_at: datetime
+    updated_at: datetime
+    username: str | None = Field(default=None, max_length=191)
+    role_binding_id: str | None = Field(default=None, min_length=26, max_length=26)
+    lifecycle_status: Literal[
+        "CREATED",
+        "DRAFT",
+        "ACTIVE",
+        "LOCKED",
+        "DISABLED",
+        "RECOVERING",
+        "ARCHIVED",
+        "LOGICALLY_DELETED",
+    ]
+
+
+class OneTimeCredentialDeliveryResource(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    user: UserResource
+    delivery_status: Literal["ISSUED", "ALREADY_DELIVERED"]
+    temporary_password: str | None = Field(default=None, min_length=1)
+    force_password_change: Literal[True] = True
+
+
+class CreateUserResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    data: OneTimeCredentialDeliveryResource
+    correlation_id: str
+
+
+class OneTimeCredentialDeliveryResponse(CreateUserResponse):
+    pass
+
+
+class ResetUserCredentialRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_version: int = Field(ge=0)
+    reason: str | None = Field(default=None, max_length=1000)
+
+
+class UserStateCommandRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_version: int = Field(ge=0)
+    reason: str | None = Field(default=None, max_length=1000)
+
+
+class UpdateUserResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    data: UserResource
+    correlation_id: str
+
+
+class CreateUserRoleBindingRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    user_id: str = Field(min_length=26, max_length=26)
+    role_id: str = Field(min_length=26, max_length=26)
+    project_id: str | None = Field(default=None, min_length=26, max_length=26)
+    data_scope_grants: list[DataScopeGrantInput] = Field(default_factory=list)
+    expected_user_version: int = Field(ge=0)
+    reason: str | None = Field(default=None, max_length=1000)
+
+
+class RevokeUserRoleBindingRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_version: int = Field(ge=0)
+    reason: str | None = Field(default=None, max_length=1000)
+
+
+class UserRoleBindingResource(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    binding_id: str = Field(min_length=26, max_length=26)
+    user_id: str = Field(min_length=26, max_length=26)
+    role_id: str = Field(min_length=26, max_length=26)
+    project_id: str | None = Field(default=None, min_length=26, max_length=26)
+    valid_from: datetime
+    valid_to: datetime | None = None
+    row_version: int = Field(ge=0)
+
+
+class UserRoleBindingResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    data: UserRoleBindingResource
     correlation_id: str

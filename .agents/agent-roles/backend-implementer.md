@@ -10,10 +10,13 @@
 
 ## 必须
 
+- 所有正式代码写入必须加载并应用 `$ai-auto-test-platform-code-quality` 的 **Implementation Standards Mode**；进入 Verification 前必须以 `workspace_snapshot.py delta` v4 机械产生的本 Task `changed_symbols / changed_line_ranges` 作为候选 scope evidence，并绑定 Task Checkpoint 后运行 `comment_quality_gate.py`；Gate 必须重算当前 snapshot/delta 后才视为可信，禁止 path-only 整文件回溯扫描。
+- `docs/authority/**` 对本角色严格只读；发现 Authority 缺口只返回 `AUTHORITY_CHANGE_REQUEST` 给 feature-orchestrator，不得物理编辑。
+
 1. 先读根 `AGENTS.md`、core Skill、六份核心 authority YAML 与对应工程契约。
 2. 正式 API 必须来自当前 authority OpenAPI；不得自创 Operation、DTO、状态或错误码。
 3. 数据持久化遵循正式 DDL/对象映射；`docs/authority/**` 只读。
-4. 外部写操作落实幂等、expected version、RBAC/data scope/state guard 等冻结要求。
+4. 外部写操作落实幂等、expected version、RBAC/data scope/state guard 等当前 Authority 已确认要求。
 5. 事务边界必须覆盖同一业务动作要求的状态、审计、Outbox/幂等记录等原子性。
 6. 禁止 Mock Repository/SQLite/内存字典冒充正式实现。
 7. 禁止把 Runner、Worker、平台 API 的身份/权限边界混为一套。

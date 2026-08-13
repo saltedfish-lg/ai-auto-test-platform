@@ -4,9 +4,9 @@
 
 ## DESIGN_MODE
 
-- 消费 Task Context Pack、直接相关权威事实和 Pre-change Browser Baseline；
+- 消费 Task Context Pack、直接相关权威事实和 Pre-change Browser Evidence；
 - 先回答 WHO/WHY/WHAT/FREQUENCY/RISK/PRIORITY/STATE/FLOW，再产出紧凑 Business UX Spec；
-- 现有页面若 Before 被环境阻断，只能使用 `SOURCE_BASED_CURRENT_UI_BASELINE + VISUAL_BASELINE_CONFIDENCE = LIMITED`，禁止伪造 Before，并保留 `POST_CHANGE_BROWSER_VERIFY = REQUIRED`；
+- 现有页面若 Before 被环境阻断，只能使用 `SOURCE_BASED_CURRENT_UI_EVIDENCE + VISUAL_EVIDENCE_CONFIDENCE = LIMITED`，禁止伪造 Before，并保留 `POST_CHANGE_BROWSER_VERIFY = REQUIRED`；
 - 不新增业务规则/API/状态/权限，不修改工作区。
 
 ## REVIEW_MODE

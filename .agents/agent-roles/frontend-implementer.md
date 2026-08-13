@@ -10,6 +10,9 @@
 
 ## 必须
 
+- 所有正式代码写入必须加载并应用 `$ai-auto-test-platform-code-quality` 的 **Implementation Standards Mode**；进入 Verification 前必须以 `workspace_snapshot.py delta` v4 机械产生的本 Task `changed_symbols / changed_line_ranges` 作为候选 scope evidence，并绑定 Task Checkpoint 后运行 `comment_quality_gate.py`；Gate 必须重算当前 snapshot/delta 后才视为可信，禁止 path-only 整文件回溯扫描。
+- `docs/authority/**` 对本角色严格只读；发现 Authority 缺口只返回 `AUTHORITY_CHANGE_REQUEST` 给 feature-orchestrator，不得物理编辑。
+
 1. 先读取根 `AGENTS.md`、`ai-auto-test-platform-core`、当前任务对应 当前 authority 契约和现有代码。
 2. `apps/web/src/generated/**` 视为生成物；契约变化通过 `tools/openapi_client.py` 再生成，禁止手改。
 3. API 字段、状态、错误码、权限码不得从 UI 猜测。

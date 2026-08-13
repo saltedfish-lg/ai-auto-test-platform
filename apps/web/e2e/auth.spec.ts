@@ -4,7 +4,7 @@ test.setTimeout(120_000);
 
 function requiredEnvironment(name: string): string {
   const value = process.env[name];
-  if (!value) throw new Error(`${name} is required by the isolated P1 browser gate`);
+  if (!value) throw new Error(`${name} is required by the isolated authentication browser Gate`);
   return value;
 }
 
@@ -19,13 +19,13 @@ async function submitLogin(page: Page, username: string, password: string) {
   return response;
 }
 
-test("P1 authentication browser closure", async ({ page, context }) => {
-  const initialPassword = requiredEnvironment("P1_E2E_ADMIN_INITIAL_PASSWORD");
-  const changedPassword = requiredEnvironment("P1_E2E_ADMIN_CHANGED_PASSWORD");
-  const normalUsername = requiredEnvironment("P1_E2E_NORMAL_USERNAME");
-  const normalPassword = requiredEnvironment("P1_E2E_NORMAL_PASSWORD");
-  const disabledUsername = requiredEnvironment("P1_E2E_DISABLED_USERNAME");
-  const disabledPassword = requiredEnvironment("P1_E2E_DISABLED_PASSWORD");
+test("authentication browser closure", async ({ page, context }) => {
+  const initialPassword = requiredEnvironment("ATP_AUTH_E2E_ADMIN_INITIAL_PASSWORD");
+  const changedPassword = requiredEnvironment("ATP_AUTH_E2E_ADMIN_CHANGED_PASSWORD");
+  const normalUsername = requiredEnvironment("ATP_AUTH_E2E_NORMAL_USERNAME");
+  const normalPassword = requiredEnvironment("ATP_AUTH_E2E_NORMAL_PASSWORD");
+  const disabledUsername = requiredEnvironment("ATP_AUTH_E2E_DISABLED_USERNAME");
+  const disabledPassword = requiredEnvironment("ATP_AUTH_E2E_DISABLED_PASSWORD");
   const consoleErrors: string[] = [];
   const pageErrors: string[] = [];
   const requestFailureChecks: Promise<string | null>[] = [];
@@ -72,7 +72,25 @@ test("P1 authentication browser closure", async ({ page, context }) => {
   await page.getByLabel("当前密码", { exact: true }).fill(initialPassword);
   await page.getByLabel("新密码", { exact: true }).fill(changedPassword);
   await page.getByLabel("确认新密码", { exact: true }).fill(changedPassword);
+  let refreshRequestsAfterPasswordSubmit = 0;
+  page.on("request", (request) => {
+    if (request.url().endsWith("/api/v1/auth/refresh")) refreshRequestsAfterPasswordSubmit += 1;
+  });
+  const changePasswordResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/api/v1/auth/change-password") &&
+      response.request().method() === "POST",
+  );
   await page.getByRole("button", { name: "保存新密码" }).click();
+  const changed = await changePasswordResponse;
+  expect(changed.status()).toBe(204);
+  expect(await changed.body()).toHaveLength(0);
+  await expect(page).toHaveURL(/\/login$/);
+  await expect(page.getByRole("heading", { name: "登录平台" })).toBeVisible();
+  expect(refreshRequestsAfterPasswordSubmit).toBe(0);
+
+  const changedPasswordLogin = await submitLogin(page, "admin", changedPassword);
+  expect(changedPasswordLogin.status()).toBe(200);
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole("heading", { name: /欢迎回来/ })).toBeVisible();
   await expect(page.getByText("ROLE-SUPER-ADMIN", { exact: true })).toBeVisible();
@@ -134,7 +152,7 @@ test("P1 authentication browser closure", async ({ page, context }) => {
   expect(browserStorage.session).toEqual([]);
   expect(browserStorage.indexed).toEqual([]);
   expect(browserStorage.readableCookie).not.toContain("atp_refresh");
-  await page.screenshot({ path: "test-results/p1-auth-workspace.png", fullPage: true });
+  await page.screenshot({ path: "test-results/auth-workspace.png", fullPage: true });
 
   await page.getByRole("button", { name: "退出登录" }).click();
   await expect(page).toHaveURL(/\/login$/);

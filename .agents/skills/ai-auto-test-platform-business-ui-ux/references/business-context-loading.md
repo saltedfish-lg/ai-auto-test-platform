@@ -15,4 +15,4 @@ UI设计只加载与当前页面相关的业务切片：
 
 ## UI_HIGH 现有页面额外输入
 
-仅额外加载 `PRE_CHANGE_BASELINE` 的截图索引、viewport、关键业务状态和问题摘要；不要把完整 DOM、所有 Network 响应或大量截图 OCR 文本注入 Designer。
+仅额外加载 `PRE_CHANGE_EVIDENCE` 的截图索引、viewport、关键业务状态和问题摘要；不要把完整 DOM、所有 Network 响应或大量截图 OCR 文本注入 Designer。

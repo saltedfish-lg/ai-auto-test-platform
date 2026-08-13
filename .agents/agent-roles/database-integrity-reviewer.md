@@ -5,7 +5,7 @@
 检查 MySQL 8.4 / SQLAlchemy 实现：
 
 - 表/列/约束/唯一键/FK/CHECK 与当前 authority DDL 是否一致；
-- V3 → V4 → V5 顺序是否保持；当前 migration SQL 是否被修改；
+- `tools/current_facts.py` 机械发现的 Migration 版本是否唯一且严格递增；历史 migration SQL 是否被修改；Runtime Gate 是否执行到机械发现的当前 Head；
 - 事务是否包含状态、审计、Outbox、幂等记录等要求；
 - 乐观锁/row_version、expected version 是否真实生效；
 - 是否存在扩展 JSON 承载正式契约字段；

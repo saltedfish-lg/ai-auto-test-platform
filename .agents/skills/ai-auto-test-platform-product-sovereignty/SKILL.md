@@ -1,6 +1,6 @@
 ---
 name: ai-auto-test-platform-product-sovereignty
-description: AI自动化测试执行平台产品主权门；在Single Living Authority下判断产品事实是否明确，识别缺口/冲突/范围变化，并在用户已明确裁决后允许AUTHORITY_UPDATE_ONLY直接修改docs/authority，不创建版本化基线。
+description: AI自动化测试执行平台产品主权门；在Single Living Authority下判断产品事实是否明确，识别缺口/冲突/范围变化，并在用户已明确裁决后允许AUTHORITY_UPDATE_ONLY直接修改docs/authority，不创建版本化 Authority 副本。
 ---
 
 # Product Sovereignty Gate
@@ -21,7 +21,7 @@ description: AI自动化测试执行平台产品主权门；在Single Living Aut
 docs/authority/**
 ```
 
-该目录是**受治理的可修改 living authority**，不是不可变 R4.x baseline。Git 历史由用户在 IDEA 中管理；`MUST_NOT_INVOKE_GIT`，Codex 不运行任何 Git 命令。
+该目录是**受治理的可修改 living authority**，不是历史版本化 Authority 副本。Git 历史由用户在 IDEA 中管理；`MUST_NOT_INVOKE_GIT`，Codex 不运行任何 Git 命令。
 
 ## 调用位置
 
@@ -93,15 +93,18 @@ workflow_state = AUTHORITY_UPDATE_ONLY
 
 此阶段：`CONFIRMED` 只证明用户已经决定，不代表当前权威事实已经同步。进入 `AUTHORITY_UPDATE_ONLY` 后**禁止 Architecture/Implementation**，只允许同步源文档与验证；代码不修改。
 
-1. 直接修改受影响的 `docs/authority/**` 源文档；
-2. **不得创建 R4.3/R4.4/R5.x 目录**；
-3. 不生成 Manifest/Release Snapshot；
-4. 运行 `tools/verify_authority.py` 和相关 validators；
-5. 更新同一个 Task Context Pack authority digest / pack revision；
-6. 重新执行 Product Gate；
-7. 只有重新得到 `PRODUCT_FACT_FOUND` 才进入 Architecture/Implementation。
+1. 由 `feature-orchestrator` 作为唯一 `AUTHORITY_PHYSICAL_WRITE_OWNER` 统一执行物理写入；本 Skill 和所有子 Agent 只产生/消费 `AUTHORITY_CHANGE_REQUEST`，不得并发直接编辑；
+2. 修改意图先汇总为 workspace 外临时 `authority_change_set`，使用 workspace-level mutex、expected SHA-256、before-image 与 atomic replace；
+3. **不得创建 R4.3/R4.4/R5.x 目录**；
+4. 不生成 Manifest/Release Snapshot；
+5. 运行 `tools/verify_authority.py` 和相关 validators；
+6. 更新同一个 Task Context Pack authority digest / pack revision；
+7. 重新执行 Product Gate；
+8. 只有重新得到 `PRODUCT_FACT_FOUND` 才进入 Architecture/Implementation。
 
 代码不得先成为事实源。只有 authority 同步完成、重新 Product Gate 得到 `PRODUCT_FACT_FOUND`，才能解除 `AUTHORITY_UPDATE_ONLY`。
+
+`authority_change_set`、before-image、write-state 和 Authority mutex 均为 Task 临时运行状态：正常完成必须 cleanup；Task abort/abandon 必要时 rollback 后 cleanup；中断时暂存供同 task_id Resume，任何临时文件不得成为 Authority 或长期项目文件。
 
 ## 与其它 Skill / Agent 的边界
 
@@ -117,7 +120,7 @@ workflow_state = AUTHORITY_UPDATE_ONLY
 - 把 AI 推荐、行业惯例或当前代码写成已批准产品事实；
 - 为了不中断编码自动替用户选择方案；
 - 用户已经明确时重复询问；
-- 创建新的版本化 baseline 目录；
+- 创建新的版本化 Authority 副本目录；
 - 生成 release manifest 来替代用户 Git 历史；
 - 运行 Git；
 - 在 CURRENT Pack 存在时重新 Full Scan；

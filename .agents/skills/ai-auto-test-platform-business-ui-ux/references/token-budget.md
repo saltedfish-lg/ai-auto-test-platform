@@ -6,11 +6,11 @@ UI_LOW：不生成独立文档，不启动Designer/Reviewer子Agent。
 
 UI_MEDIUM：生成约10–20行Business UX Spec；优先由frontend_implementer同上下文完成。
 
-UI_HIGH：现有页面先生成紧凑Pre-change Browser Baseline；独立Designer只接收Task Context Pack + 当前页面相关事实 + baseline摘要；Reviewer只接收Business UX Spec + Before/After浏览器证据 + 改动页面/组件 + 关键测试结果。
+UI_HIGH：现有页面先生成紧凑Pre-change Browser Evidence；独立Designer只接收Task Context Pack + 当前页面相关事实 + evidence摘要；Reviewer只接收Business UX Spec + Before/After浏览器证据 + 改动页面/组件 + 关键测试结果。
 
 ## 禁止
 
-- Designer和Frontend分别完整通读同一批基线；
+- Designer和Frontend分别完整通读同一批当前 Authority 输入；
 - Reviewer重新从零探索整个仓库；
 - 为“美化”读取后端所有实现；
 - 每个页面都调用独立Designer；

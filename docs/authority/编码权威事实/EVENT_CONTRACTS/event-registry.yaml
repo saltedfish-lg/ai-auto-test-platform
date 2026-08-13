@@ -1,10 +1,9 @@
 metadata:
   authority_model: SINGLE_LIVING_AUTHORITY
-  artifact_id: EVENT-REGISTRY-1.4.2
-  version: 1.4.2-auth-contract-completion
-  status: FROZEN_CONTRACT
-  event_count: 628
-  last_modified_at: '2026-08-07T00:00:00+08:00'
+  artifact_id: EVENT-REGISTRY-1.5.0
+  version: 1.5.0-p1-living-authority-closure
+  status: LIVING_AUTHORITY_IMPLEMENTATION_PENDING
+  last_modified_at: '2026-08-11T00:00:00+08:00'
   identity_semantics: aggregate_id envelope value MUST equal payload[aggregate_id_field]
 envelope:
   required:
@@ -11984,200 +11983,6 @@ events:
   aggregate_id_field: project_id
   payload_identity_fields:
   - project_id
-- event_type: platform_design_baseline_release.active
-  event_id: EVT-D96D3A253841
-  version: 1.0.0
-  producer_object_id: OBJ-085
-  producer: 发布、版本与基线治理_module
-  source_transition_ids:
-  - LCT-00740
-  - LCT-00743
-  partition_key: aggregate_id
-  ordering: PER_AGGREGATE_SEQUENCE
-  idempotency: event_id
-  delivery: AT_LEAST_ONCE_OUTBOX
-  consumers:
-  - audit_projection
-  - scheduler_projection
-  - operations_console
-  sensitive_fields: []
-  forbidden_fields:
-  - plaintext_password
-  - secret_value
-  - access_token
-  - refresh_token
-  - raw_credential
-  retry_policy:
-    max_attempts: 12
-    backoff: EXPONENTIAL_JITTER
-    dead_letter_after: MAX_ATTEMPTS
-  compatibility: BACKWARD_COMPATIBLE_WITHIN_MAJOR
-  schema_path: schemas/platform_design_baseline_release.active.schema.json
-  release_id: PDBR-2026.08.07-R4.2
-  aggregate_id_field: platform_design_baseline_release_id
-  payload_identity_fields:
-  - platform_design_baseline_release_id
-- event_type: platform_design_baseline_release.archived
-  event_id: EVT-3DB5CB1435BB
-  version: 1.0.0
-  producer_object_id: OBJ-085
-  producer: 发布、版本与基线治理_module
-  source_transition_ids:
-  - LCT-00744
-  - LCT-00745
-  partition_key: aggregate_id
-  ordering: PER_AGGREGATE_SEQUENCE
-  idempotency: event_id
-  delivery: AT_LEAST_ONCE_OUTBOX
-  consumers:
-  - audit_projection
-  - scheduler_projection
-  - operations_console
-  sensitive_fields: []
-  forbidden_fields:
-  - plaintext_password
-  - secret_value
-  - access_token
-  - refresh_token
-  - raw_credential
-  retry_policy:
-    max_attempts: 12
-    backoff: EXPONENTIAL_JITTER
-    dead_letter_after: MAX_ATTEMPTS
-  compatibility: BACKWARD_COMPATIBLE_WITHIN_MAJOR
-  schema_path: schemas/platform_design_baseline_release.archived.schema.json
-  release_id: PDBR-2026.08.07-R4.2
-  aggregate_id_field: platform_design_baseline_release_id
-  payload_identity_fields:
-  - platform_design_baseline_release_id
-- event_type: platform_design_baseline_release.disabled
-  event_id: EVT-C00E36F96A00
-  version: 1.0.0
-  producer_object_id: OBJ-085
-  producer: 发布、版本与基线治理_module
-  source_transition_ids:
-  - LCT-00741
-  partition_key: aggregate_id
-  ordering: PER_AGGREGATE_SEQUENCE
-  idempotency: event_id
-  delivery: AT_LEAST_ONCE_OUTBOX
-  consumers:
-  - audit_projection
-  - scheduler_projection
-  - operations_console
-  sensitive_fields: []
-  forbidden_fields:
-  - plaintext_password
-  - secret_value
-  - access_token
-  - refresh_token
-  - raw_credential
-  retry_policy:
-    max_attempts: 12
-    backoff: EXPONENTIAL_JITTER
-    dead_letter_after: MAX_ATTEMPTS
-  compatibility: BACKWARD_COMPATIBLE_WITHIN_MAJOR
-  schema_path: schemas/platform_design_baseline_release.disabled.schema.json
-  release_id: PDBR-2026.08.07-R4.2
-  aggregate_id_field: platform_design_baseline_release_id
-  payload_identity_fields:
-  - platform_design_baseline_release_id
-- event_type: platform_design_baseline_release.draft
-  event_id: EVT-4B289ECB5C2C
-  version: 1.0.0
-  producer_object_id: OBJ-085
-  producer: 发布、版本与基线治理_module
-  source_transition_ids:
-  - LCT-00739
-  partition_key: aggregate_id
-  ordering: PER_AGGREGATE_SEQUENCE
-  idempotency: event_id
-  delivery: AT_LEAST_ONCE_OUTBOX
-  consumers:
-  - audit_projection
-  - scheduler_projection
-  - operations_console
-  sensitive_fields: []
-  forbidden_fields:
-  - plaintext_password
-  - secret_value
-  - access_token
-  - refresh_token
-  - raw_credential
-  retry_policy:
-    max_attempts: 12
-    backoff: EXPONENTIAL_JITTER
-    dead_letter_after: MAX_ATTEMPTS
-  compatibility: BACKWARD_COMPATIBLE_WITHIN_MAJOR
-  schema_path: schemas/platform_design_baseline_release.draft.schema.json
-  release_id: PDBR-2026.08.07-R4.2
-  aggregate_id_field: platform_design_baseline_release_id
-  payload_identity_fields:
-  - platform_design_baseline_release_id
-- event_type: platform_design_baseline_release.logically_deleted
-  event_id: EVT-B2BF98359099
-  version: 1.0.0
-  producer_object_id: OBJ-085
-  producer: 发布、版本与基线治理_module
-  source_transition_ids:
-  - LCT-00746
-  partition_key: aggregate_id
-  ordering: PER_AGGREGATE_SEQUENCE
-  idempotency: event_id
-  delivery: AT_LEAST_ONCE_OUTBOX
-  consumers:
-  - audit_projection
-  - scheduler_projection
-  - operations_console
-  sensitive_fields: []
-  forbidden_fields:
-  - plaintext_password
-  - secret_value
-  - access_token
-  - refresh_token
-  - raw_credential
-  retry_policy:
-    max_attempts: 12
-    backoff: EXPONENTIAL_JITTER
-    dead_letter_after: MAX_ATTEMPTS
-  compatibility: BACKWARD_COMPATIBLE_WITHIN_MAJOR
-  schema_path: schemas/platform_design_baseline_release.logically_deleted.schema.json
-  release_id: PDBR-2026.08.07-R4.2
-  aggregate_id_field: platform_design_baseline_release_id
-  payload_identity_fields:
-  - platform_design_baseline_release_id
-- event_type: platform_design_baseline_release.recovered
-  event_id: EVT-84DEA170506F
-  version: 1.0.0
-  producer_object_id: OBJ-085
-  producer: 发布、版本与基线治理_module
-  source_transition_ids:
-  - LCT-00742
-  partition_key: aggregate_id
-  ordering: PER_AGGREGATE_SEQUENCE
-  idempotency: event_id
-  delivery: AT_LEAST_ONCE_OUTBOX
-  consumers:
-  - audit_projection
-  - scheduler_projection
-  - operations_console
-  sensitive_fields: []
-  forbidden_fields:
-  - plaintext_password
-  - secret_value
-  - access_token
-  - refresh_token
-  - raw_credential
-  retry_policy:
-    max_attempts: 12
-    backoff: EXPONENTIAL_JITTER
-    dead_letter_after: MAX_ATTEMPTS
-  compatibility: BACKWARD_COMPATIBLE_WITHIN_MAJOR
-  schema_path: schemas/platform_design_baseline_release.recovered.schema.json
-  release_id: PDBR-2026.08.07-R4.2
-  aggregate_id_field: platform_design_baseline_release_id
-  payload_identity_fields:
-  - platform_design_baseline_release_id
 - event_type: platform_technical_event.archived
   event_id: EVT-9C7C041C1F03
   version: 1.0.0
@@ -19685,10 +19490,32 @@ events:
   aggregate_id_field: user_id
   payload_identity_fields:
   - user_id
-
 authentication_audit_contract:
   decision: NO_NEW_DOMAIN_EVENTS_FOR_P1_AUTHENTICATION
-  reason: P1认证动作没有跨边界事件消费者，登录成功/失败、登出、密码修改/重置和Session撤销使用不可变安全审计；避免自创无消费方事件。
-  reused_domain_events: [admin.active, admin.locked, user.active, user.locked, user.disabled, user.archived, role_binding.active]
-  audit_actions: [LOGIN_SUCCEEDED, LOGIN_FAILED, LOGOUT, PASSWORD_CHANGED, CREDENTIAL_RESET, SESSION_REVOKED, PERMISSION_DENIED]
-  forbidden_fields: [password, password_hash, access_token, refresh_token, cookie, secret, database_credential]
+  reason: P1认证与普通用户治理动作没有跨边界事件消费者，使用不可变安全审计；仅默认admin初始化沿用admin.active与user.active，atp_user_role_binding不得冒充OBJ-087发布role_binding事件。
+  reused_domain_events:
+  - admin.active
+  - user.active
+  audit_actions:
+  - LOGIN_SUCCEEDED
+  - LOGIN_FAILED
+  - REFRESH_SUCCEEDED
+  - REFRESH_FAILED
+  - LOGOUT
+  - PASSWORD_CHANGED
+  - CREDENTIAL_RESET
+  - SESSION_REVOKED
+  - USER_CREATED
+  - USER_ENABLED
+  - USER_DISABLED_OR_LOCKED
+  - ROLE_ASSIGNED
+  - ROLE_REVOKED
+  - PERMISSION_DENIED
+  forbidden_fields:
+  - password
+  - password_hash
+  - access_token
+  - refresh_token
+  - cookie
+  - secret
+  - database_credential

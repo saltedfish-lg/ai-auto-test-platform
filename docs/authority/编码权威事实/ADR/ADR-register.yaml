@@ -18,7 +18,7 @@ adrs:
   blocks_full_code_ready: false
   source_baseline_sha256: c146e9a1913b5e8a22dc8f19275a0fa902736b3ad178b473dad502e2ad95ff57
   approved_at: '2026-08-06'
-  safe_behavior_before_decision: 决策已关闭，按对应ADR及PDBR-2026.08.06-R2冻结契约实施。
+  safe_behavior_before_decision: 决策已关闭；相关历史裁决已吸收进入当前 Living Authority，按对应ADR及现行 Authority 内容实施。
   superseded_by: ADR-030
   release_id: PDBR-2026.08.06-R3
 - adr_id: ADR-019
@@ -31,7 +31,7 @@ adrs:
   blocks_full_code_ready: false
   source_baseline_sha256: c146e9a1913b5e8a22dc8f19275a0fa902736b3ad178b473dad502e2ad95ff57
   approved_at: '2026-08-06'
-  safe_behavior_before_decision: 决策已关闭，按对应ADR及PDBR-2026.08.06-R2冻结契约实施。
+  safe_behavior_before_decision: 决策已关闭；相关历史裁决已吸收进入当前 Living Authority，按对应ADR及现行 Authority 内容实施。
   release_id: PDBR-2026.08.06-R3
 - adr_id: ADR-020
   decision_id: PEND-R3-003
@@ -43,7 +43,7 @@ adrs:
   blocks_full_code_ready: false
   source_baseline_sha256: c146e9a1913b5e8a22dc8f19275a0fa902736b3ad178b473dad502e2ad95ff57
   approved_at: '2026-08-06'
-  safe_behavior_before_decision: 决策已关闭，按对应ADR及PDBR-2026.08.06-R2冻结契约实施。
+  safe_behavior_before_decision: 决策已关闭；相关历史裁决已吸收进入当前 Living Authority，按对应ADR及现行 Authority 内容实施。
   release_id: PDBR-2026.08.06-R3
 - adr_id: ADR-021
   decision_id: PEND-R3-004
@@ -55,7 +55,7 @@ adrs:
   blocks_full_code_ready: false
   source_baseline_sha256: c146e9a1913b5e8a22dc8f19275a0fa902736b3ad178b473dad502e2ad95ff57
   approved_at: '2026-08-06'
-  safe_behavior_before_decision: 决策已关闭，按对应ADR及PDBR-2026.08.06-R2冻结契约实施。
+  safe_behavior_before_decision: 决策已关闭；相关历史裁决已吸收进入当前 Living Authority，按对应ADR及现行 Authority 内容实施。
   release_id: PDBR-2026.08.06-R3
 - adr_id: ADR-022
   decision_id: PEND-R3-005
@@ -67,7 +67,7 @@ adrs:
   blocks_full_code_ready: false
   source_baseline_sha256: c146e9a1913b5e8a22dc8f19275a0fa902736b3ad178b473dad502e2ad95ff57
   approved_at: '2026-08-06'
-  safe_behavior_before_decision: 决策已关闭，按对应ADR及PDBR-2026.08.06-R2冻结契约实施。
+  safe_behavior_before_decision: 决策已关闭；相关历史裁决已吸收进入当前 Living Authority，按对应ADR及现行 Authority 内容实施。
   release_id: PDBR-2026.08.06-R3
 - adr_id: ADR-023
   decision_id: PEND-R3-006
@@ -79,7 +79,7 @@ adrs:
   blocks_full_code_ready: false
   source_baseline_sha256: c146e9a1913b5e8a22dc8f19275a0fa902736b3ad178b473dad502e2ad95ff57
   approved_at: '2026-08-06'
-  safe_behavior_before_decision: 决策已关闭，按对应ADR及PDBR-2026.08.06-R2冻结契约实施。
+  safe_behavior_before_decision: 决策已关闭；相关历史裁决已吸收进入当前 Living Authority，按对应ADR及现行 Authority 内容实施。
   release_id: PDBR-2026.08.06-R3
 - adr_id: ADR-024
   decision_id: PEND-R3-007
@@ -91,7 +91,7 @@ adrs:
   blocks_full_code_ready: false
   source_baseline_sha256: c146e9a1913b5e8a22dc8f19275a0fa902736b3ad178b473dad502e2ad95ff57
   approved_at: '2026-08-06'
-  safe_behavior_before_decision: 决策已关闭，按对应ADR及PDBR-2026.08.06-R2冻结契约实施。
+  safe_behavior_before_decision: 决策已关闭；相关历史裁决已吸收进入当前 Living Authority，按对应ADR及现行 Authority 内容实施。
   release_id: PDBR-2026.08.06-R3
 - adr_id: ADR-025
   decision_id: PEND-R3-008
@@ -103,7 +103,7 @@ adrs:
   blocks_full_code_ready: false
   source_baseline_sha256: c146e9a1913b5e8a22dc8f19275a0fa902736b3ad178b473dad502e2ad95ff57
   approved_at: '2026-08-06'
-  safe_behavior_before_decision: 决策已关闭，按对应ADR及PDBR-2026.08.06-R2冻结契约实施。
+  safe_behavior_before_decision: 决策已关闭；相关历史裁决已吸收进入当前 Living Authority，按对应ADR及现行 Authority 内容实施。
   release_id: PDBR-2026.08.06-R3
 - adr_id: ADR-026
   decision_id: PEND-R3-009
@@ -115,7 +115,7 @@ adrs:
   blocks_full_code_ready: false
   source_baseline_sha256: c146e9a1913b5e8a22dc8f19275a0fa902736b3ad178b473dad502e2ad95ff57
   approved_at: '2026-08-06'
-  safe_behavior_before_decision: 决策已关闭，按对应ADR及PDBR-2026.08.06-R2冻结契约实施。
+  safe_behavior_before_decision: 决策已关闭；相关历史裁决已吸收进入当前 Living Authority，按对应ADR及现行 Authority 内容实施。
   release_id: PDBR-2026.08.06-R3
 - adr_id: ADR-027
   decision_id: PEND-R3-010
@@ -127,7 +127,7 @@ adrs:
   blocks_full_code_ready: false
   source_baseline_sha256: c146e9a1913b5e8a22dc8f19275a0fa902736b3ad178b473dad502e2ad95ff57
   approved_at: '2026-08-06'
-  safe_behavior_before_decision: 决策已关闭，按对应ADR及PDBR-2026.08.06-R2冻结契约实施。
+  safe_behavior_before_decision: 决策已关闭；相关历史裁决已吸收进入当前 Living Authority，按对应ADR及现行 Authority 内容实施。
   release_id: PDBR-2026.08.06-R3
 - adr_id: ADR-028
   decision_id: PEND-R3-011
@@ -139,7 +139,7 @@ adrs:
   blocks_full_code_ready: false
   source_baseline_sha256: c146e9a1913b5e8a22dc8f19275a0fa902736b3ad178b473dad502e2ad95ff57
   approved_at: '2026-08-06'
-  safe_behavior_before_decision: 决策已关闭，按对应ADR及PDBR-2026.08.06-R2冻结契约实施。
+  safe_behavior_before_decision: 决策已关闭；相关历史裁决已吸收进入当前 Living Authority，按对应ADR及现行 Authority 内容实施。
   release_id: PDBR-2026.08.06-R3
 - adr_id: ADR-029
   decision_id: PEND-R3-012
@@ -151,7 +151,7 @@ adrs:
   blocks_full_code_ready: false
   source_baseline_sha256: c146e9a1913b5e8a22dc8f19275a0fa902736b3ad178b473dad502e2ad95ff57
   approved_at: '2026-08-06'
-  safe_behavior_before_decision: 决策已关闭，按对应ADR及PDBR-2026.08.06-R2冻结契约实施。
+  safe_behavior_before_decision: 决策已关闭；相关历史裁决已吸收进入当前 Living Authority，按对应ADR及现行 Authority 内容实施。
   release_id: PDBR-2026.08.06-R3
 - adr_id: ADR-030
   title: V1正式运行SLO与任务派发时延

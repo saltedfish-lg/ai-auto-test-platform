@@ -1,49 +1,26 @@
 metadata:
   authority_model: SINGLE_LIVING_AUTHORITY
-  artifact_id: AUTHENTICATION-CONTRACT-1.4.3
-  version: 1.4.3-p1-auth-governance-closure
+  artifact_id: AUTHENTICATION-CONTRACT-1.5.0
+  version: 1.5.0-p1-living-authority-closure
   status: ACTIVE_CONTROLLED_MUTABLE_AUTHORITY
-  change_scope: P1_AUTHENTICATION_CONTRACT_COMPLETION
+  change_scope: P1_CREDENTIAL_SOURCE_LIMIT_AND_PASSWORD_REAUTHENTICATION
   pending_user_decisions: 0
-  deferred_product_decisions: 3
-  implementation_status: IMPLEMENTED_PENDING_RUNTIME_VALIDATION
-product_decision_placeholders:
+  deferred_product_decisions: 0
+  implementation_status_source: SYSTEM_DESIGN.runtime_gate_contract.implementation_status
+product_decision_placeholders: []
+confirmed_product_decisions:
 - decision_id: GOV-P1-002
-  name: TEMPORARY_CREDENTIAL_DELIVERY_AND_WRITE_SEMANTICS
-  status: BLOCKED_BY_PRODUCT_DECISION
-  decision_owner: USER_PRODUCT_SOVEREIGNTY
-  blocks_current_approved_scope: false
-  current_fact: 当前P1已定义默认admin Bootstrap、force_password_change与首改密码边界；普通用户创建时的临时Credential交付及相关User/Admin/Role写侧组合未进入已批准实现范围。
-  issue: 管理员创建普通用户时的临时Credential交付方式，以及User/Admin/Role相关写侧组合的最终业务语义尚未形成唯一产品事实。
-  missing_facts:
-  - 临时凭据由管理员输入还是由系统生成，以及允许采用的安全交付边界。
-  - 临时Credential与User、Role及管理员写侧关系的最终原子性、失败回滚与可观察结果语义。
-  blocked_scope: 仅阻断管理员创建普通用户时的临时凭据交付和相关写侧扩展；不阻断已批准的登录、admin Bootstrap、改密、JWT Key Ring与认证安全审计实现。
-  implementation_rule: 在用户作出唯一产品裁决并完成AUTHORITY_UPDATE_ONLY之前，不得推导、编码或通过默认行为固化该语义。
+  selected_option: SYSTEM_GENERATED_ONE_TIME_TEMP_CREDENTIAL
+  decision_source: CURRENT_USER_REQUEST
+  status: CONFIRMED_IN_LIVING_AUTHORITY
 - decision_id: GOV-P1-003
-  name: LOGIN_REFRESH_SOURCE_RATE_LIMIT_POLICY
-  status: BLOCKED_BY_PRODUCT_DECISION
-  decision_owner: USER_PRODUCT_SOVEREIGNTY
-  blocks_current_approved_scope: false
-  current_fact: 当前P1已实现Credential失败次数/时间窗口/临时锁与Refresh Rotation/Replay Detection，但未定义或实现IP、代理来源或其他source identity维度的来源级Rate Limit。
-  issue: Login与Refresh是否实施来源级限流，以及来源身份、阈值、时间窗口和代理信任边界尚未形成唯一产品事实。
-  missing_facts:
-  - 来源级限流使用何种可信来源身份维度，以及反向代理场景下哪些来源头可被信任。
-  - Login与Refresh是否采用独立阈值/窗口，以及触发限流后的正式外部响应语义。
-  blocked_scope: 仅阻断来源级Rate Limit扩展；现有密码失败锁、Refresh Rotation、Replay Detection和认证错误语义继续按当前Authority执行。
-  implementation_rule: 在用户作出唯一产品裁决并完成AUTHORITY_UPDATE_ONLY之前，不得新增来源级限流器、默认阈值或代理来源信任规则。
+  selected_option: SOURCE_RATE_LIMIT_ENABLED_MYSQL84
+  decision_source: CURRENT_USER_REQUEST
+  status: CONFIRMED_IN_LIVING_AUTHORITY
 - decision_id: GOV-P1-005
-  name: CHANGE_PASSWORD_LOST_RESPONSE_IDEMPOTENT_REPLAY
-  status: BLOCKED_BY_PRODUCT_DECISION
-  decision_owner: USER_PRODUCT_SOVEREIGNTY
-  blocks_current_approved_scope: false
-  current_fact: Change Password当前已要求Idempotency-Key并写入atp_idempotency_record；同一key再次使用当前返回409冲突，未缓存或重放第一次成功响应。
-  issue: Change Password已成功提交但客户端丢失响应后，同一业务意图再次请求时的幂等重放结果尚未形成唯一产品事实。
-  missing_facts:
-  - 是否需要显式幂等键，以及可识别为同一改密业务意图的正式边界。
-  - 重放时应返回既有成功结果、拒绝重复改密，还是采用其他正式结果；新Session/Access Token如何处理。
-  blocked_scope: 仅阻断Change Password“成功提交但响应丢失”后的幂等重放扩展；正常改密事务、凭据版本递增和Session撤销/重签继续按当前Authority执行。
-  implementation_rule: 在用户作出唯一产品裁决并完成AUTHORITY_UPDATE_ONLY之前，保留现有Idempotency-Key与重复key冲突语义；不得自行改造成成功结果缓存/重放、自动换key重试或其他response-loss恢复语义。
+  selected_option: PASSWORD_CHANGE_REVOKES_REFRESH_SESSIONS_AND_REAUTHENTICATES
+  decision_source: CURRENT_USER_REQUEST
+  status: CONFIRMED_IN_LIVING_AUTHORITY
 authority:
   product_rules:
   - 核心对象、业务规则与生命周期/核心对象、业务规则与生命周期.yaml
@@ -52,6 +29,7 @@ authority:
   - 编码权威事实/SYSTEM_DESIGN.yaml
   - 编码权威事实/DATABASE_DDL/V5__platform_authentication_contract.sql
   - 编码权威事实/DATABASE_DDL/V6__p1_auth_governance_closure.sql
+  - 编码权威事实/DATABASE_DDL/V7__p1_remaining_authentication_closure.sql
   - 编码权威事实/OPENAPI/openapi.yaml
   adr: ADR-032 + ADR-033
 scope:
@@ -60,6 +38,8 @@ scope:
   - 默认admin安全初始化
   - Browser Access JWT与Refresh Session
   - 当前用户、登出、刷新和改密
+  - 管理员创建普通用户、重置凭据、启停用户及管理User-Role Binding
+  - Login与Refresh的MySQL共享来源级限流
   - 认证状态检查、撤销、审计及与RBAC的边界
   excluded:
   - 普通用户自助注册
@@ -117,7 +97,7 @@ refresh_session:
   multiple_sessions: 每用户最多5个ACTIVE Session；创建第6个时撤销最早的ACTIVE Session并记录审计。
   logout: 撤销Cookie对应Session；缺失或已撤销Session仍返回204，因此登出幂等。
   user_disabled: 用户进入LOCKED、DISABLED、ARCHIVED或LOGICALLY_DELETED时，同事务撤销其全部ACTIVE Session；后续Access请求也因实时用户状态校验失效。
-  password_changed: 凭据版本递增并撤销全部旧Session；改密响应创建新的Session与Access Token。
+  password_changed: 凭据版本递增并撤销全部旧Session；改密返回204且不创建或签发新Session、Access Token或Refresh Token，客户端必须重新登录。
   credential_reset: 凭据版本递增、force_password_change设为true并撤销全部Session。
 browser_transport:
   access_token: 仅保存在运行时内存，通过Authorization Bearer头发送；禁止localStorage、sessionStorage和持久化IndexedDB。
@@ -158,6 +138,15 @@ supporting_objects:
   business_unique_key: audit_id
   lifecycle_values: [APPEND_ONLY]
   delete_semantics: 禁止UPDATE和DELETE；MySQL trigger强制不可变，只允许INSERT。
+- object_id: AUTH-OBJ-004
+  canonical_name: auth_source_rate_limit
+  owner: AuthenticationRateLimitService
+  aggregate_owner: AUTHENTICATION_SECURITY_BOUNDARY
+  table: atp_auth_source_rate_limit
+  primary_key: source_key_hash+operation_id+window_started_at
+  business_unique_key: source_key_hash+operation_id+window_started_at
+  lifecycle_values: [ACTIVE_WINDOW, EXPIRED]
+  delete_semantics: expires_at到期后允许受控批量清理；不得保存原始来源IP。
 credential:
   credential_type: PASSWORD
   lifecycle_status: ACTIVE
@@ -168,6 +157,9 @@ credential:
   one_active_password_credential_per_user: true
   password_hash_export: FORBIDDEN
   plaintext_storage: FORBIDDEN
+  temporary_credential_generation: 服务端使用密码学安全随机源生成满足当前密码策略的高强度临时密码；调用方不得提交临时密码。
+  temporary_credential_delivery: 仅在create_user或reset_user_credential成功响应中展示一次；常规User查询、列表、审计、日志、trace、report和artifact均不得包含。
+  credential_reset: 新哈希替换旧哈希、credential_version原子递增、force_password_change=true并撤销全部ACTIVE Refresh Session；旧密码立即失效。
 password_policy:
   minimum_length: 12
   maximum_length: 128
@@ -180,7 +172,7 @@ password_policy:
   common_passwords: 必须拒绝部署内置且可升级的常见弱密码拒绝列表；拒绝列表不得记录用户输入。
   periodic_expiry: V1不强制定期过期。
   password_history: V1不保留历史密码，仅禁止新密码与当前密码相同。
-  change_password_session_effect: 凭据版本递增、撤销全部旧Session并为当前客户端创建新Session。
+  change_password_session_effect: 凭据版本递增并撤销全部旧Session；返回204，不签发任何Token，客户端清理认证状态并重新登录。
 password_hash:
   algorithm: Argon2id
   implementation: 成熟维护库；禁止自实现算法。
@@ -202,6 +194,40 @@ login_failure_policy:
   lock_storage: locked_until与失败窗口字段；不改变用户业务生命周期。
   successful_login: 清零失败次数、窗口和locked_until，并记录last_successful_login_at。
   correct_password_but_temporary_lock: 403 AUTH_ACCOUNT_TEMPORARILY_LOCKED
+auth_hmac_key_ring:
+  configuration: ATP_AUTH_HMAC_MASTER_KEY_FILE
+  format: STRICT_JSON_RING
+  root_fields: [ring_version, active_key_id, keys]
+  key_fields: [key_id, key_material, activated_at, retired_at_if_previous, accept_until_if_previous]
+  key_material: base64url解码后至少32字节；不得进入日志、审计、持久化业务数据或对象repr。
+  lifecycle: 唯一active key用于新HMAC；previous仅在retired_at <= now < accept_until时参与兼容读取；允许尚未激活的staged key但不得提前使用。
+  minimum_rotation_overlap_seconds: 86400
+  derivation: HKDF-SHA256，使用固定版本salt和source-rate-limit、change-password-fingerprint、idempotency-storage-key三个独立domain label。
+  startup_policy: 文件缺失、不可读、为空、JSON或schema无效、active不唯一、key过短、UTC时间无效或previous重叠不足时启动失败关闭。
+source_rate_limit:
+  enabled: true
+  state_owner: AuthenticationRateLimitService
+  persistence: MYSQL84_SHARED_STATE
+  algorithm: FIXED_UTC_WINDOW
+  window_seconds: 300
+  limits:
+    login_platform_user: 60
+    refresh_platform_session: 300
+  source_identity:
+    default: DIRECT_TCP_HTTP_PEER_IP
+    canonicalization: Python ipaddress规范化IPv4/IPv6后，以部署秘密HMAC-SHA256生成source_key_hash；数据库不得保存原始IP。
+    trusted_proxy_config: ATP_TRUSTED_PROXY_CIDRS；默认空集合。
+    forwarded_policy: 仅直接peer属于TRUSTED_PROXY_CIDRS时解析Forwarded，缺失时才解析X-Forwarded-For；从右向左剥离可信代理，首个非可信规范地址为来源。
+    untrusted_policy: 直接peer不可信时无条件忽略Forwarded与X-Forwarded-For。
+    invalid_forwarded_policy: 解析失败时使用直接peer，禁止以无效Header绕过限流。
+  external_response:
+    status: 429
+    code: AUTH_SOURCE_RATE_LIMITED
+    retry_after: 距当前5分钟UTC窗口结束的整秒数，最小1、最大300；必须输出合法Retry-After响应头。
+    enumeration_protection: 不得泄漏账号或Refresh Session是否存在。
+  concurrency: 每个source_key_hash+operation_id+window_started_at由MySQL唯一键和行级锁串行计数，多实例共享同一结果。
+  failure_policy: MySQL限流状态不可用时失败关闭为503，不得绕过来源级限流继续认证。
+  cleanup: expires_at索引支持受控批量删除过期窗口；在线请求不得执行无界清理。
 admin_bootstrap:
   username: admin
   command_contract: 显式bootstrap-admin命令；禁止普通API或Vue触发首次初始化。
@@ -230,7 +256,39 @@ first_password_change:
   - change_current_user_password
   - logout_platform_user
   forbidden_behavior: 其他受保护Operation返回403 AUTH_PASSWORD_CHANGE_REQUIRED；refresh也被拒绝，用户可重新登录后完成改密。
-  completion: 成功改密后force_password_change=false、credential_version递增、旧Session全部撤销，并为当前客户端签发新Session。
+  completion: 成功改密后force_password_change=false、credential_version递增、旧Session全部撤销并返回204；当前客户端清理内存身份并跳转登录页，不签发新Token。
+user_administration:
+  create_user:
+    permission: USER_CREATE + ROLE_BIND；请求包含项目级binding或DataScopeGrant时还要求PROJECT_MEMBER_MANAGE。
+    transaction: User、PASSWORD Credential、至少一个UserRoleBinding、指定DataScopeGrant、幂等记录和安全审计在同一事务提交；任一步失败整体回滚。
+    initial_state: user=ACTIVE、credential=ACTIVE、credential_version=1、force_password_change=true。
+    response: 首次成功返回201和delivery_status=ISSUED，并只在该响应返回一次性temporary_password；相同Idempotency-Key与相同非秘密请求指纹重放返回200和delivery_status=ALREADY_DELIVERED且不含temporary_password；禁止后续查询。
+  credential_reset:
+    permission: USER_CREATE
+    response: 首次成功返回200和delivery_status=ISSUED，并只返回新的一次性temporary_password；相同Idempotency-Key与相同非秘密请求指纹重放返回200和delivery_status=ALREADY_DELIVERED且不含temporary_password；不返回旧凭据。
+    transaction: 更新密码哈希与credential_version、设置force_password_change、撤销Refresh Session、幂等记录和审计同事务。
+  user_state_commands:
+    permission: USER_CREATE
+    enable: 仅将允许恢复的普通用户状态转为ACTIVE。
+    disable: 将普通用户转为DISABLED并同事务撤销全部ACTIVE Refresh Session。
+  role_binding:
+    persistence: 复用atp_user_role_binding和atp_data_scope_grant；不得使用平行Role Binding模型承载认证授权事实。
+    project_scoped_realtime_authorization: project_id非空的实时请求必须同时满足有效UserRoleBinding、同project_id且ACTIVE的ProjectMember职责，并要求ProjectMember.role_id与该UserRoleBinding.role_id一致；仅有项目成员关系或仅有项目级binding均不得授权。所有project-scoped Role Binding写操作必须使用请求/目标Binding自己的project_id作为实时AuthorizationContext，禁止用其它项目或聚合/me权限授权目标项目写入。ROLE-SUPER-ADMIN按平台最高权限契约处理；ROLE-PLATFORM-ADMIN仍受目标项目显式DataScopeGrant约束但不要求项目职责绑定。
+    create: ROLE_BIND权限；project_id非空时ROLE_BIND与PROJECT_MEMBER_MANAGE都必须针对目标project_id实时授权；create_user中携带的初始project-scoped Role Binding适用同一规则；平台级binding附带DataScopeGrant时仍要求PROJECT_MEMBER_MANAGE；创建ACTIVE binding及指定DataScopeGrant并写ROLE_ASSIGNED审计。
+    revoke: ROLE_BIND权限；项目级binding在实际写入前还必须针对被撤销Binding.project_id实时满足ROLE_BIND与PROJECT_MEMBER_MANAGE；设置valid_to并递增row_version，不物理删除，写ROLE_REVOKED审计。
+  optimistic_lock: 更新、启停、重置和撤销命令必须提交expected_version并原子递增对应row_version。
+  admin_protection:
+  - admin不可删除、禁用、锁定、归档、逻辑删除或改名。
+  - admin与ROLE-SUPER-ADMIN的有效UserRoleBinding不可撤销、失效或替换。
+  - 所有User、Credential、UserRoleBinding写路径都必须服务端强制这些规则；前端隐藏不是安全边界。
+change_password_idempotency:
+  key_scope: principal+change_current_user_password+Idempotency-Key
+  request_fingerprint: 对current_password与new_password的规范请求使用部署秘密HMAC-SHA256；只保存不可逆摘要，不保存密码或Token。
+  first_success: 密码只变更一次、credential_version只递增一次、Session撤销为一个逻辑操作、记录terminal 204结果。
+  same_key_same_fingerprint: 返回逻辑等价204，不再校验已失效旧密码，不重复任何变更、审计或Session撤销。
+  same_key_different_fingerprint: 返回409 AUTH_IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_REQUEST。
+  concurrency: 先以atp_idempotency_record唯一行claim或锁定同key请求，再按User→Credential→Session固定顺序加锁；并发相同key收敛为一次逻辑成功，竞争请求在首事务提交后读取terminal记录并返回204。
+  retention: V7改密幂等记录使用contract_version=2并保留24小时后清理；response_json必须为空，不保存Access Token、Refresh Token、密码或可恢复秘密。升级前既有记录保留contract_version=1直至自然过期，V7不得假定能从旧request_hash回填principal。
 state_model:
   user_business_state_owner: UserAggregateService owns atp_user.lifecycle_status
   login_allowed_user_state: ACTIVE
@@ -242,6 +300,7 @@ state_model:
   temporary_security_lock: locked_until晚于当前时间；不改变atp_user.lifecycle_status。
   session_state_owner: SessionService owns auth_refresh_session.lifecycle_status与rotation/revoke字段。
   audit_immutability_owner: AuthenticationAuditService owns atp_auth_security_audit append-only写入；数据库trigger拒绝UPDATE/DELETE。
+  source_rate_limit_owner: AuthenticationRateLimitService owns atp_auth_source_rate_limit窗口计数和过期清理；原始来源IP不持久化。
 operations:
 - operation_id: login_platform_user
   method: POST
@@ -278,7 +337,52 @@ operations:
   permission: NONE
   idempotency: IDEMPOTENCY_KEY_REQUIRED
   audit: REQUIRED
+- operation_id: create_user
+  method: POST
+  path: /api/v1/user
+  authentication: BEARER_ACCESS_TOKEN
+  permission: USER_CREATE+ROLE_BIND；项目或数据范围存在时附加PROJECT_MEMBER_MANAGE
+  idempotency: IDEMPOTENCY_KEY_REQUIRED
+  audit: USER_CREATED_AND_ROLE_ASSIGNED
+- operation_id: reset_user_credential
+  method: POST
+  path: /api/v1/user/{id}/credential-reset
+  authentication: BEARER_ACCESS_TOKEN
+  permission: USER_CREATE
+  idempotency: IDEMPOTENCY_KEY_REQUIRED
+  audit: CREDENTIAL_RESET_AND_SESSION_REVOKED
+- operation_id: enable_user
+  method: POST
+  path: /api/v1/user/{id}/enable
+  authentication: BEARER_ACCESS_TOKEN
+  permission: USER_CREATE
+  idempotency: IDEMPOTENCY_KEY_REQUIRED
+  audit: USER_ENABLED
+- operation_id: disable_user
+  method: POST
+  path: /api/v1/user/{id}/disable
+  authentication: BEARER_ACCESS_TOKEN
+  permission: USER_CREATE
+  idempotency: IDEMPOTENCY_KEY_REQUIRED
+  audit: USER_DISABLED_OR_LOCKED
+- operation_id: create_user_role_binding
+  method: POST
+  path: /api/v1/user-role-binding
+  authentication: BEARER_ACCESS_TOKEN
+  permission: ROLE_BIND；项目或数据范围存在时附加PROJECT_MEMBER_MANAGE
+  idempotency: IDEMPOTENCY_KEY_REQUIRED
+  audit: ROLE_ASSIGNED
+- operation_id: revoke_user_role_binding
+  method: POST
+  path: /api/v1/user-role-binding/{id}/revoke
+  authentication: BEARER_ACCESS_TOKEN
+  permission: ROLE_BIND；项目或数据范围存在时附加PROJECT_MEMBER_MANAGE
+  idempotency: IDEMPOTENCY_KEY_REQUIRED
+  audit: ROLE_REVOKED
 error_semantics:
+  request_validation_422:
+  - AUTH_REQUEST_VALIDATION_FAILED
+  request_validation_rule: 所有正式API在请求字段、类型、长度、枚举、格式或extra字段校验失败时统一返回422 application/problem+json与AUTH_REQUEST_VALIDATION_FAILED；不得复用AUTH_INVALID_CREDENTIALS或AUTH_OPERATION_FORBIDDEN_FOR_STATE。
   unauthenticated_401:
   - AUTH_REQUIRED
   - AUTH_INVALID_CREDENTIALS
@@ -294,8 +398,17 @@ error_semantics:
   - AUTH_ACCOUNT_TEMPORARILY_LOCKED
   - AUTH_PASSWORD_CHANGE_REQUIRED
   - AUTH_OPERATION_FORBIDDEN_FOR_STATE
+  conflict_409:
+  - AUTH_IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_REQUEST
+  - AUTH_ADMIN_IMMUTABLE
+  - AUTH_ROLE_BINDING_PROTECTED
+  - AUTH_CONCURRENCY_CONFLICT
+  rate_limited_429:
+  - AUTH_SOURCE_RATE_LIMITED
+  service_unavailable_503:
+  - AUTH_RATE_LIMIT_STATE_UNAVAILABLE
   response_media_type: application/problem+json
-  response_schema: ProblemDetails
+  response_schema: AuthenticationProblemDetails（结构兼容RFC 9457 ProblemDetails）
 audit_contract:
   persistence_table: atp_auth_security_audit
   owner: AuthenticationAuditService
@@ -305,12 +418,17 @@ audit_contract:
   required_actions:
   - LOGIN_SUCCEEDED
   - LOGIN_FAILED
+  - REFRESH_SUCCEEDED
+  - REFRESH_FAILED
   - LOGOUT
   - PASSWORD_CHANGED
   - CREDENTIAL_RESET
   - SESSION_REVOKED
+  - USER_CREATED
+  - USER_ENABLED
   - USER_DISABLED_OR_LOCKED
   - ROLE_ASSIGNED
+  - ROLE_REVOKED
   - PERMISSION_DENIED
   required_fields: [actor_id, target_user_id_if_known, session_id_if_known, result_code, correlation_id, occurred_at, source_context_hash]
   forbidden_fields: [password, password_hash, access_token, refresh_token, cookie, secret, database_credential]
@@ -331,9 +449,12 @@ acceptance_contract:
   evidence_status: NOT_STARTED
   required_coverage:
   - admin首次且仅一次初始化、保护与超级管理员绑定
-  - RBAC Seed幂等及50/12/600完整性
+  - RBAC Seed 幂等且行数必须与当前 permission/role/mapping 明细定义完全一致
   - 登录成功、错误密码、用户不存在、禁用、管理员锁定和临时安全锁
   - Token过期、无效、撤销、Refresh rotation与重放检测
   - Logout幂等、当前用户、401、403和实时权限
   - 强制改密、改密后旧Session失效、用户禁用后Session失效
+  - 管理员创建普通用户时一次性临时凭据、Credential Reset、User启停、Role Binding创建与撤销、admin不可变保护
+  - Login 60/5m与Refresh 300/5m来源级限流、可信代理边界、429与Retry-After、多实例并发和过期清理
+  - Change Password返回204、不签发Token、相同幂等请求重放204、不同指纹409和并发仅一次逻辑变更
   - 初始化秘密不进入仓库、密码不明文落库、Token不进入日志

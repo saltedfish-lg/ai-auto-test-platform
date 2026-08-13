@@ -17,6 +17,7 @@ from platform_api.auth_schemas import (
 )
 from platform_api.auth_service import AuthenticationResult, AuthenticationService
 from platform_api.errors import PlatformError
+from platform_api.rate_limit import resolve_source_ip
 
 REFRESH_COOKIE_NAME = "atp_refresh"
 REFRESH_COOKIE_PATH = "/api/v1/auth"
@@ -26,6 +27,7 @@ router = APIRouter(prefix="/api/v1/auth", tags=["身份认证"])
 
 
 def _service(request: Request) -> AuthenticationService:
+    """路由层只构造认证服务依赖，确保HTTP入口不会复制或分叉核心认证安全规则。"""
     service = getattr(request.app.state, "auth_service", None)
     if not isinstance(service, AuthenticationService):
         raise PlatformError(
@@ -47,11 +49,24 @@ def _source_context(request: Request) -> str:
     return f"{client}|{user_agent}"
 
 
+def _source_ip(request: Request) -> str:
+    """来源地址只作为审计上下文提取，避免把不可信代理头直接提升为认证或授权依据。"""
+    peer = request.client.host if request.client is not None else ""
+    return resolve_source_ip(
+        peer,
+        request.headers.get("forwarded"),
+        request.headers.get("x-forwarded-for"),
+        request.app.state.settings.trusted_proxy_networks,
+    )
+
+
 def _audit_context(request: Request) -> AuditContext:
+    """审计上下文统一从请求提取，确保各认证端点记录一致的来源与客户端证据。"""
     return AuditContext(_correlation_id(request), _source_context(request))
 
 
 def _bearer(authorization: str | None) -> str:
+    """Bearer解析必须严格拒绝缺失或畸形头，避免宽松解析让非标准凭据进入认证服务。"""
     if authorization is None:
         raise PlatformError(
             title="Authentication required",
@@ -71,6 +86,7 @@ def _bearer(authorization: str | None) -> str:
 
 
 def _require_same_origin(request: Request) -> None:
+    """状态变更请求需要同源约束，避免浏览器携带会话时被跨站请求触发敏感认证操作。"""
     fetch_site = request.headers.get("sec-fetch-site")
     if fetch_site is not None:
         if fetch_site in {"same-origin", "none"}:
@@ -138,7 +154,13 @@ def _authentication_response(
 def login_platform_user(
     body: LoginRequest, request: Request, response: Response
 ) -> AuthenticationResponse:
-    result = _service(request).login(body.username, body.password, _audit_context(request))
+    """登录路由只负责协议转换并委托认证服务，避免HTTP层绕过事务、锁定和审计规则。"""
+    result = _service(request).login(
+        body.username,
+        body.password,
+        _audit_context(request),
+        _source_ip(request),
+    )
     _set_refresh_cookie(response, request, result.refresh_token)
     return _authentication_response(result, _correlation_id(request))
 
@@ -151,10 +173,11 @@ def refresh_platform_session(
     response: Response,
     body: AuthCookieActionRequest | None = None,
 ) -> AuthenticationResponse:
+    """刷新路由统一传递刷新凭据和审计上下文，确保旋转与重放检测只由认证服务裁决。"""
     del body
     _require_same_origin(request)
     token = request.cookies.get(REFRESH_COOKIE_NAME)
-    result = _service(request).refresh(token, _audit_context(request))
+    result = _service(request).refresh(token, _audit_context(request), _source_ip(request))
     _set_refresh_cookie(response, request, result.refresh_token)
     return _authentication_response(result, _correlation_id(request))
 
@@ -171,6 +194,7 @@ def logout_platform_user(
     response: Response,
     body: AuthCookieActionRequest | None = None,
 ) -> None:
+    """登出路由统一委托服务撤销会话，确保客户端响应与服务端失效语义保持一致。"""
     del body
     _require_same_origin(request)
     _service(request).logout(request.cookies.get(REFRESH_COOKIE_NAME), _audit_context(request))
@@ -181,6 +205,7 @@ def logout_platform_user(
 def get_current_user(
     request: Request, authorization: str | None = Header(default=None)
 ) -> CurrentUserResponse:
+    """当前用户接口必须基于已验证访问令牌获取身份，避免仅凭请求参数读取受保护用户信息。"""
     token = _bearer(authorization)
     _, current_user = _service(request).authenticate_access(
         token, "get_current_user", _audit_context(request)
@@ -190,7 +215,9 @@ def get_current_user(
 
 @router.post(
     "/change-password",
-    response_model=AuthenticationResponse,
+    status_code=204,
+    response_model=None,
+    response_class=Response,
     operation_id="change_current_user_password",
 )
 def change_current_user_password(
@@ -199,14 +226,14 @@ def change_current_user_password(
     response: Response,
     idempotency_key: str = Header(min_length=1, max_length=191, alias="Idempotency-Key"),
     authorization: str | None = Header(default=None),
-) -> AuthenticationResponse:
+) -> None:
+    """改密路由必须传递幂等键和已验证身份，确保重试与安全事务由认证服务统一处理。"""
     token = _bearer(authorization)
-    result = _service(request).change_password(
+    _service(request).change_password(
         token,
         body.current_password,
         body.new_password,
         idempotency_key,
         _audit_context(request),
     )
-    _set_refresh_cookie(response, request, result.refresh_token)
-    return _authentication_response(result, _correlation_id(request))
+    _clear_refresh_cookie(response, request)

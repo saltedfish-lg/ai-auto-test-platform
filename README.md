@@ -7,7 +7,7 @@
 - `CODE_BASELINE_READINESS = READY_FOR_P1_IMPLEMENTATION`
 - `MYSQL_8_4_RUNTIME_GATE` 以当前环境实际执行结果为准；静态验证不得冒充 MySQL 8.4 运行时证据。
 - `REAL_PLATFORM_ACCEPTANCE = NOT_COMPLETED`
-- 1691 项正式验收规范仍为 `SPECIFIED/NOT_STARTED`；治理验证、Migration 或工程测试不得冒充真实平台业务验收。
+- 当前正式验收规范数量由 `tools/current_facts.py#acceptance.count` 机械派生；OBJ-085 退役前历史闭包为 1691，退役条目只保留 provenance，治理验证、Migration 或工程测试不得冒充真实平台业务验收。
 - `docs/authority/**` 是唯一活动事实源；不创建 R4.x/R5.x 整套复制目录，不维护 CURRENT marker、Baseline Manifest 或 Release Snapshot。
 - Codex 只维护当前事实源并运行 Validators；Git 对 Codex 禁用，提交、推送、回滚与历史查看由用户在 IDEA 中完成。
 
@@ -45,6 +45,19 @@
 - Node.js 22 或 24（`package.json` 约束为 `>=22 <25`）
 - npm 11
 - MySQL 8.4.x
+
+## 数据库连接配置
+
+本地开发环境负责安全注入两个包含凭据的环境变量；仓库文档和日志不得记录真实密码或完整 DSN：
+
+```env
+ATP_MYSQL_ADMIN_URL=mysql+pymysql://<user>:<password>@127.0.0.1:3306/mysql
+ATP_DATABASE_URL=mysql+pymysql://<user>:<password>@127.0.0.1:3306/ai_auto_test_platform_dev
+```
+
+- `ATP_MYSQL_ADMIN_URL` 是唯一实例级管理连接；Full Schema MySQL Gate 与认证 MySQL Gate 都通过它创建/删除隔离 Gate 数据库并执行 Migration/约束验证。
+- `ATP_DATABASE_URL` 是应用连接；当前本地开发库为 `ai_auto_test_platform_dev`。
+- 认证 Runtime Gate 始终创建 `ai_auto_test_platform_gate_auth_<unique>` 临时库，不会把破坏性验证指向开发库。
 
 ## 安装依赖
 
@@ -106,13 +119,17 @@ python tools/dev.py authority
 python tools/dev.py verify
 ```
 
-`python tools/dev.py verify` 是本地和 CI 的全量工程验证入口。当前事实源也可直接验证：
+`python tools/dev.py verify` 是本地和 CI 的全量工程验证入口。`python tools/dev.py authority` 与 Guard/聚合验证器共享 `tools/authority_validation.py` 中唯一正式 Validator 集合。当前事实源也可直接验证：
 
 ```powershell
 python tools/verify_authority.py
 python docs/authority/validation/validate_all.py --root docs/authority
 python docs/authority/validation/validate_governance.py --root docs/authority
 python docs/authority/validation/validate_auth_contract.py --root docs/authority
+python tools/authority_projection.py check
+python tools/current_facts.py check
+python tools/authority_referential_integrity.py check
+python tools/openapi_client.py check
 ```
 
 ## MySQL 8.4 门禁
@@ -129,4 +146,23 @@ python tools/mysql84_gate.py
 python tools/mysql84_gate.py --execute
 ```
 
-重新执行需要可用的 MySQL 8.4 环境或正式容器环境；工具不得伪造 PASS，也不得把真实数据库秘密写入仓库。
+Full Schema Gate 的本机 MySQL 模式只读取 `ATP_MYSQL_ADMIN_URL`，不再接受拆分式管理员连接变量。需要保存可审计的结构化 Evidence 时：
+
+```powershell
+python tools/mysql84_gate.py --execute --evidence-output outputs/runtime-gates/mysql84-full-schema.json
+```
+
+stdout 与 `--evidence-output` 均为 secret-free JSON，包含 Gate ID、MySQL 版本、机械发现的 Migration Head/Chain、Empty DB、Seed 幂等、Legacy Upgrade、Schema Assertions、临时数据库清理等结果。工具不得伪造 PASS，也不得把真实数据库秘密或完整 DSN 写入证据。
+
+认证域的长期 Runtime Gate 按能力域命名：
+
+```powershell
+python tools/gates/auth_mysql_gate.py
+python tools/gates/auth_browser_gate.py
+
+# 等价聚合入口
+python tools/dev.py auth-mysql-gate
+python tools/dev.py auth-browser-gate
+```
+
+输出状态分别为 `AUTH_MYSQL_RUNTIME_GATE` 与 `AUTH_BROWSER_RUNTIME_GATE`。MySQL Gate 会动态创建并清理隔离临时库；Browser Gate 只接受真实 Chromium 结果。

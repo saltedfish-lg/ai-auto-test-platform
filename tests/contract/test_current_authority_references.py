@@ -35,7 +35,7 @@ def test_active_core_skill_references_match_living_authority() -> None:
     rules = (ROOT / ".agents/skills/ai-auto-test-platform-core/schemas/skill-rules.yaml").read_text(encoding="utf-8")
     assert AUTHORITY_MODEL in skill and AUTHORITY_MODEL in rules
     assert "docs/authority" in skill and "docs/authority" in rules
-    assert "versioned_baseline_copies" in rules
+    assert "versioned_authority_copies" in rules
     assert "codex_git_access" in rules
 
 

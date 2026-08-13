@@ -4,7 +4,7 @@ metadata:
   document_version: 1.1.0
   document_status: ACTIVE_CONTROLLED_MUTABLE_AUTHORITY
   generation_date: '2026-08-05'
-  analysis_scope: 输入基线全部有效文件
+  analysis_scope: 当前 Living Authority 有效范围
   independence_status: SELF_CONTAINED
   coding_readiness: READY_FOR_P1_IMPLEMENTATION
   formats:
@@ -406,7 +406,7 @@ problem_definition:
   - 模型治理
   - Adapter边界
   - 平台事实源
-  - 冻结准入
+  - Living Authority治理与实现准入
 product_positioning:
   product_name: AI自动化测试执行平台
   product_type: AI驱动、Runner执行、事实治理的Web自动化测试执行平台
@@ -443,8 +443,8 @@ product_goals:
   name: 统一结果证据和生命周期
   statement: 保留初次执行、重试、最终结果、报告、日志和制品的完整追溯链，并执行权限、保留和清理治理。
 - goal_id: GOAL-005
-  name: 建立独立可落地的产品基线
-  statement: 使产品范围、责任边界、固定约束和成功标准无需依赖其他文档即可被下游设计和验收消费。
+  name: 建立独立可落地的产品事实源
+  statement: 使产品范围、责任边界、固定约束和成功标准无需依赖其他文档即可被下游设计、实现和验收消费。
 sub_goals:
 - sub_goal_id: SUBG-001
   name: 统一自动化测试执行入口
@@ -480,7 +480,7 @@ sub_goals:
   requirement_id: PRD-GOL-008
 - sub_goal_id: SUBG-009
   name: 建立可编码和可验收的事实闭包
-  statement: 建立独立、可验证的产品基线，并要求后续架构、数据、接口、状态、权限和验收设计在进入Codex编码前形成完整冻结闭包；Codex不得自行补充产品规则。
+  statement: 建立独立、可验证的产品事实，并要求后续架构、数据、接口、状态、权限和验收事实在进入Codex编码前形成完整 Living Authority 闭包；Codex不得自行补充产品规则。
   requirement_id: PRD-GOL-009
 non_goals:
 - non_goal_id: NG-001
@@ -936,11 +936,11 @@ external_actors:
 - actor_id: EXT-CODEX
   name: Codex编码环境
   actor_type: EXTERNAL_DEVELOPMENT_ENVIRONMENT
-  purpose: 在产品基线、架构基线和实现契约达到编码准入条件后生成实现；准入条件未满足时仅用于分析、设计和一致性校验。
-  input_to_platform: 经批准并冻结的产品需求、架构决策、领域模型、数据与接口契约、验收规则及完整性校验结果。
+  purpose: 仅消费当前 Living Authority 中已闭包并通过正式 validators 的产品、架构和实现契约生成实现；未通过时仅用于分析、设计和一致性校验。
+  input_to_platform: 经批准并纳入当前 Living Authority 的产品需求、架构决策、领域模型、数据与接口契约、验收规则及完整性校验结果。
   output_from_platform: 在分析阶段输出问题、设计和校验结果；在编码准入后输出代码、迁移、接口和测试实现。
-  participant_responsibility: 严格执行经批准和冻结的输入，不自行补充、改变或选择互斥业务规则。
-  failure_boundary: 批准状态不完整、输入未冻结、依赖缺失、校验失败或内容哈希漂移时，必须阻断代码生成并返回明确原因。
+  participant_responsibility: 严格执行经批准并纳入当前 Living Authority 的输入，不自行补充、改变或选择互斥业务规则。
+  failure_boundary: 批准状态不完整、输入未纳入当前 Living Authority、依赖缺失、校验失败或内容哈希漂移时，必须阻断代码生成并返回明确原因。
 core_business_objects:
 - object_id: OBJ-001
   name: 用户
@@ -1219,14 +1219,6 @@ core_business_objects:
   capability_domain: DOM-031
   main_relationships:
   - OBJ-088
-  lifecycle: 创建→启用/维护→停用→归档；被引用时不得直接物理删除。
-- object_id: OBJ-085
-  name: 平台设计基线发布
-  definition: 原子保存成员版本、hash、readiness、current事件、lock version和frozen_at的发布对象。
-  purpose: 原子保存成员版本、hash、readiness、current事件、lock version和frozen_at的发布对象。
-  capability_domain: REL-001
-  main_relationships:
-  - OBJ-077
   lifecycle: 创建→启用/维护→停用→归档；被引用时不得直接物理删除。
 - object_id: OBJ-002
   name: 内置admin用户
@@ -1666,7 +1658,7 @@ product_requirements:
 - requirement_id: PRD-BND-010
   requirement_name: Codex编码边界
   requirement_type: BOUNDARY
-  statement: 本文件可独立作为产品级输入；直接编码仍必须等待架构、领域、数据、接口、状态、权限和验收契约冻结并通过准入校验，Codex不得根据不完整材料猜测业务规则。
+  statement: 本文件可独立作为产品级输入；直接编码仍必须等待架构、领域、数据、接口、状态、权限和验收契约进入当前 Living Authority 并通过准入校验，Codex不得根据不完整材料猜测业务规则。
   capability_domain: CAPDOM-12
   primary_users:
   - 模型管理员
@@ -2530,7 +2522,8 @@ product_requirements:
 - requirement_id: PRD-CON-007
   requirement_name: 不同账号允许并行
   requirement_type: CONSTRAINT
-  statement: 同一项目和环境下，不同 `sso_identity_key` 可在Runner容量和其他资源约束允许时并行执行；同一规范键 `project_id + environment_id + sso_identity_key` 必须互斥。
+  statement: 同一项目和环境下，不同 `sso_identity_key` 可在Runner容量和其他资源约束允许时并行执行；同一规范键 `project_id + environment_id + sso_identity_key`
+    必须互斥。
   capability_domain: CAPDOM-08
   primary_users:
   - 任务执行人员
@@ -2894,7 +2887,7 @@ product_requirements:
 - requirement_id: PRD-GOL-009
   requirement_name: 建立可编码和可验收的事实闭包
   requirement_type: GOAL
-  statement: 建立独立、可验证的产品基线，并要求后续架构、数据、接口、状态、权限和验收设计在进入Codex编码前形成完整冻结闭包；Codex不得自行补充产品规则。
+  statement: 建立独立、可验证的产品事实，并要求后续架构、数据、接口、状态、权限和验收事实在进入Codex编码前形成完整 Living Authority 闭包；Codex不得自行补充产品规则。
   capability_domain: CAPDOM-12
   primary_users:
   - 模型管理员
@@ -2929,8 +2922,8 @@ product_requirements:
   downstream_impact: 约束系统架构、部署、可观测性、安全和验收设计。
   source_status: USER_CONFIRMED_2026-08-06
   blocking_current_release: true
-  calibration_class: FROZEN_V1_SLO
-  slo_contract: &id001
+  calibration_class: CURRENT_V1_SLO
+  slo_contract:
     metric: control_plane_monthly_availability
     target: 0.995
     window: CALENDAR_MONTH
@@ -2962,8 +2955,8 @@ product_requirements:
   downstream_impact: 约束系统架构、部署、可观测性、安全和验收设计。
   source_status: USER_CONFIRMED_2026-08-06
   blocking_current_release: true
-  calibration_class: FROZEN_V1_SLO
-  slo_contract: &id002
+  calibration_class: CURRENT_V1_SLO
+  slo_contract:
     conditions:
     - STANDARD_V1_CAPACITY
     - NORMAL_NETWORK
@@ -3004,8 +2997,8 @@ product_requirements:
   downstream_impact: 约束系统架构、部署、可观测性、安全和验收设计。
   source_status: USER_CONFIRMED_2026-08-06
   blocking_current_release: true
-  calibration_class: FROZEN_V1_SLO
-  slo_contract: &id003
+  calibration_class: CURRENT_V1_SLO
+  slo_contract:
     metric: schedulable_to_runner_claim_ms
     sample_minimum: 5000
     p95_ms: 3000
@@ -3450,14 +3443,14 @@ core_business_scenarios:
   product_boundary: 由平台按权限、状态、并发、资源和审计规则编排；外部系统故障只形成测试证据。
   success_result: 受控访问结果和不可变审计
 - scenario_id: PS-029
-  scenario_name: 基线冻结和Codex准入
+  scenario_name: Living Authority闭包与实现准入
   initiator: 验证服务
-  business_goal: 以单一正式基线开展编码
-  primary_input: 成员hash和readiness完整
-  main_processing: 按平台内置发布治理规则冻结获准内容，校验编号、依赖、版本、批准状态和完整性后生成可消费基线。
-  primary_output: FULL_CODE_READY编码输入
-  product_boundary: 由平台按权限、状态、并发、资源和审计规则编排；外部系统故障只形成测试证据。
-  success_result: FULL_CODE_READY编码输入
+  business_goal: 以唯一当前 Living Authority 和机械校验结果控制实现准入
+  primary_input: 当前 Authority 事实、引用、契约和 readiness 已闭包且正式 validators 可执行
+  main_processing: 对当前 Living Authority 执行事实、引用、数据库、OpenAPI、权限、状态、场景和治理一致性校验；不生成或消费版本化冻结副本。
+  primary_output: 实现准入判定与可追溯验证结果
+  product_boundary: 该场景治理的是研发实现输入，不创建平台运行时“设计基线发布”业务对象；事实变化直接更新当前 Living Authority 并重新校验。
+  success_result: 当前 Living Authority 通过实现准入 validators，或返回明确阻断原因
 - scenario_id: PS-030
   scenario_name: 契约和验收反向验证
   initiator: 验证服务
@@ -3858,10 +3851,20 @@ release_scope:
   scope_status: IN_SCOPE_APPROVED
   priority: P1
   blocking_current_release: true
-  calibration_class: FROZEN_V1_SLO
+  calibration_class: CURRENT_V1_SLO
   statement: V1生产环境控制面月度可用率不得低于99.5%；提前公告的计划维护窗口不计入可用率；开发环境和测试环境不作为正式SLA考核对象。
   acceptance_direction: 按自然月统计生产控制面可用分钟数；以外部探针和服务端健康指标双源取证；剔除已公告维护窗口；月度可用率必须≥99.5%。
-  slo_contract: *id001
+  slo_contract:
+    metric: control_plane_monthly_availability
+    target: 0.995
+    window: CALENDAR_MONTH
+    environment: PRODUCTION
+    exclusions:
+    - ANNOUNCED_PLANNED_MAINTENANCE
+    evidence:
+    - synthetic_probe_timeseries
+    - service_health_timeseries
+    - maintenance_window_registry
   current_scope: IN_SCOPE_APPROVED
   source_status: USER_CONFIRMED_2026-08-06
   approval_status: APPROVED
@@ -3870,10 +3873,29 @@ release_scope:
   scope_status: IN_SCOPE_APPROVED
   priority: P1
   blocking_current_release: true
-  calibration_class: FROZEN_V1_SLO
+  calibration_class: CURRENT_V1_SLO
   statement: 在标准V1容量和正常网络条件下，普通查询P95≤500ms、P99≤1000ms；普通写入P95≤800ms、P99≤1500ms；异步命令受理P95≤300ms、P99≤800ms。文件上传下载、AI模型调用和浏览器执行不适用普通API指标，必须使用各自专用超时与性能验收规则。
   acceptance_direction: 在标准V1容量、正常网络、稳定预热后分别对普通查询、普通写入和异步命令受理采集不少于10000个有效样本；按服务端端到端时延计算P95/P99；专用长任务不得混入普通API统计。
-  slo_contract: *id002
+  slo_contract:
+    conditions:
+    - STANDARD_V1_CAPACITY
+    - NORMAL_NETWORK
+    - WARMED_UP
+    sample_minimum: 10000
+    metrics:
+      ordinary_query_ms:
+        p95: 500
+        p99: 1000
+      ordinary_write_ms:
+        p95: 800
+        p99: 1500
+      async_command_accept_ms:
+        p95: 300
+        p99: 800
+    excluded_categories:
+    - FILE_TRANSFER
+    - AI_MODEL_CALL
+    - BROWSER_EXECUTION
   current_scope: IN_SCOPE_APPROVED
   source_status: USER_CONFIRMED_2026-08-06
   approval_status: APPROVED
@@ -3882,10 +3904,19 @@ release_scope:
   scope_status: IN_SCOPE_APPROVED
   priority: P1
   blocking_current_release: true
-  calibration_class: FROZEN_V1_SLO
+  calibration_class: CURRENT_V1_SLO
   statement: 当存在健康、已绑定、能力匹配的空闲Runner，且无环境锁、账号租约和资源冲突时，任务从进入可调度状态到Runner成功领取的时延必须满足P95≤3秒、P99≤10秒。
   acceptance_direction: 构造健康且能力匹配的空闲Runner、无锁租约冲突的标准调度场景，采集不少于5000次从SCHEDULABLE到CLAIMED的服务端时钟差；P95≤3秒且P99≤10秒。
-  slo_contract: *id003
+  slo_contract:
+    metric: schedulable_to_runner_claim_ms
+    sample_minimum: 5000
+    p95_ms: 3000
+    p99_ms: 10000
+    preconditions:
+    - HEALTHY_BOUND_CAPABILITY_MATCHED_IDLE_RUNNER
+    - NO_ENVIRONMENT_LOCK
+    - NO_ACCOUNT_LEASE
+    - NO_RESOURCE_CONFLICT
   current_scope: IN_SCOPE_APPROVED
   source_status: USER_CONFIRMED_2026-08-06
   approval_status: APPROVED
@@ -4089,12 +4120,12 @@ system_context_participants:
 - participant_id: CTX-013
   participant: Codex编码环境
   participant_type: EXTERNAL_CONSUMER
-  purpose: 消费冻结的产品和设计基线生成实现
+  purpose: 消费当前 Living Authority 的产品与设计事实生成实现
   input_to_platform: 代码、迁移、接口和测试实现
-  output_from_platform: 独立产品基线及后续冻结契约
+  output_from_platform: 当前 Living Authority 中的产品事实及后续受治理契约
   platform_responsibility: 定义输入准入和验收门禁
   participant_responsibility: 不猜测产品规则并遵守获准输入
-  failure_boundary: 不完整或未冻结输入必须阻断编码
+  failure_boundary: 不完整或未纳入当前 Living Authority 的输入必须阻断编码
   data_boundary: 只消费批准的设计资产
   security_boundary: 不接触未授权运行凭证
 platform_responsibilities:
@@ -4565,8 +4596,18 @@ non_functional_requirements:
   downstream_impact: 约束系统架构、部署、可观测性、安全和验收设计。
   source_status: USER_CONFIRMED_2026-08-06
   blocking_current_release: true
-  calibration_class: FROZEN_V1_SLO
-  slo_contract: *id001
+  calibration_class: CURRENT_V1_SLO
+  slo_contract:
+    metric: control_plane_monthly_availability
+    target: 0.995
+    window: CALENDAR_MONTH
+    environment: PRODUCTION
+    exclusions:
+    - ANNOUNCED_PLANNED_MAINTENANCE
+    evidence:
+    - synthetic_probe_timeseries
+    - service_health_timeseries
+    - maintenance_window_registry
   scope_status: IN_SCOPE_APPROVED
   approval_status: APPROVED
 - requirement_id: PRD-NFR-002
@@ -4588,8 +4629,27 @@ non_functional_requirements:
   downstream_impact: 约束系统架构、部署、可观测性、安全和验收设计。
   source_status: USER_CONFIRMED_2026-08-06
   blocking_current_release: true
-  calibration_class: FROZEN_V1_SLO
-  slo_contract: *id002
+  calibration_class: CURRENT_V1_SLO
+  slo_contract:
+    conditions:
+    - STANDARD_V1_CAPACITY
+    - NORMAL_NETWORK
+    - WARMED_UP
+    sample_minimum: 10000
+    metrics:
+      ordinary_query_ms:
+        p95: 500
+        p99: 1000
+      ordinary_write_ms:
+        p95: 800
+        p99: 1500
+      async_command_accept_ms:
+        p95: 300
+        p99: 800
+    excluded_categories:
+    - FILE_TRANSFER
+    - AI_MODEL_CALL
+    - BROWSER_EXECUTION
   scope_status: IN_SCOPE_APPROVED
   approval_status: APPROVED
 - requirement_id: PRD-NFR-003
@@ -4611,8 +4671,17 @@ non_functional_requirements:
   downstream_impact: 约束系统架构、部署、可观测性、安全和验收设计。
   source_status: USER_CONFIRMED_2026-08-06
   blocking_current_release: true
-  calibration_class: FROZEN_V1_SLO
-  slo_contract: *id003
+  calibration_class: CURRENT_V1_SLO
+  slo_contract:
+    metric: schedulable_to_runner_claim_ms
+    sample_minimum: 5000
+    p95_ms: 3000
+    p99_ms: 10000
+    preconditions:
+    - HEALTHY_BOUND_CAPABILITY_MATCHED_IDLE_RUNNER
+    - NO_ENVIRONMENT_LOCK
+    - NO_ACCOUNT_LEASE
+    - NO_RESOURCE_CONFLICT
   scope_status: IN_SCOPE_APPROVED
   approval_status: APPROVED
 - requirement_id: PRD-NFR-004
@@ -4851,7 +4920,7 @@ risks_and_limitations:
 - risk_id: RISK-006
   name: 历史开放决策回退风险
   description: 实现可能误读旧版候选或OPEN描述。
-  mitigation: 以R2冻结ADR、机器契约和发布清单为准，并通过一致性门禁禁止回退。
+  mitigation: 以当前 Living Authority、ADR 历史 provenance 与机械一致性门禁为准，禁止旧发布/冻结模型回退为当前事实。
 success_criteria:
 - success_id: SC-001
   statement: 授权用户可以创建、编辑和保存自然语言用例。
@@ -5231,7 +5300,7 @@ requirement_index:
 - requirement_id: PRD-BND-010
   requirement_name: Codex编码边界
   requirement_type: BOUNDARY
-  statement: 本文件可独立作为产品级输入；直接编码仍必须等待架构、领域、数据、接口、状态、权限和验收契约冻结并通过准入校验，Codex不得根据不完整材料猜测业务规则。
+  statement: 本文件可独立作为产品级输入；直接编码仍必须等待架构、领域、数据、接口、状态、权限和验收契约进入当前 Living Authority 并通过准入校验，Codex不得根据不完整材料猜测业务规则。
   capability_domain: CAPDOM-12
   primary_users:
   - 模型管理员
@@ -5907,7 +5976,8 @@ requirement_index:
 - requirement_id: PRD-CON-007
   requirement_name: 不同账号允许并行
   requirement_type: CONSTRAINT
-  statement: 同一项目和环境下，不同 `sso_identity_key` 可在Runner容量和其他资源约束允许时并行执行；同一规范键 `project_id + environment_id + sso_identity_key` 必须互斥。
+  statement: 同一项目和环境下，不同 `sso_identity_key` 可在Runner容量和其他资源约束允许时并行执行；同一规范键 `project_id + environment_id + sso_identity_key`
+    必须互斥。
   capability_domain: CAPDOM-08
   primary_users:
   - 任务执行人员
@@ -6191,7 +6261,7 @@ requirement_index:
 - requirement_id: PRD-GOL-009
   requirement_name: 建立可编码和可验收的事实闭包
   requirement_type: GOAL
-  statement: 建立独立、可验证的产品基线，并要求后续架构、数据、接口、状态、权限和验收设计在进入Codex编码前形成完整冻结闭包；Codex不得自行补充产品规则。
+  statement: 建立独立、可验证的产品事实，并要求后续架构、数据、接口、状态、权限和验收事实在进入Codex编码前形成完整 Living Authority 闭包；Codex不得自行补充产品规则。
   capability_domain: CAPDOM-12
   primary_users:
   - 模型管理员
@@ -6219,8 +6289,18 @@ requirement_index:
   downstream_impact: 约束系统架构、部署、可观测性、安全和验收设计。
   source_status: USER_CONFIRMED_2026-08-06
   blocking_current_release: true
-  calibration_class: FROZEN_V1_SLO
-  slo_contract: *id001
+  calibration_class: CURRENT_V1_SLO
+  slo_contract:
+    metric: control_plane_monthly_availability
+    target: 0.995
+    window: CALENDAR_MONTH
+    environment: PRODUCTION
+    exclusions:
+    - ANNOUNCED_PLANNED_MAINTENANCE
+    evidence:
+    - synthetic_probe_timeseries
+    - service_health_timeseries
+    - maintenance_window_registry
   scope_status: IN_SCOPE_APPROVED
   approval_status: APPROVED
 - requirement_id: PRD-NFR-002
@@ -6239,8 +6319,27 @@ requirement_index:
   downstream_impact: 约束系统架构、部署、可观测性、安全和验收设计。
   source_status: USER_CONFIRMED_2026-08-06
   blocking_current_release: true
-  calibration_class: FROZEN_V1_SLO
-  slo_contract: *id002
+  calibration_class: CURRENT_V1_SLO
+  slo_contract:
+    conditions:
+    - STANDARD_V1_CAPACITY
+    - NORMAL_NETWORK
+    - WARMED_UP
+    sample_minimum: 10000
+    metrics:
+      ordinary_query_ms:
+        p95: 500
+        p99: 1000
+      ordinary_write_ms:
+        p95: 800
+        p99: 1500
+      async_command_accept_ms:
+        p95: 300
+        p99: 800
+    excluded_categories:
+    - FILE_TRANSFER
+    - AI_MODEL_CALL
+    - BROWSER_EXECUTION
   scope_status: IN_SCOPE_APPROVED
   approval_status: APPROVED
 - requirement_id: PRD-NFR-003
@@ -6259,8 +6358,17 @@ requirement_index:
   downstream_impact: 约束系统架构、部署、可观测性、安全和验收设计。
   source_status: USER_CONFIRMED_2026-08-06
   blocking_current_release: true
-  calibration_class: FROZEN_V1_SLO
-  slo_contract: *id003
+  calibration_class: CURRENT_V1_SLO
+  slo_contract:
+    metric: schedulable_to_runner_claim_ms
+    sample_minimum: 5000
+    p95_ms: 3000
+    p99_ms: 10000
+    preconditions:
+    - HEALTHY_BOUND_CAPABILITY_MATCHED_IDLE_RUNNER
+    - NO_ENVIRONMENT_LOCK
+    - NO_ACCOUNT_LEASE
+    - NO_RESOURCE_CONFLICT
   scope_status: IN_SCOPE_APPROVED
   approval_status: APPROVED
 - requirement_id: PRD-NFR-004
@@ -6370,7 +6478,6 @@ requirement_index:
   downstream_impact: 约束系统架构、部署、可观测性、安全和验收设计。
   source_status: SUPPORTED_BY_MULTIPLE_SOURCES
 statistics:
-  source_file_count: 725
   logical_document_count: 9
   capability_domain_count: 12
   requirement_count: 87
@@ -6415,9 +6522,8 @@ statistics:
     CAPDOM-07: 2
     CAPDOM-08: 17
     CAPDOM-11: 4
-  source_file_count_scope: PACKAGE_FILES_INCLUDING_ROOT_MANIFEST
 coding_readiness:
-  status: READY_WITH_RUNTIME_DB_VALIDATION_PENDING
+  status: READY_FOR_P1_IMPLEMENTATION
   product_positioning_unique: true
   current_scope_unique: true
   capability_map_complete: true
@@ -6427,7 +6533,7 @@ coding_readiness:
   requires_input_package_for_understanding: false
   codex_may_guess_product_rules: false
   open_decision_count: 0
-  statement: PDBR-2026.08.06-R4.1允许工程初始化和分阶段编码；真实验收证据仅用于平台发布门禁。
+  statement: 当前 Living Authority 允许工程初始化和分阶段编码；真实验收证据仅用于平台发布门禁。
   direct_code_input: true
   pending_user_decisions: 0
 independence_validation:
@@ -6452,7 +6558,7 @@ independence_validation:
   - 固定约束是什么
   - 运行依赖是什么
   - 如何判断产品成功
-  result: INDEPENDENT_BASELINE_CONTENT_CLOSED
+  result: INDEPENDENT_AUTHORITY_CONTENT_CLOSED
   forbidden_reference_categories_checked:
   - 外部内容跳转
   - 外部权威替代
@@ -6467,7 +6573,7 @@ conclusion:
   input_content_dependencies_removed: true
   input_path_dependencies_removed: true
   standalone_usable: true
-  next_stage: 可独立作为模块、架构、领域、数据、业务规则、状态、权限和验收设计的产品级输入；直接编码仍需关闭阻断性开放决策并冻结下游实现契约。
+  next_stage: 可独立作为模块、架构、领域、数据、业务规则、状态、权限和验收设计的产品级输入；直接编码仍需关闭阻断性开放决策、确认下游实现契约并通过对应机械门禁。
 format_governance:
   logical_document: 产品总体需求与系统边界
   canonical_format: YAML
@@ -6479,72 +6585,80 @@ format_governance:
     Mermaid: DIAGRAM_SOURCE
     SVG: DIAGRAM_DISPLAY_PROJECTION
   projection_scope: 人工版完整承载责任范围内的规范语义；机器版承载全量原子记录。机器版中的明细ID可以不逐条复制到人工表格，但不得缺失定义、聚合规则、例外、阻断语义和可追溯索引。
-  generator: consistency-repair-generator
-  generator_version: 1.1.0
-  upstream_release_id: BSL-CONSISTENCY-REPAIR-1.0.0
-  upstream_hash: null
-  output_hash: null
-  id_coverage_report: 基础文档发布清单.yaml
-baseline_readiness:
-  current_status: READY_WITH_RUNTIME_DB_VALIDATION_PENDING
-  current_release_kind: FORMAL_CODE_INPUT_BASELINE
-  direct_code_input: true
-  current_package_has_frozen_design_release: true
+  id_coverage_validation: python tools/verify_authority.py
+authority_readiness:
+  current_status: READY_FOR_P1_IMPLEMENTATION
+  current_authority_kind: SINGLE_LIVING_AUTHORITY
+  direct_implementation_input: true
+  current_living_authority_available: true
   pending_user_decisions: 0
   allowed_now:
   - 初始化Monorepo及前端、API、Worker、Runner、测试和CI工程
-  - 依据正式契约分阶段实现非数据库模块
-  - 实现数据库模块并准备运行门禁
+  - 依据当前正式契约分阶段实现各模块
+  - 数据库模块正式合并按SYSTEM_DESIGN中的Full Schema Gate单源状态判定
   database_runtime_gate:
-    status: NOT_EXECUTED_ENVIRONMENT_UNAVAILABLE
+    status_source: 编码权威事实/SYSTEM_DESIGN.yaml#runtime_gate_contract.gates[FULL_SCHEMA_MYSQL84_RUNTIME_GATE].status
     blocks_code_initialization: false
     blocks_non_database_module_development: false
-    blocks_database_module_formal_merge: true
-    blocks_production_release: true
+    blocks_database_module_formal_merge_when_status_not_pass: true
+    blocks_production_release_when_status_not_pass: true
   implementation_release_gate:
-    status: NOT_EVALUATED_IMPLEMENTATION_NOT_PRESENT
+    status_source: 编码权威事实/SYSTEM_DESIGN.yaml#runtime_gate_contract.implementation_status
     blocks_code_initialization: false
     blocks_production_release: true
-release_manifest_contract:
-  manifest_name: platform_design_baseline_release
-  required_fields:
-  - release_id
-  - status
-  - platform_code_readiness
-  - members
-  - member_role
-  - version
-  - approval_status
-  - sha256
-  - generated_at
-  required_member_roles:
-  - PRODUCT_BASELINE
-  - DOMAIN_BASELINE
-  - PERMISSION_CLOSURE
-  - AI_RUNNER_BASELINE
-  - SECURITY_ACCEPTANCE_BASELINE
-  - SYSTEM_DESIGN
-  - DATABASE_DDL
-  - OPENAPI
-  - EVENT_CONTRACT
-  - STATE_OWNER_REGISTRY
-  - ACCEPTANCE_CLOSURE
-  current_package_has_frozen_design_release: false
 canonical_decisions:
   sso_identity_lease_key: project_id + environment_id + sso_identity_key
 approved_non_functional_baselines:
   PRD-NFR-001:
     statement: V1生产环境控制面月度可用率不得低于99.5%；提前公告的计划维护窗口不计入可用率；开发环境和测试环境不作为正式SLA考核对象。
     acceptance_direction: 按自然月统计生产控制面可用分钟数；以外部探针和服务端健康指标双源取证；剔除已公告维护窗口；月度可用率必须≥99.5%。
-    slo_contract: *id001
+    slo_contract:
+      metric: control_plane_monthly_availability
+      target: 0.995
+      window: CALENDAR_MONTH
+      environment: PRODUCTION
+      exclusions:
+      - ANNOUNCED_PLANNED_MAINTENANCE
+      evidence:
+      - synthetic_probe_timeseries
+      - service_health_timeseries
+      - maintenance_window_registry
   PRD-NFR-002:
     statement: 在标准V1容量和正常网络条件下，普通查询P95≤500ms、P99≤1000ms；普通写入P95≤800ms、P99≤1500ms；异步命令受理P95≤300ms、P99≤800ms。文件上传下载、AI模型调用和浏览器执行不适用普通API指标，必须使用各自专用超时与性能验收规则。
     acceptance_direction: 在标准V1容量、正常网络、稳定预热后分别对普通查询、普通写入和异步命令受理采集不少于10000个有效样本；按服务端端到端时延计算P95/P99；专用长任务不得混入普通API统计。
-    slo_contract: *id002
+    slo_contract:
+      conditions:
+      - STANDARD_V1_CAPACITY
+      - NORMAL_NETWORK
+      - WARMED_UP
+      sample_minimum: 10000
+      metrics:
+        ordinary_query_ms:
+          p95: 500
+          p99: 1000
+        ordinary_write_ms:
+          p95: 800
+          p99: 1500
+        async_command_accept_ms:
+          p95: 300
+          p99: 800
+      excluded_categories:
+      - FILE_TRANSFER
+      - AI_MODEL_CALL
+      - BROWSER_EXECUTION
   PRD-NFR-003:
     statement: 当存在健康、已绑定、能力匹配的空闲Runner，且无环境锁、账号租约和资源冲突时，任务从进入可调度状态到Runner成功领取的时延必须满足P95≤3秒、P99≤10秒。
     acceptance_direction: 构造健康且能力匹配的空闲Runner、无锁租约冲突的标准调度场景，采集不少于5000次从SCHEDULABLE到CLAIMED的服务端时钟差；P95≤3秒且P99≤10秒。
-    slo_contract: *id003
+    slo_contract:
+      metric: schedulable_to_runner_claim_ms
+      sample_minimum: 5000
+      p95_ms: 3000
+      p99_ms: 10000
+      preconditions:
+      - HEALTHY_BOUND_CAPABILITY_MATCHED_IDLE_RUNNER
+      - NO_ENVIRONMENT_LOCK
+      - NO_ACCOUNT_LEASE
+      - NO_RESOURCE_CONFLICT
 historical_provenance:
   r2_encoding_freeze_repair:
     release_id: PDBR-2026.08.06-R2
@@ -6594,17 +6708,23 @@ historical_provenance:
     code_readiness: FULL_CODE_READY
 p1_authentication_product_contract:
   contract_id: P1-AUTH-PRODUCT-001
-  status: FROZEN_IMPLEMENTABLE
+  status: CURRENT_AUTHORITY_IMPLEMENTABLE
   identity: 平台用户以唯一username登录；普通用户由管理员创建，不开放V1自助注册。
   admin: username固定为admin，且不可删除、禁用、归档、改名或解除ROLE-SUPER-ADMIN绑定。
   experience: Browser使用短期Access Token和可撤销Refresh Session；初始临时密码必须首次改密。
   boundaries: 认证确定主体，RBAC决定权限；Runner、Worker、SSO和其他业务域不在P1认证治理范围。
   detailed_contract: 编码权威事实/AUTHENTICATION_CONTRACT/authentication-contract.yaml
-  decision_ids: [ADR-032]
-current_governance_release:
+  decision_ids:
+  - ADR-032
+current_governance_state:
   current_authority_model: SINGLE_LIVING_AUTHORITY
-  current_authority: CURRENT_FORMAL_CODE_INPUT_BASELINE
-  release_status: P1_AUTHENTICATION_CONTRACT_COMPLETED
+  current_authority: CURRENT_LIVING_AUTHORITY
+  governance_status: P1_AUTHENTICATION_CONTRACT_COMPLETED
   code_readiness: READY_FOR_P1_IMPLEMENTATION
-  implementation_release_readiness: NOT_EVALUATED_IMPLEMENTATION_NOT_PRESENT
+  implementation_status_source: 编码权威事实/SYSTEM_DESIGN.yaml#runtime_gate_contract.implementation_status
   pending_user_decisions: 0
+living_authority_governance_contract:
+  authority_model: SINGLE_LIVING_AUTHORITY
+  authority_root: docs/authority
+  rule: 当前设计与编码事实直接维护在受治理的 Living Authority 中；不得重新建立或消费已退役的设计基线发布运行时对象、版本化冻结副本或发布清单作为当前代码输入。
+  historical_note: 历史 release_id 仅用于来源追溯，不构成当前事实源或运行时业务对象。

@@ -113,7 +113,7 @@ describe("认证 API 传输适配器（组件/传输层测试）", () => {
     unbind();
   });
 
-  it("preserves formal ProblemDetails and normalizes the logout 204 for the generated client", async () => {
+  it("preserves formal ProblemDetails and the real 204 response for the generated client", async () => {
     const problem = problemDetails(403, "AUTH_ACCOUNT_DISABLED", "账号不可用");
     const failedClient = createApiClient(
       vi.fn().mockResolvedValue(
@@ -127,9 +127,18 @@ describe("认证 API 传输适配器（组件/传输层测试）", () => {
       failedClient.login_platform_user({ username: "u", password: "p" }),
     ).rejects.toMatchObject({ status: 403, problem });
 
-    const logoutClient = createApiClient(
-      vi.fn().mockResolvedValue(new Response(null, { status: 204 })) as typeof fetch,
-    );
-    await expect(logoutClient.logout_platform_user({})).resolves.toBeNull();
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    const platformFetch = createPlatformFetcher(fetchMock as typeof fetch);
+    await expect(platformFetch("/api/v1/auth/logout", { method: "POST" })).resolves.toMatchObject({
+      status: 204,
+    });
+
+    const changePasswordClient = createApiClient(fetchMock as typeof fetch);
+    await expect(
+      changePasswordClient.change_current_user_password(
+        { current_password: "CurrentPassword123", new_password: "NewPassword456" },
+        { headers: { "Idempotency-Key": "password-change-204" } },
+      ),
+    ).resolves.toBeUndefined();
   });
 });

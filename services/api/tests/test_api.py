@@ -1,3 +1,5 @@
+import base64
+import json
 import logging
 import secrets
 import shutil
@@ -34,21 +36,74 @@ def key_ring_file() -> Iterator[Path]:
 
 
 def settings(key_ring_file: Path) -> ApiSettings:
+    hmac_key_file = key_ring_file.parent / "auth-hmac-master.key"
+    hmac_key_file.write_text(
+        json.dumps(
+            {
+                "ring_version": "test-v1",
+                "active_key_id": "active",
+                "keys": [
+                    {
+                        "key_id": "active",
+                        "key_material": base64.urlsafe_b64encode(b"x" * 32).rstrip(b"=").decode(),
+                        "activated_at": "2025-01-01T00:00:00Z",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
     return ApiSettings(
         _env_file=None,
         environment="test",
         database_url="mysql+pymysql://platform:local@127.0.0.1/platform_test",
         jwt_key_ring_file=key_ring_file,
+        auth_hmac_master_key_file=hmac_key_file,
     )
 
 
 def test_missing_required_configuration_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("PLATFORM_ENVIRONMENT", raising=False)
-    monkeypatch.delenv("PLATFORM_DATABASE_URL", raising=False)
+    monkeypatch.delenv("ATP_DATABASE_URL", raising=False)
     monkeypatch.delenv("ATP_JWT_KEY_RING_FILE", raising=False)
+    monkeypatch.delenv("ATP_AUTH_HMAC_MASTER_KEY_FILE", raising=False)
 
     with pytest.raises(ValidationError):
         ApiSettings(_env_file=None)
+
+
+def test_application_database_uses_the_governed_environment_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    governed_url = "mysql+pymysql://platform:local@127.0.0.1/ai_auto_test_platform_dev"
+    monkeypatch.setenv("ATP_DATABASE_URL", governed_url)
+    monkeypatch.setenv("PLATFORM_DATABASE_URL", "sqlite:///legacy-must-not-win.db")
+
+    configured = ApiSettings(
+        _env_file=None,
+        environment="test",
+        jwt_key_ring_file=Path("runtime-jwt-ring.json"),
+        auth_hmac_master_key_file=Path("runtime-auth-hmac-ring.json"),
+    )
+
+    assert configured.database_url == governed_url
+
+
+def test_invalid_database_environment_value_hides_secret(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    marker = "environment-database-secret"
+    monkeypatch.setenv("ATP_DATABASE_URL", f"postgresql://platform:{marker}@127.0.0.1/platform")
+
+    with pytest.raises(ValidationError) as captured:
+        ApiSettings(
+            _env_file=None,
+            environment="test",
+            jwt_key_ring_file=Path("runtime-jwt-ring.json"),
+            auth_hmac_master_key_file=Path("runtime-auth-hmac-ring.json"),
+        )
+
+    assert marker not in str(captured.value)
 
 
 def test_missing_key_ring_configuration_is_rejected(

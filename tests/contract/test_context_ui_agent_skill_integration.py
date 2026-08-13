@@ -20,7 +20,7 @@ def _scan(repo:Path,*extra:str):
 
 def test_context_policy_declares_single_living_authority_and_no_git()->None:
     text=(CONTEXT/'schemas/context-policy.yaml').read_text(encoding='utf-8')
-    for token in ('SINGLE_LIVING_AUTHORITY','root: docs/authority','versioned_baseline_copies: forbidden','codex_git_access: DISABLED','FILESYSTEM_ONLY'): assert token in text
+    for token in ('SINGLE_LIVING_AUTHORITY','root: docs/authority','versioned_authority_copies: forbidden','codex_git_access: DISABLED','FILESYSTEM_ONLY'): assert token in text
 
 def test_scanner_searches_authority_and_source_broadly(tmp_path:Path)->None:
     repo=tmp_path/'repo'; repo.mkdir(); _repo(repo); c=_scan(repo); assert c.returncode==0, c.stdout
@@ -41,7 +41,7 @@ def test_large_authority_file_is_streamed_not_silently_skipped(tmp_path:Path)->N
 def test_workspace_snapshot_is_filesystem_only_and_external(tmp_path:Path)->None:
     repo=tmp_path/'repo'; repo.mkdir(); (repo/'a.txt').write_text('a',encoding='utf-8'); out=tmp_path/'snap.json'
     c=subprocess.run([sys.executable,str(SNAPSHOT),'capture','--root',str(repo),'--out',str(out)],capture_output=True,text=True,check=False); assert c.returncode==0
-    p=json.loads(out.read_text(encoding='utf-8')); assert p['snapshot_version']==3; assert p['git_access']=='DISABLED'; assert p['workspace_identity']['identity_mode']=='FILESYSTEM_ONLY'
+    p=json.loads(out.read_text(encoding='utf-8')); assert p['snapshot_version']==4; assert p['git_access']=='DISABLED'; assert p['workspace_identity']['identity_mode']=='FILESYSTEM_ONLY'
 
 def test_workspace_snapshot_delta_is_task_scoped(tmp_path:Path)->None:
     repo=tmp_path/'repo'; repo.mkdir(); (repo/'a.txt').write_text('a',encoding='utf-8'); start=tmp_path/'s.json'; out=tmp_path/'d.json'
@@ -50,7 +50,7 @@ def test_workspace_snapshot_delta_is_task_scoped(tmp_path:Path)->None:
 
 def test_task_context_pack_contains_authority_snapshot_expert_and_resume_slices()->None:
     text=(CONTEXT/'references/task-context-pack.md').read_text(encoding='utf-8')
-    for token in ('authority:','model: SINGLE_LIVING_AUTHORITY','workspace_fingerprint:','snapshot_version: 3','task_delta_paths:','product_authority:','architecture_decision:','expert_selection:','task_lifecycle:'): assert token in text
+    for token in ('authority:','model: SINGLE_LIVING_AUTHORITY','workspace_fingerprint:','snapshot_version_source:','task_delta_paths:','product_authority:','architecture_decision:','expert_selection:','task_lifecycle:'): assert token in text
 
 def test_business_ui_ux_skill_is_risk_triggered_and_business_first()->None:
     text=(BUSINESS/'SKILL.md').read_text(encoding='utf-8')
@@ -59,7 +59,7 @@ def test_business_ui_ux_skill_is_risk_triggered_and_business_first()->None:
 
 def test_ui_high_baseline_capture_has_environment_fallback_without_fake_before()->None:
     text=(BUSINESS/'SKILL.md').read_text(encoding='utf-8'); q=(UIQ/'SKILL.md').read_text(encoding='utf-8')
-    for token in ('BASELINE_CAPTURE','BLOCKED_BY_ENVIRONMENT','SOURCE_BASED_CURRENT_UI_BASELINE','VISUAL_BASELINE_CONFIDENCE = LIMITED','POST_CHANGE_BROWSER_VERIFY = REQUIRED'): assert token in text and token in q
+    for token in ('PRE_CHANGE_CAPTURE','BLOCKED_BY_ENVIRONMENT','SOURCE_BASED_CURRENT_UI_EVIDENCE','VISUAL_EVIDENCE_CONFIDENCE = LIMITED','POST_CHANGE_BROWSER_VERIFY = REQUIRED'): assert token in text and token in q
     assert '禁止伪造' in text
 
 def test_business_ui_specialist_is_dual_mode_and_ui_verifier_remains_separate()->None:

@@ -5,7 +5,27 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, BigInteger, DateTime, ForeignKey, Integer, LargeBinary, String
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    DateTime,
+    ForeignKey,
+    Integer,
+    LargeBinary,
+    String,
+)
+from sqlalchemy.dialects.mysql import (
+    BIGINT as MySQLBigInteger,
+)
+from sqlalchemy.dialects.mysql import (
+    BINARY as MySQLBinary,
+)
+from sqlalchemy.dialects.mysql import (
+    INTEGER as MySQLInteger,
+)
+from sqlalchemy.dialects.mysql import (
+    SMALLINT as MySQLSmallInteger,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -224,11 +244,24 @@ class AuthSecurityAudit(Base):
 class IdempotencyRecord(Base):
     __tablename__ = "atp_idempotency_record"
     idempotency_key: Mapped[str] = mapped_column(String(191), primary_key=True)
+    contract_version: Mapped[int] = mapped_column(MySQLSmallInteger(unsigned=True), default=2)
+    principal_id: Mapped[str | None] = mapped_column(String(26))
     operation_id: Mapped[str] = mapped_column(String(191))
     request_hash: Mapped[str] = mapped_column(String(64))
     response_status: Mapped[int | None] = mapped_column(Integer)
-    response_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    response_json: Mapped[dict[str, Any] | None] = mapped_column(JSON(none_as_null=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime)
     expires_at: Mapped[datetime] = mapped_column(DateTime)
+
+
+class AuthSourceRateLimit(Base):
+    __tablename__ = "atp_auth_source_rate_limit"
+    source_key_hash: Mapped[bytes] = mapped_column(MySQLBinary(32), primary_key=True)
+    operation_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    window_started_at: Mapped[datetime] = mapped_column(DateTime, primary_key=True)
+    request_count: Mapped[int] = mapped_column(MySQLInteger(unsigned=True))
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    row_version: Mapped[int] = mapped_column(MySQLBigInteger(unsigned=True))
 
 
 class OutboxEvent(Base):

@@ -18,7 +18,7 @@ description: AI自动化测试执行平台上下文效率与影响闭包Skill；
 ```text
 SINGLE_LIVING_AUTHORITY
 root = docs/authority
-versioned_baseline_copies = false
+versioned_authority_copies = false
 Git access for Codex = DISABLED
 ```
 
@@ -60,13 +60,14 @@ python .agents/skills/ai-auto-test-platform-context-efficiency/scripts/workspace
   capture --root . --out <workspace外>/task-start-workspace.json
 ```
 
-`snapshot_version=3`，采用 `FILESYSTEM_ONLY`：
+Snapshot 协议版本以 `workspace_snapshot.py::SNAPSHOT_VERSION` 为唯一事实，采用 `FILESYSTEM_ONLY`：
 
 - 对受控工作树文件做 SHA-256 指纹；
 - 排除 `.git/node_modules/dist/build/.venv/__pycache__/.pytest_cache/.mypy_cache/.ruff_cache/.runtime/.tmp` 等噪声；
 - 不执行任何 Git 命令；
 - snapshot/delta 必须位于 workspace 外；
-- 绑定 resolved root + filesystem workspace identity。
+- 绑定 resolved root + filesystem workspace identity；
+- 对稳定 snapshot evidence（不含 captured_at）计算 `snapshot_evidence_digest`，Checkpoint CP-0 用该摘要绑定真正的 task-start snapshot。
 
 修改后执行：
 
@@ -78,11 +79,14 @@ python .agents/skills/ai-auto-test-platform-context-efficiency/scripts/workspace
 得到：
 
 ```text
-added
-removed
-modified
+added / removed / modified
 task_delta_paths
+changed_symbols
+changed_line_ranges
+removed_symbols
+change_scope_provenance = FILESYSTEM_SNAPSHOT_V4
 delta_digest
+snapshot_evidence_digest（位于 task_start/current snapshot）
 ```
 
 因此历史 Git dirty state 不再属于 Codex 上下文；Codex 只关心当前 Task 在文件系统上真正产生的变化。

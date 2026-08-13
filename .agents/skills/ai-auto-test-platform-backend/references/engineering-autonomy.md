@@ -21,7 +21,7 @@ A-E 全部为“否” → 工程实现事项：Codex 有自主技术决策权�
 - 内部目录/模块/类/函数/私有方法拆分；
 - Repository / Service / Mapper / Composable / Store 的内部组织；
 - Grid/Flex、Element Plus 组件组合、非产品语义视觉细节；
-- 成熟维护库的具体选择（满足冻结算法/协议/安全参数）；
+- 成熟维护库的具体选择（满足当前 Authority 已确认的算法/协议/安全参数）；
 - 日志位置和结构化字段（不得泄密、不得改变审计契约）；
 - 测试 fixture、builder、helper；
 - 不改变唯一性/业务语义的索引和查询优化；

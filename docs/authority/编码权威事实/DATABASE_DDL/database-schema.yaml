@@ -1,19 +1,12 @@
 metadata:
   authority_model: SINGLE_LIVING_AUTHORITY
-  artifact_id: DATABASE-SCHEMA-1.4.2
-  version: 1.4.3-p1-auth-governance-closure
-  status: CURRENT_AUTHORITY_STATIC_VALIDATED
+  artifact_id: DATABASE-SCHEMA-1.5.0
+  version: 1.5.0-p1-remaining-authentication-closure
+  status: CURRENT_AUTHORITY_APPEND_ONLY_MIGRATIONS_RUNTIME_FRESHNESS_DERIVED
   code_readiness: READY_FOR_P1_IMPLEMENTATION
   last_modified_at: '2026-08-11T00:00:00+08:00'
 database: MySQL 8.4 LTS
 migration_tool: Flyway
-migration_files:
-- V3__platform_contract_rebuild.sql
-- V4__rbac_seed_data.sql
-- V5__platform_authentication_contract.sql
-- V6__p1_auth_governance_closure.sql
-object_table_count: 79
-technical_table_count: 6
 tables:
 - table_name: atp_account_mapping_revision
   columns:
@@ -366,7 +359,8 @@ tables:
   unique_keys: []
   check_constraints:
   - name: ck_atp_ai_call_lifecycle_status
-    expression: (lifecycle_status IN ('CREATED', 'QUEUED', 'PREPARING', 'RUNNING', 'SUCCEEDED', 'FAILED', 'CANCELED', 'ABORTED', 'TIMED_OUT', 'EXCEPTION', 'RECOVERING', 'COMPLETED', 'ARCHIVED'))
+    expression: (lifecycle_status IN ('CREATED', 'QUEUED', 'PREPARING', 'RUNNING', 'SUCCEEDED', 'FAILED', 'CANCELED', 'ABORTED',
+      'TIMED_OUT', 'EXCEPTION', 'RECOVERING', 'COMPLETED', 'ARCHIVED'))
   foreign_keys:
   - name: fk_atp_ai_call_ai_task_id
     column: ai_task_id
@@ -1197,7 +1191,8 @@ tables:
     - terminal_code
   check_constraints:
   - name: ck_atp_business_terminal_lifecycle_status
-    expression: (lifecycle_status IN ('CREATED', 'CONFIGURING', 'VALIDATING', 'ACTIVE', 'UNREACHABLE', 'DISABLED', 'RECOVERING', 'ARCHIVED'))
+    expression: (lifecycle_status IN ('CREATED', 'CONFIGURING', 'VALIDATING', 'ACTIVE', 'UNREACHABLE', 'DISABLED', 'RECOVERING',
+      'ARCHIVED'))
   foreign_keys:
   - name: fk_atp_business_terminal_environment_id
     column: environment_id
@@ -1297,7 +1292,8 @@ tables:
   - name: ck_atp_case_attempt_result_status
     expression: (result_status IN ('BROKEN', 'CANCELLED', 'FAILED', 'PASSED', 'SKIPPED'))
   - name: ck_atp_case_attempt_lifecycle_status
-    expression: (lifecycle_status IN ('CREATED', 'PREPARING', 'RUNNING', 'PASSED', 'FAILED', 'SKIPPED', 'NOT_EXECUTED', 'CANCELED', 'ABORTED', 'TIMED_OUT', 'EXCEPTION', 'COMPLETED'))
+    expression: (lifecycle_status IN ('CREATED', 'PREPARING', 'RUNNING', 'PASSED', 'FAILED', 'SKIPPED', 'NOT_EXECUTED', 'CANCELED',
+      'ABORTED', 'TIMED_OUT', 'EXCEPTION', 'COMPLETED'))
   foreign_keys:
   - name: fk_atp_case_attempt_run_task_id
     column: run_task_id
@@ -2509,11 +2505,17 @@ tables:
     - scope_id
     - permission_code
   check_constraints: []
-  foreign_keys: []
+  foreign_keys:
+  - name: fk_scope_binding
+    column: binding_id
+    referenced_table: atp_user_role_binding
+    referenced_column: binding_id
+    on_delete: CASCADE
+    on_update: RESTRICT
   indexes: []
-  delete_behavior: DECLARED_PER_FOREIGN_KEY
-  data_owner: DOMAIN_OR_TECHNICAL_OWNER
-  idempotency_and_audit: ROW_VERSION_OR_TECHNICAL_TABLE_RULE
+  delete_behavior: CASCADE_WITH_USER_ROLE_BINDING
+  data_owner: AuthorizationService
+  idempotency_and_audit: SAME_TRANSACTION_AS_USER_ROLE_BINDING
   object_id: null
   table_kind: TECHNICAL_TABLE
 - table_name: atp_entity_super_admin_role
@@ -2680,7 +2682,8 @@ tables:
     - environment_code
   check_constraints:
   - name: ck_atp_environment_lifecycle_status
-    expression: (lifecycle_status IN ('CREATED', 'CONFIGURING', 'VALIDATING', 'ACTIVE', 'UNREACHABLE', 'DISABLED', 'RECOVERING', 'ARCHIVED'))
+    expression: (lifecycle_status IN ('CREATED', 'CONFIGURING', 'VALIDATING', 'ACTIVE', 'UNREACHABLE', 'DISABLED', 'RECOVERING',
+      'ARCHIVED'))
   - name: ck_atp_environment_enablement_state
     expression: (enablement_state IN ('ENABLED', 'DISABLED'))
   - name: ck_atp_environment_accessibility_state
@@ -2923,11 +2926,13 @@ tables:
     - attempt_no
   check_constraints:
   - name: ck_atp_execution_attempt_execution_status
-    expression: (execution_status IN ('ABORTED', 'BROKEN', 'CANCELLED', 'FAILED', 'PRESTART_BLOCKED', 'READY', 'RUNNING', 'SUCCEEDED'))
+    expression: (execution_status IN ('ABORTED', 'BROKEN', 'CANCELLED', 'FAILED', 'PRESTART_BLOCKED', 'READY', 'RUNNING',
+      'SUCCEEDED'))
   - name: ck_atp_execution_attempt_finalization_status
     expression: (finalization_status IN ('COMPLETED', 'INITIAL', 'IN_PROGRESS', 'PENDING_RECOVERY'))
   - name: ck_atp_execution_attempt_lifecycle_status
-    expression: (lifecycle_status IN ('CREATED', 'PREPARING', 'RUNNING', 'PASSED', 'FAILED', 'SKIPPED', 'NOT_EXECUTED', 'CANCELED', 'ABORTED', 'TIMED_OUT', 'EXCEPTION', 'COMPLETED'))
+    expression: (lifecycle_status IN ('CREATED', 'PREPARING', 'RUNNING', 'PASSED', 'FAILED', 'SKIPPED', 'NOT_EXECUTED', 'CANCELED',
+      'ABORTED', 'TIMED_OUT', 'EXCEPTION', 'COMPLETED'))
   foreign_keys:
   - name: fk_atp_execution_attempt_run_task_id
     column: run_task_id
@@ -3068,7 +3073,8 @@ tables:
     - batch_no
   check_constraints:
   - name: ck_atp_execution_batch_lifecycle_status
-    expression: (lifecycle_status IN ('CREATED', 'PREPARING', 'RUNNING', 'PASSED', 'FAILED', 'SKIPPED', 'NOT_EXECUTED', 'CANCELED', 'ABORTED', 'TIMED_OUT', 'EXCEPTION', 'COMPLETED'))
+    expression: (lifecycle_status IN ('CREATED', 'PREPARING', 'RUNNING', 'PASSED', 'FAILED', 'SKIPPED', 'NOT_EXECUTED', 'CANCELED',
+      'ABORTED', 'TIMED_OUT', 'EXCEPTION', 'COMPLETED'))
   foreign_keys:
   - name: fk_atp_execution_batch_run_task_id
     column: run_task_id
@@ -3244,7 +3250,8 @@ tables:
   unique_keys: []
   check_constraints:
   - name: ck_atp_execution_lock_lifecycle_status
-    expression: (lifecycle_status IN ('REQUESTED', 'WAITING', 'ACQUIRED', 'HELD', 'RENEWING', 'RELEASED', 'EXPIRED', 'REVOKED', 'RECOVERING', 'ARCHIVED'))
+    expression: (lifecycle_status IN ('REQUESTED', 'WAITING', 'ACQUIRED', 'HELD', 'RENEWING', 'RELEASED', 'EXPIRED', 'REVOKED',
+      'RECOVERING', 'ARCHIVED'))
   foreign_keys:
   - name: fk_atp_execution_lock_lease_id
     column: lease_id
@@ -3340,7 +3347,8 @@ tables:
     - plan_code
   check_constraints:
   - name: ck_atp_execution_plan_lifecycle_status
-    expression: (lifecycle_status IN ('CREATED', 'DRAFT', 'VALIDATING', 'ACTIVE', 'TRIGGERED', 'PAUSED', 'DISABLED', 'RECOVERING', 'ARCHIVED'))
+    expression: (lifecycle_status IN ('CREATED', 'DRAFT', 'VALIDATING', 'ACTIVE', 'TRIGGERED', 'PAUSED', 'DISABLED', 'RECOVERING',
+      'ARCHIVED'))
   foreign_keys:
   - name: fk_atp_execution_plan_run_task_id
     column: run_task_id
@@ -3720,6 +3728,16 @@ tables:
     nullable: false
     primary_key: true
     default: null
+  - name: contract_version
+    type: SMALLINT UNSIGNED
+    nullable: false
+    primary_key: false
+    default: '2'
+  - name: principal_id
+    type: VARCHAR(26)
+    nullable: true
+    primary_key: false
+    default: null
   - name: operation_id
     type: VARCHAR(191)
     nullable: false
@@ -3740,6 +3758,11 @@ tables:
     nullable: true
     primary_key: false
     default: null
+  - name: completed_at
+    type: DATETIME(6)
+    nullable: true
+    primary_key: false
+    default: null
   - name: expires_at
     type: DATETIME(6)
     nullable: false
@@ -3748,12 +3771,26 @@ tables:
   primary_key:
   - idempotency_key
   unique_keys: []
-  check_constraints: []
+  check_constraints:
+  - name: ck_atp_idempotency_record_contract_version
+    expression: contract_version IN (1, 2)
+  - name: ck_atp_idempotency_change_password_terminal
+    expression: contract_version = 1 OR operation_id <> 'change_current_user_password' OR (principal_id IS NOT NULL AND response_json
+      IS NULL AND ((response_status IS NULL AND completed_at IS NULL) OR (response_status = 204 AND completed_at IS NOT NULL
+      AND expires_at > completed_at)))
   foreign_keys: []
-  indexes: []
-  delete_behavior: DECLARED_PER_FOREIGN_KEY
-  data_owner: DOMAIN_OR_TECHNICAL_OWNER
-  idempotency_and_audit: ROW_VERSION_OR_TECHNICAL_TABLE_RULE
+  indexes:
+  - name: ix_atp_idempotency_record_principal_operation_expiry
+    columns:
+    - principal_id
+    - operation_id
+    - expires_at
+  - name: ix_atp_idempotency_record_expiry
+    columns:
+    - expires_at
+  delete_behavior: DELETE_AFTER_EXPIRES_AT_CONTROLLED_BATCH
+  data_owner: IdempotencyService
+  idempotency_and_audit: CHANGE_PASSWORD_TERMINAL_204_REPLAY_WITHOUT_SECRET_RESPONSE
   object_id: null
   table_kind: TECHNICAL_TABLE
 - table_name: atp_integration_component
@@ -3816,7 +3853,8 @@ tables:
     - component_code
   check_constraints:
   - name: ck_atp_integration_component_lifecycle_status
-    expression: (lifecycle_status IN ('CREATED', 'CONFIGURING', 'VALIDATING', 'ACTIVE', 'DEGRADED', 'UNAVAILABLE', 'DISABLED', 'RECOVERING', 'ARCHIVED'))
+    expression: (lifecycle_status IN ('CREATED', 'CONFIGURING', 'VALIDATING', 'ACTIVE', 'DEGRADED', 'UNAVAILABLE', 'DISABLED',
+      'RECOVERING', 'ARCHIVED'))
   foreign_keys: []
   indexes: []
   delete_behavior: DECLARED_PER_FOREIGN_KEY
@@ -3897,7 +3935,8 @@ tables:
   - name: ck_atp_lease_status
     expression: (status IN ('ACTIVE', 'EXPIRED', 'FENCED', 'RELEASED'))
   - name: ck_atp_lease_lifecycle_status
-    expression: (lifecycle_status IN ('REQUESTED', 'WAITING', 'ACQUIRED', 'HELD', 'RENEWING', 'RELEASED', 'EXPIRED', 'REVOKED', 'RECOVERING', 'ARCHIVED'))
+    expression: (lifecycle_status IN ('REQUESTED', 'WAITING', 'ACQUIRED', 'HELD', 'RENEWING', 'RELEASED', 'EXPIRED', 'REVOKED',
+      'RECOVERING', 'ARCHIVED'))
   foreign_keys:
   - name: fk_atp_lease_execution_slot_id
     column: execution_slot_id
@@ -4377,7 +4416,9 @@ tables:
   - name: ck_atp_manual_recording_session_status
     expression: (status IN ('ABORTED', 'ACTIVE', 'COMPLETED', 'CREATED', 'PARTIAL', 'PAUSED'))
   - name: ck_atp_manual_recording_session_lifecycle_status
-    expression: (lifecycle_status IN ('CREATED', 'WAITING_RUNNER', 'PREPARING', 'WAITING_USER', 'RUNNING', 'PAUSED', 'DISCONNECTED', 'RECOVERABLE', 'RECOVERING', 'ENDED', 'PENDING_CONVERSION', 'PENDING_CONFIRMATION', 'COMPLETED', 'CANCELED', 'ABORTED', 'RECOVERY_FAILED', 'ARCHIVED'))
+    expression: (lifecycle_status IN ('CREATED', 'WAITING_RUNNER', 'PREPARING', 'WAITING_USER', 'RUNNING', 'PAUSED', 'DISCONNECTED',
+      'RECOVERABLE', 'RECOVERING', 'ENDED', 'PENDING_CONVERSION', 'PENDING_CONFIRMATION', 'COMPLETED', 'CANCELED', 'ABORTED',
+      'RECOVERY_FAILED', 'ARCHIVED'))
   foreign_keys:
   - name: fk_atp_manual_recording_session_manual_recording_task_id
     column: manual_recording_task_id
@@ -4496,7 +4537,9 @@ tables:
   - name: ck_atp_manual_recording_task_status
     expression: (status IN ('ASSIGNED', 'CANCELLED', 'COMPLETED', 'CREATED', 'FAILED', 'PARTIAL', 'RECORDING'))
   - name: ck_atp_manual_recording_task_lifecycle_status
-    expression: (lifecycle_status IN ('CREATED', 'WAITING_RUNNER', 'PREPARING', 'WAITING_USER', 'RUNNING', 'PAUSED', 'DISCONNECTED', 'RECOVERABLE', 'RECOVERING', 'ENDED', 'PENDING_CONVERSION', 'PENDING_CONFIRMATION', 'COMPLETED', 'CANCELED', 'ABORTED', 'RECOVERY_FAILED', 'ARCHIVED'))
+    expression: (lifecycle_status IN ('CREATED', 'WAITING_RUNNER', 'PREPARING', 'WAITING_USER', 'RUNNING', 'PAUSED', 'DISCONNECTED',
+      'RECOVERABLE', 'RECOVERING', 'ENDED', 'PENDING_CONVERSION', 'PENDING_CONFIRMATION', 'COMPLETED', 'CANCELED', 'ABORTED',
+      'RECOVERY_FAILED', 'ARCHIVED'))
   foreign_keys:
   - name: fk_atp_manual_recording_task_project_id
     column: project_id
@@ -4576,7 +4619,8 @@ tables:
     - config_code
   check_constraints:
   - name: ck_atp_model_config_lifecycle_status
-    expression: (lifecycle_status IN ('CREATED', 'CONFIGURING', 'VALIDATING', 'ACTIVE', 'DEGRADED', 'UNAVAILABLE', 'DISABLED', 'RECOVERING', 'ARCHIVED'))
+    expression: (lifecycle_status IN ('CREATED', 'CONFIGURING', 'VALIDATING', 'ACTIVE', 'DEGRADED', 'UNAVAILABLE', 'DISABLED',
+      'RECOVERING', 'ARCHIVED'))
   foreign_keys: []
   indexes: []
   delete_behavior: DECLARED_PER_FOREIGN_KEY
@@ -4650,7 +4694,8 @@ tables:
   unique_keys: []
   check_constraints:
   - name: ck_atp_natural_language_case_lifecycle_status
-    expression: (lifecycle_status IN ('CREATED', 'DRAFT', 'ACTIVE', 'CONVERSION_REQUESTED', 'EXPLORATION_REQUESTED', 'STRUCTURED_DRAFT_PRODUCED', 'ARCHIVED', 'LOGICALLY_DELETED'))
+    expression: (lifecycle_status IN ('CREATED', 'DRAFT', 'ACTIVE', 'CONVERSION_REQUESTED', 'EXPLORATION_REQUESTED', 'STRUCTURED_DRAFT_PRODUCED',
+      'ARCHIVED', 'LOGICALLY_DELETED'))
   foreign_keys:
   - name: fk_atp_natural_language_case_page_exploration_id
     column: page_exploration_id
@@ -4800,7 +4845,8 @@ tables:
   unique_keys: []
   check_constraints:
   - name: ck_atp_page_exploration_lifecycle_status
-    expression: (lifecycle_status IN ('CREATED', 'VALIDATING', 'WAITING_RUNNER', 'PREPARING', 'EXPLORING', 'WAITING_CONFIRMATION', 'SUCCEEDED', 'FAILED', 'CANCELED', 'ABORTED', 'TIMED_OUT', 'RECOVERING', 'ARCHIVED'))
+    expression: (lifecycle_status IN ('CREATED', 'VALIDATING', 'WAITING_RUNNER', 'PREPARING', 'EXPLORING', 'WAITING_CONFIRMATION',
+      'SUCCEEDED', 'FAILED', 'CANCELED', 'ABORTED', 'TIMED_OUT', 'RECOVERING', 'ARCHIVED'))
   foreign_keys:
   - name: fk_atp_page_exploration_runner_id
     column: runner_id
@@ -4993,106 +5039,6 @@ tables:
   - lifecycle_status
   relationship_fields: []
   extension_json_rule: NON_CONTRACT_EXTENSIONS_ONLY
-- table_name: atp_platform_design_baseline_release
-  columns:
-  - name: platform_design_baseline_release_id
-    type: VARCHAR(26)
-    nullable: false
-    primary_key: true
-    default: null
-  - name: release_id
-    type: VARCHAR(26)
-    nullable: true
-    primary_key: false
-    default: null
-  - name: data_dictionary_id
-    type: VARCHAR(26)
-    nullable: false
-    primary_key: false
-    default: null
-  - name: release_status
-    type: VARCHAR(10)
-    nullable: false
-    primary_key: false
-    default: DRAFT
-  - name: readiness_status
-    type: VARCHAR(22)
-    nullable: false
-    primary_key: false
-    default: CONDITIONAL_CODE_READY
-  - name: lifecycle_status
-    type: VARCHAR(17)
-    nullable: false
-    primary_key: false
-    default: CREATED
-  - name: display_name
-    type: VARCHAR(255)
-    nullable: true
-    primary_key: false
-    default: null
-  - name: row_version
-    type: BIGINT
-    nullable: false
-    primary_key: false
-    default: '0'
-  - name: created_at
-    type: DATETIME(6)
-    nullable: false
-    primary_key: false
-    default: CURRENT_TIMESTAMP(6)
-  - name: updated_at
-    type: DATETIME(6)
-    nullable: false
-    primary_key: false
-    default: CURRENT_TIMESTAMP(6)
-  - name: created_by
-    type: VARCHAR(26)
-    nullable: true
-    primary_key: false
-    default: null
-  - name: updated_by
-    type: VARCHAR(26)
-    nullable: true
-    primary_key: false
-    default: null
-  - name: extension_json
-    type: JSON
-    nullable: true
-    primary_key: false
-    default: null
-  primary_key:
-  - platform_design_baseline_release_id
-  unique_keys:
-  - name: uq_atp_platform_design_baseline_release_business
-    columns:
-    - release_id
-  check_constraints:
-  - name: ck_atp_platform_design_baseline_release_release_status
-    expression: (release_status IN ('DRAFT', 'FROZEN', 'SUPERSEDED'))
-  - name: ck_atp_platform_design_baseline_release_readiness_status
-    expression: (readiness_status IN ('CONDITIONAL_CODE_READY', 'FULL_CODE_READY', 'NOT_CODE_READY'))
-  - name: ck_atp_platform_design_baseline_release_lifecycle_status
-    expression: (lifecycle_status IN ('CREATED', 'DRAFT', 'ACTIVE', 'DISABLED', 'RECOVERED', 'ARCHIVED', 'LOGICALLY_DELETED'))
-  foreign_keys:
-  - name: fk_atp_platform_design_baseline_release_data_dictionary_id
-    column: data_dictionary_id
-    referenced_table: atp_data_dictionary
-    referenced_column: data_dictionary_id
-    on_delete: RESTRICT
-    on_update: RESTRICT
-  indexes: []
-  delete_behavior: DECLARED_PER_FOREIGN_KEY
-  data_owner: DOMAIN_OR_TECHNICAL_OWNER
-  idempotency_and_audit: ROW_VERSION_OR_TECHNICAL_TABLE_RULE
-  object_id: OBJ-085
-  business_unique_key: release_id
-  state_fields:
-  - release_status
-  - readiness_status
-  - lifecycle_status
-  relationship_fields:
-  - data_dictionary_id
-  extension_json_rule: NON_CONTRACT_EXTENSIONS_ONLY
 - table_name: atp_project
   columns:
   - name: project_id
@@ -5153,7 +5099,8 @@ tables:
     - project_code
   check_constraints:
   - name: ck_atp_project_lifecycle_status
-    expression: (lifecycle_status IN ('CREATED', 'CONFIGURING', 'VALIDATING', 'ACTIVE', 'DISABLED', 'RECOVERING', 'ARCHIVED', 'CLEANUP_PENDING', 'LOGICALLY_DELETED'))
+    expression: (lifecycle_status IN ('CREATED', 'CONFIGURING', 'VALIDATING', 'ACTIVE', 'DISABLED', 'RECOVERING', 'ARCHIVED',
+      'CLEANUP_PENDING', 'LOGICALLY_DELETED'))
   foreign_keys: []
   indexes: []
   delete_behavior: DECLARED_PER_FOREIGN_KEY
@@ -5501,7 +5448,8 @@ tables:
   unique_keys: []
   check_constraints:
   - name: ck_atp_recording_evidence_bundle_lifecycle_status
-    expression: (lifecycle_status IN ('COLLECTED', 'UPLOAD_PENDING', 'UPLOADING', 'STORED', 'UPLOAD_FAILED', 'RETRYING', 'RETAINED', 'EXTENDED_RETENTION', 'HELD', 'CLEANUP_PENDING', 'CLEANED', 'ARCHIVED'))
+    expression: (lifecycle_status IN ('COLLECTED', 'UPLOAD_PENDING', 'UPLOADING', 'STORED', 'UPLOAD_FAILED', 'RETRYING', 'RETAINED',
+      'EXTENDED_RETENTION', 'HELD', 'CLEANUP_PENDING', 'CLEANED', 'ARCHIVED'))
   foreign_keys:
   - name: fk_atp_recording_evidence_bundle_manual_recording_task_id
     column: manual_recording_task_id
@@ -5935,9 +5883,11 @@ tables:
     - idempotency_key
   check_constraints:
   - name: ck_atp_run_task_lifecycle_status
-    expression: (lifecycle_status IN ('CREATED', 'SNAPSHOTTED', 'VALIDATING', 'WAITING_RESOURCE', 'DISPATCHING', 'PREPARING', 'RUNNING', 'RETRYING', 'CANCELING', 'ABORTING', 'EXCEPTION', 'RECOVERING', 'COMPLETED', 'REPORTING', 'ARCHIVED'))
+    expression: (lifecycle_status IN ('CREATED', 'SNAPSHOTTED', 'VALIDATING', 'WAITING_RESOURCE', 'DISPATCHING', 'PREPARING',
+      'RUNNING', 'RETRYING', 'CANCELING', 'ABORTING', 'EXCEPTION', 'RECOVERING', 'COMPLETED', 'REPORTING', 'ARCHIVED'))
   - name: ck_atp_run_task_task_state
-    expression: (task_state IN ('CREATED', 'WAITING_RESOURCE', 'RUNNING', 'RETRYING', 'COMPLETED', 'CANCELED', 'ABORTED', 'EXCEPTION'))
+    expression: (task_state IN ('CREATED', 'WAITING_RESOURCE', 'RUNNING', 'RETRYING', 'COMPLETED', 'CANCELED', 'ABORTED',
+      'EXCEPTION'))
   - name: ck_atp_run_task_final_result
     expression: (final_result IN ('PASSED', 'FAILED', 'CANCELED', 'ABORTED', 'PARTIAL', 'UNKNOWN'))
   foreign_keys:
@@ -6114,7 +6064,8 @@ tables:
   - name: ck_atp_runner_resource_state
     expression: (resource_state IN ('AVAILABLE', 'PARTIALLY_ALLOCATED', 'FULLY_ALLOCATED', 'EXHAUSTED'))
   - name: ck_atp_runner_lifecycle_status
-    expression: (lifecycle_status IN ('REGISTERING', 'REGISTERED', 'AUTHENTICATED', 'BOUND', 'ENABLED', 'ONLINE', 'DEGRADED', 'UNHEALTHY', 'OFFLINE', 'RECOVERING', 'DRAINING', 'DISABLED', 'UNBOUND', 'DEREGISTERED', 'ARCHIVED'))
+    expression: (lifecycle_status IN ('REGISTERING', 'REGISTERED', 'AUTHENTICATED', 'BOUND', 'ENABLED', 'ONLINE', 'DEGRADED',
+      'UNHEALTHY', 'OFFLINE', 'RECOVERING', 'DRAINING', 'DISABLED', 'UNBOUND', 'DEREGISTERED', 'ARCHIVED'))
   foreign_keys:
   - name: fk_atp_runner_runner_project_binding_id
     column: runner_project_binding_id
@@ -6942,7 +6893,8 @@ tables:
     - batch_key
   check_constraints:
   - name: ck_atp_technical_alert_ingestion_batch_lifecycle_status
-    expression: (lifecycle_status IN ('CREATED', 'QUEUED', 'PREPARING', 'RUNNING', 'SUCCEEDED', 'FAILED', 'CANCELED', 'ABORTED', 'TIMED_OUT', 'EXCEPTION', 'RECOVERING', 'COMPLETED', 'ARCHIVED'))
+    expression: (lifecycle_status IN ('CREATED', 'QUEUED', 'PREPARING', 'RUNNING', 'SUCCEEDED', 'FAILED', 'CANCELED', 'ABORTED',
+      'TIMED_OUT', 'EXCEPTION', 'RECOVERING', 'COMPLETED', 'ARCHIVED'))
   foreign_keys:
   - name: fk_atp_technical_alert_ingestion_batch_technical_alert_id
     column: technical_alert_id
@@ -7054,7 +7006,8 @@ tables:
     - account_identifier
   check_constraints:
   - name: ck_atp_test_account_lifecycle_status
-    expression: (lifecycle_status IN ('CREATED', 'CONFIGURING', 'VALIDATING', 'ACTIVE', 'CREDENTIAL_EXPIRED', 'DISABLED', 'RECOVERING', 'ARCHIVED'))
+    expression: (lifecycle_status IN ('CREATED', 'CONFIGURING', 'VALIDATING', 'ACTIVE', 'CREDENTIAL_EXPIRED', 'DISABLED',
+      'RECOVERING', 'ARCHIVED'))
   - name: ck_atp_test_account_credential_state
     expression: (credential_state IN ('VALID', 'EXPIRING', 'EXPIRED', 'REVOKED'))
   foreign_keys:
@@ -7172,7 +7125,8 @@ tables:
   unique_keys: []
   check_constraints:
   - name: ck_atp_test_artifact_lifecycle_status
-    expression: (lifecycle_status IN ('COLLECTED', 'UPLOAD_PENDING', 'UPLOADING', 'STORED', 'UPLOAD_FAILED', 'RETRYING', 'RETAINED', 'EXTENDED_RETENTION', 'HELD', 'CLEANUP_PENDING', 'CLEANED', 'ARCHIVED'))
+    expression: (lifecycle_status IN ('COLLECTED', 'UPLOAD_PENDING', 'UPLOADING', 'STORED', 'UPLOAD_FAILED', 'RETRYING', 'RETAINED',
+      'EXTENDED_RETENTION', 'HELD', 'CLEANUP_PENDING', 'CLEANED', 'ARCHIVED'))
   - name: ck_atp_test_artifact_upload_state
     expression: (upload_state IN ('PENDING', 'UPLOADING', 'STORED', 'FAILED'))
   - name: ck_atp_test_artifact_retention_state
@@ -7488,7 +7442,8 @@ tables:
   - name: ck_atp_test_report_report_state
     expression: (report_state IN ('PENDING', 'GENERATING', 'GENERATED', 'PARTIAL', 'FAILED', 'ARCHIVED'))
   - name: ck_atp_test_report_lifecycle_status
-    expression: (lifecycle_status IN ('PENDING', 'GENERATING', 'GENERATED', 'PARTIAL', 'FAILED', 'REGENERATING', 'ARCHIVED', 'METADATA_RETAINED'))
+    expression: (lifecycle_status IN ('PENDING', 'GENERATING', 'GENERATED', 'PARTIAL', 'FAILED', 'REGENERATING', 'ARCHIVED',
+      'METADATA_RETAINED'))
   foreign_keys:
   - name: fk_atp_test_report_test_artifact_id
     column: test_artifact_id
@@ -7585,7 +7540,8 @@ tables:
   - name: ck_atp_test_report_generation_request_status
     expression: (status IN ('CANCELLED', 'FAILED', 'INITIAL', 'QUEUED', 'RUNNING', 'SUCCEEDED'))
   - name: ck_atp_test_report_generation_request_lifecycle_status
-    expression: (lifecycle_status IN ('CREATED', 'QUEUED', 'PREPARING', 'RUNNING', 'SUCCEEDED', 'FAILED', 'CANCELED', 'ABORTED', 'TIMED_OUT', 'EXCEPTION', 'RECOVERING', 'COMPLETED', 'ARCHIVED'))
+    expression: (lifecycle_status IN ('CREATED', 'QUEUED', 'PREPARING', 'RUNNING', 'SUCCEEDED', 'FAILED', 'CANCELED', 'ABORTED',
+      'TIMED_OUT', 'EXCEPTION', 'RECOVERING', 'COMPLETED', 'ARCHIVED'))
   foreign_keys:
   - name: fk_atp_test_report_generation_request_test_report_id
     column: test_report_id
@@ -7831,44 +7787,147 @@ tables:
     - project_id
     - valid_from
   check_constraints: []
-  foreign_keys: []
-  indexes: []
-  delete_behavior: DECLARED_PER_FOREIGN_KEY
-  data_owner: DOMAIN_OR_TECHNICAL_OWNER
-  idempotency_and_audit: ROW_VERSION_OR_TECHNICAL_TABLE_RULE
+  foreign_keys:
+  - name: fk_user_role_user
+    column: user_id
+    referenced_table: atp_user
+    referenced_column: user_id
+    on_delete: CASCADE
+    on_update: RESTRICT
+  - name: fk_user_role_role
+    column: role_id
+    referenced_table: atp_role
+    referenced_column: role_id
+    on_delete: RESTRICT
+    on_update: RESTRICT
+  indexes:
+  - name: ix_atp_user_role_binding_current_lookup
+    columns:
+    - user_id
+    - role_id
+    - project_id
+    - valid_to
+  delete_behavior: REVOKE_BY_VALID_TO_NO_PHYSICAL_DELETE
+  data_owner: AuthorizationService
+  idempotency_and_audit: ROW_VERSION_AND_SECURITY_AUDIT
   object_id: null
   table_kind: TECHNICAL_TABLE
 - table_name: atp_platform_user_credential
   columns:
-  - {name: credential_id, type: VARCHAR(26), nullable: false, primary_key: true, default: null}
-  - {name: user_id, type: VARCHAR(26), nullable: false, primary_key: false, default: null}
-  - {name: credential_type, type: VARCHAR(16), nullable: false, primary_key: false, default: PASSWORD}
-  - {name: password_hash, type: VARCHAR(512), nullable: false, primary_key: false, default: null}
-  - {name: password_algorithm, type: VARCHAR(32), nullable: false, primary_key: false, default: ARGON2ID_V19}
-  - {name: credential_version, type: BIGINT, nullable: false, primary_key: false, default: '1'}
-  - {name: force_password_change, type: BOOLEAN, nullable: false, primary_key: false, default: 'TRUE'}
-  - {name: failed_login_count, type: INTEGER, nullable: false, primary_key: false, default: '0'}
-  - {name: failure_window_started_at, type: DATETIME(6), nullable: true, primary_key: false, default: null}
-  - {name: locked_until, type: DATETIME(6), nullable: true, primary_key: false, default: null}
-  - {name: last_failed_at, type: DATETIME(6), nullable: true, primary_key: false, default: null}
-  - {name: last_successful_login_at, type: DATETIME(6), nullable: true, primary_key: false, default: null}
-  - {name: password_changed_at, type: DATETIME(6), nullable: false, primary_key: false, default: null}
-  - {name: lifecycle_status, type: VARCHAR(16), nullable: false, primary_key: false, default: ACTIVE}
-  - {name: row_version, type: BIGINT, nullable: false, primary_key: false, default: '0'}
-  - {name: created_at, type: DATETIME(6), nullable: false, primary_key: false, default: CURRENT_TIMESTAMP(6)}
-  - {name: updated_at, type: DATETIME(6), nullable: false, primary_key: false, default: CURRENT_TIMESTAMP(6)}
-  - {name: created_by, type: VARCHAR(26), nullable: true, primary_key: false, default: null}
-  - {name: updated_by, type: VARCHAR(26), nullable: true, primary_key: false, default: null}
-  primary_key: [credential_id]
+  - name: credential_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: true
+    default: null
+  - name: user_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: credential_type
+    type: VARCHAR(16)
+    nullable: false
+    primary_key: false
+    default: PASSWORD
+  - name: password_hash
+    type: VARCHAR(512)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: password_algorithm
+    type: VARCHAR(32)
+    nullable: false
+    primary_key: false
+    default: ARGON2ID_V19
+  - name: credential_version
+    type: BIGINT
+    nullable: false
+    primary_key: false
+    default: '1'
+  - name: force_password_change
+    type: BOOLEAN
+    nullable: false
+    primary_key: false
+    default: 'TRUE'
+  - name: failed_login_count
+    type: INTEGER
+    nullable: false
+    primary_key: false
+    default: '0'
+  - name: failure_window_started_at
+    type: DATETIME(6)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: locked_until
+    type: DATETIME(6)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: last_failed_at
+    type: DATETIME(6)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: last_successful_login_at
+    type: DATETIME(6)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: password_changed_at
+    type: DATETIME(6)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: lifecycle_status
+    type: VARCHAR(16)
+    nullable: false
+    primary_key: false
+    default: ACTIVE
+  - name: row_version
+    type: BIGINT
+    nullable: false
+    primary_key: false
+    default: '0'
+  - name: created_at
+    type: DATETIME(6)
+    nullable: false
+    primary_key: false
+    default: CURRENT_TIMESTAMP(6)
+  - name: updated_at
+    type: DATETIME(6)
+    nullable: false
+    primary_key: false
+    default: CURRENT_TIMESTAMP(6)
+  - name: created_by
+    type: VARCHAR(26)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: updated_by
+    type: VARCHAR(26)
+    nullable: true
+    primary_key: false
+    default: null
+  primary_key:
+  - credential_id
   unique_keys:
-  - {name: uq_atp_platform_user_credential_user, columns: [user_id]}
+  - name: uq_atp_platform_user_credential_user
+    columns:
+    - user_id
   check_constraints:
-  - {name: ck_atp_platform_user_credential_type, expression: "credential_type IN ('PASSWORD')"}
-  - {name: ck_atp_platform_user_credential_algorithm, expression: "password_algorithm IN ('ARGON2ID_V19')"}
-  - {name: ck_atp_platform_user_credential_version, expression: credential_version >= 1}
-  - {name: ck_atp_platform_user_credential_failed_count, expression: failed_login_count >= 0 AND failed_login_count <= 5}
-  - {name: ck_atp_platform_user_credential_lifecycle, expression: "lifecycle_status IN ('ACTIVE', 'REVOKED')"}
-  - {name: ck_atp_platform_user_credential_row_version, expression: row_version >= 0}
+  - name: ck_atp_platform_user_credential_type
+    expression: credential_type IN ('PASSWORD')
+  - name: ck_atp_platform_user_credential_algorithm
+    expression: password_algorithm IN ('ARGON2ID_V19')
+  - name: ck_atp_platform_user_credential_version
+    expression: credential_version >= 1
+  - name: ck_atp_platform_user_credential_failed_count
+    expression: failed_login_count >= 0 AND failed_login_count <= 5
+  - name: ck_atp_platform_user_credential_lifecycle
+    expression: lifecycle_status IN ('ACTIVE', 'REVOKED')
+  - name: ck_atp_platform_user_credential_row_version
+    expression: row_version >= 0
   foreign_keys:
   - name: fk_atp_platform_user_credential_user
     column: user_id
@@ -7882,39 +7941,127 @@ tables:
   idempotency_and_audit: ROW_VERSION_AND_IMMUTABLE_SECURITY_AUDIT
   object_id: AUTH-OBJ-001
   business_unique_key: user_id
-  state_fields: [lifecycle_status, force_password_change, credential_version, failed_login_count, locked_until]
-  relationship_fields: [user_id]
+  state_fields:
+  - lifecycle_status
+  - force_password_change
+  - credential_version
+  - failed_login_count
+  - locked_until
+  relationship_fields:
+  - user_id
 - table_name: atp_auth_refresh_session
   columns:
-  - {name: session_id, type: VARCHAR(26), nullable: false, primary_key: true, default: null}
-  - {name: credential_id, type: VARCHAR(26), nullable: false, primary_key: false, default: null}
-  - {name: family_id, type: VARCHAR(26), nullable: false, primary_key: false, default: null}
-  - {name: token_hash, type: BINARY(32), nullable: false, primary_key: false, default: null}
-  - {name: session_version, type: BIGINT, nullable: false, primary_key: false, default: '1'}
-  - {name: credential_version, type: BIGINT, nullable: false, primary_key: false, default: null}
-  - {name: lifecycle_status, type: VARCHAR(16), nullable: false, primary_key: false, default: ACTIVE}
-  - {name: issued_at, type: DATETIME(6), nullable: false, primary_key: false, default: null}
-  - {name: expires_at, type: DATETIME(6), nullable: false, primary_key: false, default: null}
-  - {name: last_used_at, type: DATETIME(6), nullable: true, primary_key: false, default: null}
-  - {name: rotated_at, type: DATETIME(6), nullable: true, primary_key: false, default: null}
-  - {name: revoked_at, type: DATETIME(6), nullable: true, primary_key: false, default: null}
-  - {name: revoke_reason, type: VARCHAR(64), nullable: true, primary_key: false, default: null}
-  - {name: replaced_by_session_id, type: VARCHAR(26), nullable: true, primary_key: false, default: null}
-  - {name: client_context_hash, type: BINARY(32), nullable: true, primary_key: false, default: null}
-  - {name: row_version, type: BIGINT, nullable: false, primary_key: false, default: '0'}
-  - {name: created_at, type: DATETIME(6), nullable: false, primary_key: false, default: CURRENT_TIMESTAMP(6)}
-  - {name: updated_at, type: DATETIME(6), nullable: false, primary_key: false, default: CURRENT_TIMESTAMP(6)}
-  primary_key: [session_id]
+  - name: session_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: true
+    default: null
+  - name: credential_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: family_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: token_hash
+    type: BINARY(32)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: session_version
+    type: BIGINT
+    nullable: false
+    primary_key: false
+    default: '1'
+  - name: credential_version
+    type: BIGINT
+    nullable: false
+    primary_key: false
+    default: null
+  - name: lifecycle_status
+    type: VARCHAR(16)
+    nullable: false
+    primary_key: false
+    default: ACTIVE
+  - name: issued_at
+    type: DATETIME(6)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: expires_at
+    type: DATETIME(6)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: last_used_at
+    type: DATETIME(6)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: rotated_at
+    type: DATETIME(6)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: revoked_at
+    type: DATETIME(6)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: revoke_reason
+    type: VARCHAR(64)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: replaced_by_session_id
+    type: VARCHAR(26)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: client_context_hash
+    type: BINARY(32)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: row_version
+    type: BIGINT
+    nullable: false
+    primary_key: false
+    default: '0'
+  - name: created_at
+    type: DATETIME(6)
+    nullable: false
+    primary_key: false
+    default: CURRENT_TIMESTAMP(6)
+  - name: updated_at
+    type: DATETIME(6)
+    nullable: false
+    primary_key: false
+    default: CURRENT_TIMESTAMP(6)
+  primary_key:
+  - session_id
   unique_keys:
-  - {name: uq_atp_auth_refresh_session_token_hash, columns: [token_hash]}
+  - name: uq_atp_auth_refresh_session_token_hash
+    columns:
+    - token_hash
   check_constraints:
-  - {name: ck_atp_auth_refresh_session_version, expression: session_version >= 1}
-  - {name: ck_atp_auth_refresh_session_credential_version, expression: credential_version >= 1}
-  - {name: ck_atp_auth_refresh_session_lifecycle, expression: "lifecycle_status IN ('ACTIVE', 'ROTATED', 'REVOKED', 'EXPIRED', 'COMPROMISED')"}
-  - {name: ck_atp_auth_refresh_session_expiry, expression: expires_at > issued_at}
-  - {name: ck_atp_auth_refresh_session_row_version, expression: row_version >= 0}
-  - {name: ck_atp_auth_refresh_session_rotation, expression: "ROTATED requires rotated_at and replaced_by_session_id"}
-  - {name: ck_atp_auth_refresh_session_revocation, expression: "lifecycle_status NOT IN ('REVOKED', 'COMPROMISED') OR revoked_at IS NOT NULL"}
+  - name: ck_atp_auth_refresh_session_version
+    expression: session_version >= 1
+  - name: ck_atp_auth_refresh_session_credential_version
+    expression: credential_version >= 1
+  - name: ck_atp_auth_refresh_session_lifecycle
+    expression: lifecycle_status IN ('ACTIVE', 'ROTATED', 'REVOKED', 'EXPIRED', 'COMPROMISED')
+  - name: ck_atp_auth_refresh_session_expiry
+    expression: expires_at > issued_at
+  - name: ck_atp_auth_refresh_session_row_version
+    expression: row_version >= 0
+  - name: ck_atp_auth_refresh_session_rotation
+    expression: ROTATED requires rotated_at and replaced_by_session_id
+  - name: ck_atp_auth_refresh_session_revocation
+    expression: lifecycle_status NOT IN ('REVOKED', 'COMPROMISED') OR revoked_at IS NOT NULL
   foreign_keys:
   - name: fk_atp_auth_refresh_session_credential
     column: credential_id
@@ -7929,47 +8076,179 @@ tables:
     on_delete: RESTRICT
     on_update: RESTRICT
   indexes:
-  - {name: ix_atp_auth_refresh_session_credential_status, columns: [credential_id, lifecycle_status, expires_at]}
-  - {name: ix_atp_auth_refresh_session_family_status, columns: [family_id, lifecycle_status]}
+  - name: ix_atp_auth_refresh_session_credential_status
+    columns:
+    - credential_id
+    - lifecycle_status
+    - expires_at
+  - name: ix_atp_auth_refresh_session_family_status
+    columns:
+    - family_id
+    - lifecycle_status
   delete_behavior: RETAIN_30_DAYS_THEN_CONTROLLED_PURGE
   data_owner: SessionService
   idempotency_and_audit: ROTATION_REPLAY_DETECTION_AND_ROW_VERSION
   object_id: AUTH-OBJ-002
   business_unique_key: token_hash
-  state_fields: [lifecycle_status, session_version, credential_version, rotated_at, revoked_at]
-  relationship_fields: [credential_id, replaced_by_session_id]
+  state_fields:
+  - lifecycle_status
+  - session_version
+  - credential_version
+  - rotated_at
+  - revoked_at
+  relationship_fields:
+  - credential_id
+  - replaced_by_session_id
 - table_name: atp_auth_security_audit
   columns:
-  - {name: audit_id, type: VARCHAR(26), nullable: false, primary_key: true, default: null}
-  - {name: action, type: VARCHAR(32), nullable: false, primary_key: false, default: null}
-  - {name: operation_id, type: VARCHAR(128), nullable: false, primary_key: false, default: null}
-  - {name: actor_id, type: VARCHAR(26), nullable: true, primary_key: false, default: null}
-  - {name: target_user_id, type: VARCHAR(26), nullable: true, primary_key: false, default: null}
-  - {name: session_id, type: VARCHAR(26), nullable: true, primary_key: false, default: null}
-  - {name: result_code, type: VARCHAR(64), nullable: false, primary_key: false, default: null}
-  - {name: correlation_id, type: VARCHAR(128), nullable: false, primary_key: false, default: null}
-  - {name: occurred_at, type: DATETIME(6), nullable: false, primary_key: false, default: null}
-  - {name: source_context_hash, type: BINARY(32), nullable: false, primary_key: false, default: null}
-  primary_key: [audit_id]
+  - name: audit_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: true
+    default: null
+  - name: action
+    type: VARCHAR(32)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: operation_id
+    type: VARCHAR(128)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: actor_id
+    type: VARCHAR(26)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: target_user_id
+    type: VARCHAR(26)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: session_id
+    type: VARCHAR(26)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: result_code
+    type: VARCHAR(64)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: correlation_id
+    type: VARCHAR(128)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: occurred_at
+    type: DATETIME(6)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: source_context_hash
+    type: BINARY(32)
+    nullable: false
+    primary_key: false
+    default: null
+  primary_key:
+  - audit_id
   unique_keys: []
-  check_constraints: []
+  check_constraints:
+  - name: ck_atp_auth_security_audit_action
+    expression: action IN ('LOGIN_SUCCEEDED', 'LOGIN_FAILED', 'REFRESH_SUCCEEDED', 'REFRESH_FAILED', 'LOGOUT', 'PASSWORD_CHANGED',
+      'CREDENTIAL_RESET', 'SESSION_REVOKED', 'USER_CREATED', 'USER_ENABLED', 'USER_DISABLED_OR_LOCKED', 'ROLE_ASSIGNED', 'ROLE_REVOKED',
+      'PERMISSION_DENIED')
   foreign_keys: []
   indexes:
-  - {name: ix_atp_auth_security_audit_correlation, columns: [correlation_id]}
-  - {name: ix_atp_auth_security_audit_occurred_at, columns: [occurred_at]}
+  - name: ix_atp_auth_security_audit_correlation
+    columns:
+    - correlation_id
+  - name: ix_atp_auth_security_audit_occurred_at
+    columns:
+    - occurred_at
   delete_behavior: APPEND_ONLY_UPDATE_DELETE_FORBIDDEN
   data_owner: AuthenticationAuditService
   idempotency_and_audit: IMMUTABLE_SECURITY_AUDIT
   object_id: AUTH-OBJ-003
   business_unique_key: audit_id
   state_fields: []
-  relationship_fields: [actor_id, target_user_id, session_id]
-foreign_key_count: 174
+  relationship_fields:
+  - actor_id
+  - target_user_id
+  - session_id
+- table_name: atp_auth_source_rate_limit
+  columns:
+  - name: source_key_hash
+    type: BINARY(32)
+    nullable: false
+    primary_key: true
+    default: null
+  - name: operation_id
+    type: VARCHAR(32)
+    nullable: false
+    primary_key: true
+    default: null
+  - name: window_started_at
+    type: DATETIME(6)
+    nullable: false
+    primary_key: true
+    default: null
+  - name: request_count
+    type: INTEGER UNSIGNED
+    nullable: false
+    primary_key: false
+    default: '1'
+  - name: expires_at
+    type: DATETIME(6)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: row_version
+    type: BIGINT UNSIGNED
+    nullable: false
+    primary_key: false
+    default: '0'
+  primary_key:
+  - source_key_hash
+  - operation_id
+  - window_started_at
+  unique_keys: []
+  check_constraints:
+  - name: ck_atp_auth_source_rate_limit_operation
+    expression: operation_id IN ('login_platform_user', 'refresh_platform_session')
+  - name: ck_atp_auth_source_rate_limit_count
+    expression: (operation_id = 'login_platform_user' AND request_count BETWEEN 1 AND 61) OR (operation_id = 'refresh_platform_session'
+      AND request_count BETWEEN 1 AND 301)
+  - name: ck_atp_auth_source_rate_limit_expiry
+    expression: expires_at = DATE_ADD(window_started_at, INTERVAL 300 SECOND)
+  - name: ck_atp_auth_source_rate_limit_row_version
+    expression: row_version >= 0
+  foreign_keys: []
+  indexes:
+  - name: ix_atp_auth_source_rate_limit_expiry
+    columns:
+    - expires_at
+  delete_behavior: EXPIRED_WINDOWS_MAY_BE_PURGED_AFTER_EXPIRES_AT
+  data_owner: AuthenticationRateLimitService
+  idempotency_and_audit: MYSQL_SHARED_FIXED_WINDOW_ATOMIC_INCREMENT
+  object_id: AUTH-OBJ-004
+  table_kind: TECHNICAL_TABLE
+  business_unique_key:
+  - source_key_hash
+  - operation_id
+  - window_started_at
+  state_fields:
+  - request_count
+  - expires_at
+  - row_version
+  relationship_fields: []
 rules:
 - 正式关系、状态、权限和唯一约束必须物理化，extension_json仅保存非契约扩展。
 - 对象事实源、对象表映射、DDL、OpenAPI与事件必须使用同一技术身份。
-- 当前Living Authority静态契约、认证约束和RBAC种子保持一致；V6新增认证安全审计表及不可变触发器。
-validation_status: STATIC_AND_RUNTIME_MYSQL84_VALIDATED
+- 当前Living Authority静态契约、认证约束和RBAC种子保持一致；V7新增共享来源限流，并扩充认证幂等与安全审计约束。
+- 角色绑定创建先锁定目标atp_user行，再按user_id、role_id、project_id、valid_to查询当前绑定，避免并发重复ACTIVE绑定。
+validation_status: STATIC_VALIDATION_CURRENT_FULL_SCHEMA_RUNTIME_PENDING
 rbac_seed_identifier_mapping:
 - role_code: ROLE-ASSET-REVIEWER
   role_id: R7F90D7DAA356CA2376C7CB824
@@ -7995,3 +8274,28 @@ rbac_seed_identifier_mapping:
   role_id: R7B84F6FFD02D6ED17F599124A
 - role_code: ROLE-TEST-LEAD
   role_id: RF10CB01F3A6E790C6E5A6FE51
+migration_discovery:
+  source: docs/authority/编码权威事实/DATABASE_DDL
+  filename_pattern: ^V(?P<version>\d+)__.+\.sql$
+  ordering: NUMERIC_VERSION_ASCENDING
+  history_policy: APPEND_ONLY_EXISTING_MIGRATIONS_IMMUTABLE
+  current_facts_source: tools/current_facts.py
+table_classification:
+  technical_table_names:
+  - atp_permission_code
+  - atp_role
+  - atp_role_permission
+  - atp_user_role_binding
+  - atp_data_scope_grant
+  - atp_idempotency_record
+  - atp_outbox_event
+migration_execution:
+  selected_tool: Flyway
+  authority_source: docs/authority/编码权威事实/DATABASE_DDL
+  migration_discovery_source: tools/current_facts.py#discover_migrations
+  current_runtime_gate_executor: DIRECT_MYSQL_CLIENT_OR_PYMYSQL
+  flyway_runtime_integration_status: SELECTED_BUT_NOT_YET_WIRED_IN_REPOSITORY
+  truth_rule: Flyway remains the selected migration tool; until runtime wiring exists, current executable gates must apply
+    every mechanically discovered formal migration in numeric order and must not hard-code the current migration head.
+  retired_active_models:
+  - OBJ-085 / atp_platform_design_baseline_release

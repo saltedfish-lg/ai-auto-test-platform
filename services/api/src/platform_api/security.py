@@ -27,6 +27,7 @@ COMMON_PASSWORD_DENYLIST_VERSION = "v1"
 
 
 def _load_common_passwords() -> frozenset[str]:
+    """常见弱密码词表加载失败时保持显式边界，避免环境差异静默降低密码策略强度。"""
     resource = files("platform_api").joinpath(
         "data", f"common-passwords-{COMMON_PASSWORD_DENYLIST_VERSION}.txt"
     )
@@ -50,6 +51,7 @@ def utc_now() -> datetime:
 
 
 def new_ulid() -> str:
+    """认证标识统一使用单调且足够随机的生成路径，避免并发创建时出现可预测或重复标识。"""
     value = ((time.time_ns() // 1_000_000) << 80) | int.from_bytes(secrets.token_bytes(10))
     chars: list[str] = []
     for _ in range(26):
@@ -59,10 +61,12 @@ def new_ulid() -> str:
 
 
 def new_refresh_token() -> str:
+    """刷新令牌使用高熵随机值，避免可预测令牌被枚举后绕过正常认证流程。"""
     return base64.urlsafe_b64encode(secrets.token_bytes(32)).rstrip(b"=").decode("ascii")
 
 
 def refresh_token_hash(token: str) -> bytes:
+    """数据库只保存刷新令牌哈希，避免持久化层泄露后直接获得可用的 bearer credential。"""
     if not re.fullmatch(r"[A-Za-z0-9_-]{43}", token):
         raise ValueError("invalid refresh token format")
     try:
@@ -84,6 +88,7 @@ class PasswordPolicyError(ValueError):
 
 class PasswordService:
     def __init__(self) -> None:
+        """密码服务集中固定哈希参数和弱密码策略，确保不同调用方不会自行降低认证安全基线。"""
         self._hasher = PasswordHasher(
             time_cost=3,
             memory_cost=65536,
@@ -95,6 +100,7 @@ class PasswordService:
         self._dummy_hash = self._hasher.hash(secrets.token_urlsafe(32))
 
     def validate(self, password: str, username: str) -> None:
+        """密码校验统一执行长度、复杂度和常见弱密码规则，避免不同写入口产生不一致凭据质量。"""
         if not 12 <= len(password) <= 128:
             raise PasswordPolicyError("password length must be between 12 and 128")
         if password != password.strip() or not password.strip():
@@ -112,6 +118,7 @@ class PasswordService:
         return self._hasher.hash(password)
 
     def verify(self, encoded_hash: str, password: str) -> bool:
+        """密码验证只通过既定哈希器完成，避免调用方使用不同算法造成认证结果不一致。"""
         try:
             return self._hasher.verify(encoded_hash, password)
         except (InvalidHashError, VerifyMismatchError):
@@ -187,7 +194,7 @@ class JwtKeyRing:
 
     @classmethod
     def load(cls, manifest_file: Path, *, now: datetime | None = None) -> JwtKeyRing:
-        """Load a complete ring or fail without retaining a partial configuration."""
+        """密钥环必须完整校验后一次性生效，避免部分配置被保留而形成未知或过期密钥的宽松验证路径。"""
         try:
             document = json.loads(manifest_file.read_text(encoding="utf-8"))
         except (OSError, UnicodeError, json.JSONDecodeError) as error:
@@ -306,6 +313,7 @@ class JwtKeyRing:
 
     @staticmethod
     def _utc_timestamp(document: dict[str, Any], field: str, *, required: bool) -> datetime | None:
+        """密钥时间统一归一到UTC时间戳，避免时区差异破坏轮换窗口和过期判断。"""
         value = document.get(field)
         if value is None and not required:
             return None
@@ -341,6 +349,7 @@ class JwtKeyRing:
 
     @staticmethod
     def _load_private_key(path: Path) -> tuple[bytes, RSAPrivateKey]:
+        """私钥只从受控文件加载并校验类型，避免错误密钥材料在运行时被当成签名凭据。"""
         try:
             value = path.read_bytes()
             key = serialization.load_pem_private_key(value, password=None)
@@ -365,6 +374,7 @@ class JwtService:
         return self._key_ring.ring_version
 
     def issue(self, claims: AccessClaims, *, now: datetime | None = None) -> str:
+        """签发令牌必须写入当前active kid和凭据版本，确保后续轮换与撤销可以精确验证。"""
         issued = (now or datetime.now(UTC)).astimezone(UTC)
         payload: dict[str, Any] = {
             "iss": self.issuer,
@@ -385,6 +395,7 @@ class JwtService:
         )
 
     def decode(self, token: str, *, now: datetime | None = None) -> AccessClaims:
+        """解析JWT先校验算法和kid再选择验证密钥，避免算法混淆或未知密钥进入宽松验证路径。"""
         try:
             header = jwt.get_unverified_header(token)
             kid = header.get("kid")

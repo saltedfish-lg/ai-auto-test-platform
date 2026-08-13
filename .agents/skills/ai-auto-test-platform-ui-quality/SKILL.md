@@ -20,9 +20,9 @@ description: 用真实浏览器验证AI自动化测试执行平台页面视觉�
 - 当前改动页面/组件；
 - 已知测试账号/权限态和验证路径。
 
-不要重新通读完整业务基线。
+不要重新通读完整当前业务 Authority。
 
-## BASELINE_CAPTURE 模式（UI_HIGH 现有页面改造前）
+## PRE_CHANGE_CAPTURE 模式（UI_HIGH 现有页面改造前）
 
 在任何重设计代码写入前，以只读方式记录当前页面真实表现：
 
@@ -30,11 +30,11 @@ description: 用真实浏览器验证AI自动化测试执行平台页面视觉�
 2. 记录首屏、核心业务状态、主要操作入口；
 3. 记录现有 Loading/Error/Forbidden/Conflict 等与任务相关状态；
 4. 记录 Console/Network 明显异常；
-5. 输出 `PRE_CHANGE_BASELINE = CAPTURED` 与紧凑截图/路径索引。
+5. 输出 `PRE_CHANGE_EVIDENCE = CAPTURED` 与紧凑截图/路径索引。
 
-不得在该模式修改页面。新页面输出 `PRE_CHANGE_BASELINE = NOT_APPLICABLE_NEW_PAGE`。该证据供 `business_ui_ux_specialist` 的 `DESIGN_MODE / REVIEW_MODE` 使用，不要求像素级 diff。
+不得在该模式修改页面。新页面输出 `PRE_CHANGE_EVIDENCE = NOT_APPLICABLE_NEW_PAGE`。该证据供 `business_ui_ux_specialist` 的 `DESIGN_MODE / REVIEW_MODE` 使用，不要求像素级 diff。
 
-若真实 Before 因环境条件无法取得，输出 `PRE_CHANGE_BASELINE = BLOCKED_BY_ENVIRONMENT`，并记录具体阻断原因。此时不得伪造 screenshot；上游可退化到 `SOURCE_BASED_CURRENT_UI_BASELINE`，同时标记 `VISUAL_BASELINE_CONFIDENCE = LIMITED` 和 `POST_CHANGE_BROWSER_VERIFY = REQUIRED`。环境恢复后，Post-change Browser Verify 仍为强制验证债务。
+若真实 Before 因环境条件无法取得，输出 `PRE_CHANGE_EVIDENCE = BLOCKED_BY_ENVIRONMENT`，并记录具体阻断原因。此时不得伪造 screenshot；上游可退化到 `SOURCE_BASED_CURRENT_UI_EVIDENCE`，同时标记 `VISUAL_EVIDENCE_CONFIDENCE = LIMITED` 和 `POST_CHANGE_BROWSER_VERIFY = REQUIRED`。环境恢复后，Post-change Browser Verify 仍为强制验证债务。
 
 
 ## 检查清单
@@ -52,7 +52,7 @@ description: 用真实浏览器验证AI自动化测试执行平台页面视觉�
 
 ## POST_CHANGE_VERIFY 模式
 
-实现完成后按下述检查执行真实交互验证。现有页面重设计应尽量复用 BASELINE_CAPTURE 的 viewport、关键状态与路径，形成业务级 Before/After 对比。
+实现完成后按下述检查执行真实交互验证。现有页面重设计应尽量复用 PRE_CHANGE_CAPTURE 的 viewport、关键状态与路径，形成业务级 Before/After 对比。
 
 ## UI_HIGH证据
 
@@ -66,4 +66,4 @@ description: 用真实浏览器验证AI自动化测试执行平台页面视觉�
 
 ## 结果
 
-输出实际验证路径、关键交互、发现的问题和已修复项。正式发布验收仍需对应 acceptance evidence，浏览器 smoke 不得冒充 1691 项验收通过。
+输出实际验证路径、关键交互、发现的问题和已修复项。正式发布验收仍需对应 acceptance evidence，浏览器 smoke 不得冒充 当前验收全集通过（数量由 `tools/current_facts.py` 派生）。

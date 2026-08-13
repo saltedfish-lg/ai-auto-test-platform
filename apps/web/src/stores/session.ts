@@ -41,7 +41,7 @@ export const useSessionStore = defineStore("session", () => {
   async function refreshAccessToken(): Promise<void> {
     if (refreshPromise) return refreshPromise;
     refreshPromise = (async () => {
-      const response = await apiClient.refresh_platform_session({});
+      const response = await apiClient.refresh_platform_session();
       acceptAuthentication(response);
     })();
     try {
@@ -101,13 +101,16 @@ export const useSessionStore = defineStore("session", () => {
     }
   }
 
-  async function changePassword(request: ChangePasswordRequest): Promise<void> {
+  async function changePassword(
+    request: ChangePasswordRequest,
+    idempotencyKey: string,
+  ): Promise<void> {
     status.value = "changing-password";
     try {
-      const response = await apiClient.change_current_user_password(request, {
-        headers: { "Idempotency-Key": `password-change-${crypto.randomUUID()}` },
+      await apiClient.change_current_user_password(request, {
+        headers: { "Idempotency-Key": idempotencyKey },
       });
-      acceptAuthentication(response);
+      clearSession();
       initialized.value = true;
     } finally {
       status.value = "idle";
@@ -117,7 +120,7 @@ export const useSessionStore = defineStore("session", () => {
   async function logout(): Promise<void> {
     status.value = "logging-out";
     try {
-      await apiClient.logout_platform_user({});
+      await apiClient.logout_platform_user();
     } finally {
       clearSession();
       initialized.value = true;

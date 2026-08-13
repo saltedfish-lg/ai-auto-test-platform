@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import json
 import secrets
 import shutil
 from collections.abc import Iterator
@@ -22,11 +24,14 @@ def key_ring_file() -> Iterator[Path]:
 
 
 def _settings(key_ring_file: Path) -> ApiSettings:
+    hmac_key_file = key_ring_file.parent / "auth-hmac-master.key"
+    _write_hmac_ring(hmac_key_file)
     return ApiSettings(
         _env_file=None,
         environment="test",
         database_url="mysql+pymysql://platform:local@127.0.0.1/platform_test",
         jwt_key_ring_file=key_ring_file,
+        auth_hmac_master_key_file=hmac_key_file,
     )
 
 
@@ -48,23 +53,68 @@ def test_exact_frozen_auth_operations_are_registered(key_ring_file: Path) -> Non
     }
 
 
+def test_exact_user_governance_operations_are_registered(key_ring_file: Path) -> None:
+    app = create_app(_settings(key_ring_file))
+    operations = {
+        (method, route.path, route.operation_id)
+        for route in app.routes
+        if hasattr(route, "methods")
+        for method in route.methods
+        if route.path.startswith(("/api/v1/user", "/api/v1/user-role-binding"))
+    }
+    assert operations == {
+        ("POST", "/api/v1/user", "create_user"),
+        ("POST", "/api/v1/user/{id}/credential-reset", "reset_user_credential"),
+        ("POST", "/api/v1/user/{id}/enable", "enable_user"),
+        ("POST", "/api/v1/user/{id}/disable", "disable_user"),
+        ("POST", "/api/v1/user-role-binding", "create_user_role_binding"),
+        (
+            "POST",
+            "/api/v1/user-role-binding/{id}/revoke",
+            "revoke_user_role_binding",
+        ),
+    }
+
+
 def test_invalid_configured_key_ring_fails_app_creation() -> None:
     directory = Path.cwd() / ".runtime" / f"invalid-ring-{secrets.token_hex(8)}"
     directory.mkdir(parents=True, exist_ok=False)
     try:
         manifest = directory / "invalid-key-ring.json"
         manifest.write_text('{"ring_version":"broken"}', encoding="utf-8")
+        hmac_key_file = directory / "auth-hmac-master.key"
+        _write_hmac_ring(hmac_key_file)
         settings = ApiSettings(
             _env_file=None,
             environment="test",
             database_url="mysql+pymysql://platform:local@127.0.0.1/platform_test",
             jwt_key_ring_file=manifest,
+            auth_hmac_master_key_file=hmac_key_file,
         )
 
         with pytest.raises(RuntimeError, match="root schema"):
             create_app(settings)
     finally:
         shutil.rmtree(directory)
+
+
+def _write_hmac_ring(path: Path) -> None:
+    path.write_text(
+        json.dumps(
+            {
+                "ring_version": "test-v1",
+                "active_key_id": "active",
+                "keys": [
+                    {
+                        "key_id": "active",
+                        "key_material": base64.urlsafe_b64encode(b"x" * 32).rstrip(b"=").decode(),
+                        "activated_at": "2025-01-01T00:00:00Z",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
 
 
 def test_missing_bearer_returns_frozen_problem_details(key_ring_file: Path) -> None:
@@ -127,9 +177,9 @@ def test_login_validation_is_problem_details_and_redacts_password(key_ring_file:
             json={"username": "admin", "password": secret},
         )
 
-    assert response.status_code == 400
+    assert response.status_code == 422
     assert response.headers["content-type"].startswith("application/problem+json")
-    assert response.json()["code"] == "AUTH_INVALID_CREDENTIALS"
+    assert response.json()["code"] == "AUTH_REQUEST_VALIDATION_FAILED"
     assert response.json()["correlation_id"] == correlation_id
     assert response.json()["field_errors"] == [
         {"field": "password", "message": "Field validation failed."}
@@ -154,7 +204,7 @@ def test_change_password_validation_is_redacted_problem_details(key_ring_file: P
 
     assert response.status_code == 422
     assert response.headers["content-type"].startswith("application/problem+json")
-    assert response.json()["code"] == "AUTH_OPERATION_FORBIDDEN_FOR_STATE"
+    assert response.json()["code"] == "AUTH_REQUEST_VALIDATION_FAILED"
     assert response.json()["correlation_id"] == correlation_id
     assert response.json()["field_errors"] == [
         {"field": "current_password", "message": "Field validation failed."}

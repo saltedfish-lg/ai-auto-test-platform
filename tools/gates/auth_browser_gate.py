@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""Run the current living-authority P1 auth UI gate against FastAPI, Chromium and MySQL."""
+"""Run the authentication UI Gate against FastAPI, real Chromium, and isolated MySQL."""
 
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
+import re
 import secrets
 import shutil
 import socket
@@ -13,17 +15,19 @@ import subprocess
 import sys
 import time
 from contextlib import closing
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import BinaryIO
 
-from p1_auth_mysql_gate import (
+from auth_mysql_gate import (  # type: ignore[import-not-found]
     ADMIN_URL_ENV,
-    DATABASE_PREFIX,
+    DATABASE_URL_ENV,
+    GateBlocked,
     _connection,
+    _drop_isolated_database,
     _execute_script,
     _migration_names,
     _migration_path,
+    _new_database_name,
     _resolve_authority,
     _test_database_url,
 )
@@ -35,18 +39,55 @@ from platform_api.security import PasswordService, new_ulid, utc_now
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 RUNTIME_ROOT = ROOT / ".runtime"
+GATE_STATUS_NAME = "AUTH_BROWSER_RUNTIME_GATE"
 
 
 def _password(label: str) -> str:
     return f"{label}-{secrets.token_hex(12)}-7"
 
 
+def _write_hmac_key_ring(directory: Path) -> Path:
+    path = directory / "auth-hmac-key-ring.json"
+    path.write_text(
+        json.dumps(
+            {
+                "ring_version": "auth-browser-v1",
+                "active_key_id": "active",
+                "keys": [
+                    {
+                        "key_id": "active",
+                        "key_material": base64.urlsafe_b64encode(secrets.token_bytes(32))
+                        .rstrip(b"=")
+                        .decode("ascii"),
+                        "activated_at": "2025-01-01T00:00:00Z",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
 def _port_open(port: int) -> bool:
-    with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as probe:
-        probe.settimeout(0.2)
-        return probe.connect_ex(("127.0.0.1", port)) == 0
+    try:
+        with closing(socket.create_connection(("127.0.0.1", port), timeout=0.2)):
+            return True
+    except OSError:
+        return False
+
+
+def _available_loopback_port() -> int:
+    for port in range(5173, 5200):
+        try:
+            with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as probe:
+                probe.bind(("127.0.0.1", port))
+                return port
+        except OSError:
+            continue
+    raise GateBlocked("no loopback web port is available in the 5173-5199 Gate range")
 
 
 def _wait_for_port(port: int, process: subprocess.Popen[bytes], timeout: float = 30.0) -> None:
@@ -58,6 +99,27 @@ def _wait_for_port(port: int, process: subprocess.Popen[bytes], timeout: float =
             return
         time.sleep(0.2)
     raise RuntimeError(f"local process did not listen on port {port} within {timeout} seconds")
+
+
+def _wait_for_vite(
+    port: int,
+    process: subprocess.Popen[bytes],
+    log_path: Path,
+    timeout: float = 30.0,
+) -> None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            raise RuntimeError(f"Vite process for port {port} exited during startup")
+        if _port_open(port):
+            return
+        try:
+            if "ready in" in log_path.read_text(encoding="utf-8", errors="replace"):
+                return
+        except OSError:
+            pass
+        time.sleep(0.2)
+    raise RuntimeError(f"Vite did not become ready on port {port} within {timeout} seconds")
 
 
 def _create_user(
@@ -134,7 +196,11 @@ def _create_user(
 
 
 def _start_process(
-    command: list[str], environment: dict[str, str], log_path: Path
+    command: list[str],
+    environment: dict[str, str],
+    log_path: Path,
+    *,
+    keep_stdin_open: bool = False,
 ) -> tuple[subprocess.Popen[bytes], BinaryIO]:
     log_handle = log_path.open("wb")
     creation_flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if sys.platform == "win32" else 0
@@ -142,7 +208,7 @@ def _start_process(
         command,
         cwd=ROOT,
         env=environment,
-        stdin=subprocess.DEVNULL,
+        stdin=subprocess.PIPE if keep_stdin_open else subprocess.DEVNULL,
         stdout=log_handle,
         stderr=subprocess.STDOUT,
         creationflags=creation_flags,
@@ -159,6 +225,46 @@ def _stop_process(process: subprocess.Popen[bytes] | None) -> None:
     except subprocess.TimeoutExpired:
         process.kill()
         process.wait(timeout=10)
+
+
+def _startup_error_code(log_path: Path) -> str:
+    try:
+        text = log_path.read_text(encoding="utf-8", errors="replace")[-8192:]
+    except OSError:
+        return "PROCESS_EXITED_BEFORE_READY"
+    known_failures = (
+        ("spawn EPERM", "CHILD_PROCESS_SPAWN_DENIED"),
+        ("failed to load config", "VITE_CONFIG_LOAD_FAILED"),
+        ("is already in use", "PORT_ALREADY_IN_USE"),
+        ("EADDRINUSE", "PORT_ALREADY_IN_USE"),
+        ("Cannot find module", "NODE_MODULE_MISSING"),
+        ("ValidationError", "API_CONFIGURATION_INVALID"),
+        ("authentication HMAC", "API_HMAC_KEY_INVALID"),
+        ("error when starting dev server", "VITE_START_FAILED"),
+        ("ready in", "PORT_PROBE_FAILED"),
+        ("Local:", "PORT_PROBE_FAILED"),
+    )
+    return next(
+        (code for marker, code in known_failures if marker in text), "PROCESS_EXITED_BEFORE_READY"
+    )
+
+
+def _safe_startup_diagnostic(log_path: Path) -> str | None:
+    try:
+        lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return None
+    for line in reversed(lines):
+        if "Error:" not in line and "error when starting" not in line.lower():
+            continue
+        sanitized = re.sub(r"[a-z][a-z0-9+.-]*://\S+", "<redacted-url>", line, flags=re.I)
+        sanitized = re.sub(
+            r"(?i)(password|token|secret|key(?:_material)?)(\s*[=:]\s*)\S+",
+            r"\1\2<redacted>",
+            sanitized,
+        )
+        return sanitized[:300]
+    return None
 
 
 def _browser_executable() -> Path | None:
@@ -180,41 +286,81 @@ def _browser_executable() -> Path | None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description=__doc__)
     parser.parse_args()
     authority = _resolve_authority()
     migrations = _migration_names(authority)
-    if ADMIN_URL_ENV not in os.environ:
-        raise RuntimeError(f"{ADMIN_URL_ENV} is required")
-    if _port_open(8000) or _port_open(5173):
-        raise RuntimeError("ports 8000 and 5173 must be free before the isolated browser gate")
+    if not os.getenv(ADMIN_URL_ENV):
+        print(
+            json.dumps(
+                {
+                    GATE_STATUS_NAME: "BLOCKED",
+                    "blocker": f"{ADMIN_URL_ENV} is required",
+                    "admin_url": "NOT_SET",
+                    "mysql_version": "UNKNOWN",
+                    "isolated_database_removed": False,
+                    "runtime_secrets_removed": True,
+                },
+                ensure_ascii=False,
+            )
+        )
+        return 2
+    if _port_open(8000):
+        print(
+            json.dumps(
+                {
+                    GATE_STATUS_NAME: "BLOCKED",
+                    "blocker": "port 8000 must be free",
+                    "admin_url": "SET",
+                    "mysql_version": "UNKNOWN",
+                    "isolated_database_removed": False,
+                    "runtime_secrets_removed": True,
+                },
+                ensure_ascii=False,
+            )
+        )
+        return 2
 
-    database = DATABASE_PREFIX + "browser_" + datetime.now(UTC).strftime("%Y%m%d%H%M%S")
-    runtime_directory = RUNTIME_ROOT / f"p1-browser-{secrets.token_hex(6)}"
+    database = _new_database_name("browser")
+    runtime_directory = RUNTIME_ROOT / f"auth-browser-{secrets.token_hex(6)}"
     runtime_directory.mkdir(parents=True, exist_ok=False)
     api_process: subprocess.Popen[bytes] | None = None
     web_process: subprocess.Popen[bytes] | None = None
     log_handles: list[BinaryIO] = []
     created = False
+    removed = False
     browser_exit = 1
     version = "UNKNOWN"
+    status = "FAIL"
+    blocker: str | None = None
+    error_type: str | None = None
+    error_stage: str | None = None
+    error_code: str | None = None
+    error_diagnostic: str | None = None
+    web_port: int | None = None
+    runtime_removed = False
+    exit_code = 1
+    stage = "mysql_connect"
     try:
         with _connection() as connection, connection.cursor() as cursor:
             cursor.execute("SELECT VERSION()")
             version = str(cursor.fetchone()[0])
             if not version.startswith("8.4."):
-                raise RuntimeError(f"MySQL 8.4 is required; detected {version}")
+                raise GateBlocked(f"MySQL 8.4 is required; detected {version}")
             cursor.execute(
                 f"CREATE DATABASE `{database}` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci"
             )
             created = True
+        stage = "migrations"
         for migration in migrations:
             _execute_script(database, _migration_path(authority, migration))
 
+        stage = "fixtures"
         database_url = _test_database_url(database)
         key_ring = generate_development_key_ring(
-            runtime_directory / "keys", kid="p1-browser-rs256-v1"
+            runtime_directory / "keys", kid="auth-browser-rs256-v1"
         )
+        hmac_key_ring_file = _write_hmac_key_ring(runtime_directory)
         engine = create_database_engine(database_url)
         factory = create_session_factory(engine)
         passwords = PasswordService()
@@ -242,12 +388,14 @@ def main() -> int:
         api_environment.update(
             {
                 "PLATFORM_ENVIRONMENT": "test",
-                "PLATFORM_DATABASE_URL": database_url,
+                DATABASE_URL_ENV: database_url,
                 "API_HOST": "127.0.0.1",
                 "API_PORT": "8000",
                 "ATP_JWT_KEY_RING_FILE": str(key_ring.manifest_file),
+                "ATP_AUTH_HMAC_MASTER_KEY_FILE": str(hmac_key_ring_file),
             }
         )
+        stage = "api_startup"
         api_process, api_log = _start_process(
             [sys.executable, "-m", "platform_api.cli"],
             api_environment,
@@ -258,9 +406,12 @@ def main() -> int:
 
         node = shutil.which("node")
         if node is None:
-            raise RuntimeError("Node.js is required for the P1 browser gate")
+            raise GateBlocked("Node.js is required for the authentication browser Gate")
+        stage = "web_startup"
+        web_port = _available_loopback_port()
         web_environment = os.environ.copy()
         web_environment.pop(ADMIN_URL_ENV, None)
+        web_log_path = runtime_directory / "web.log"
         web_process, web_log = _start_process(
             [
                 node,
@@ -268,23 +419,38 @@ def main() -> int:
                 str(ROOT / "apps" / "web"),
                 "--host",
                 "127.0.0.1",
+                "--port",
+                str(web_port),
+                "--strictPort",
             ],
             web_environment,
-            runtime_directory / "web.log",
+            web_log_path,
+            keep_stdin_open=True,
         )
         log_handles.append(web_log)
-        _wait_for_port(5173, web_process)
+        _wait_for_vite(web_port, web_process, web_log_path)
 
         browser_environment = web_environment.copy()
+        for proxy_name in (
+            "HTTP_PROXY",
+            "HTTPS_PROXY",
+            "ALL_PROXY",
+            "http_proxy",
+            "https_proxy",
+            "all_proxy",
+        ):
+            browser_environment.pop(proxy_name, None)
         browser_environment.update(
             {
-                "PLAYWRIGHT_BASE_URL": "http://127.0.0.1:5173",
-                "P1_E2E_ADMIN_INITIAL_PASSWORD": initial_password,
-                "P1_E2E_ADMIN_CHANGED_PASSWORD": changed_password,
-                "P1_E2E_NORMAL_USERNAME": normal_username,
-                "P1_E2E_NORMAL_PASSWORD": normal_password,
-                "P1_E2E_DISABLED_USERNAME": disabled_username,
-                "P1_E2E_DISABLED_PASSWORD": disabled_password,
+                "PLAYWRIGHT_BASE_URL": f"http://127.0.0.1:{web_port}",
+                "NO_PROXY": "127.0.0.1,localhost",
+                "no_proxy": "127.0.0.1,localhost",
+                "ATP_AUTH_E2E_ADMIN_INITIAL_PASSWORD": initial_password,
+                "ATP_AUTH_E2E_ADMIN_CHANGED_PASSWORD": changed_password,
+                "ATP_AUTH_E2E_NORMAL_USERNAME": normal_username,
+                "ATP_AUTH_E2E_NORMAL_PASSWORD": normal_password,
+                "ATP_AUTH_E2E_DISABLED_USERNAME": disabled_username,
+                "ATP_AUTH_E2E_DISABLED_PASSWORD": disabled_password,
                 "PLAYWRIGHT_NO_COPY_PROMPT": "1",
                 "PLAYWRIGHT_OUTPUT_DIR": str(runtime_directory / "playwright-output"),
             }
@@ -298,6 +464,9 @@ def main() -> int:
             / ".bin"
             / ("playwright.cmd" if sys.platform == "win32" else "playwright")
         )
+        if not playwright.is_file():
+            raise GateBlocked("Playwright is required for the authentication browser Gate")
+        stage = "chromium_test"
         completed = subprocess.run(
             [
                 str(playwright),
@@ -310,36 +479,73 @@ def main() -> int:
             check=False,
         )
         browser_exit = completed.returncode
-        return browser_exit
+        status = "PASS" if browser_exit == 0 else "FAIL"
+        exit_code = browser_exit
+    except GateBlocked as exc:
+        status = "BLOCKED"
+        blocker = str(exc)
+        exit_code = 2
+    except Exception as exc:
+        status = "FAIL"
+        error_type = type(exc).__name__
+        error_stage = stage
+        if stage == "api_startup":
+            error_code = _startup_error_code(runtime_directory / "api.log")
+        elif stage == "web_startup":
+            error_code = _startup_error_code(runtime_directory / "web.log")
+            error_diagnostic = _safe_startup_diagnostic(runtime_directory / "web.log")
+        exit_code = 1
     finally:
         _stop_process(web_process)
         _stop_process(api_process)
         for handle in log_handles:
             handle.close()
-        if created and database.startswith(DATABASE_PREFIX + "browser_"):
-            with _connection() as connection, connection.cursor() as cursor:
-                cursor.execute(f"DROP DATABASE IF EXISTS `{database}`")
+        if created:
+            try:
+                _drop_isolated_database(database)
+                removed = True
+            except Exception:
+                status = "FAIL"
+                blocker = f"failed to remove isolated database {database}"
+                exit_code = 1
         resolved_runtime = runtime_directory.resolve()
         if (
             resolved_runtime.parent == RUNTIME_ROOT.resolve()
-            and resolved_runtime.name.startswith("p1-browser-")
+            and resolved_runtime.name.startswith("auth-browser-")
             and resolved_runtime.exists()
         ):
-            shutil.rmtree(resolved_runtime)
-        print(
-            json.dumps(
-                {
-                    "mysql_version": version,
-                    "browser": "chromium",
-                    "browser_exit_code": browser_exit,
-                    "isolated_database_removed": created,
-                    "runtime_secrets_removed": not resolved_runtime.exists(),
-                    "screenshot": "test-results/p1-auth-workspace.png",
-                    "gate": "PASS" if browser_exit == 0 else "FAIL",
-                },
-                ensure_ascii=False,
-            )
-        )
+            try:
+                shutil.rmtree(resolved_runtime)
+            except OSError:
+                status = "FAIL"
+                blocker = f"failed to remove runtime directory {resolved_runtime.name}"
+                exit_code = 1
+        runtime_removed = not resolved_runtime.exists()
+
+    result: dict[str, object] = {
+        GATE_STATUS_NAME: status,
+        "admin_url": "SET",
+        "mysql_version": version,
+        "database": database,
+        "browser": "chromium",
+        "web_port": web_port,
+        "browser_exit_code": browser_exit,
+        "isolated_database_removed": removed,
+        "runtime_secrets_removed": runtime_removed,
+        "screenshot": "test-results/auth-workspace.png",
+    }
+    if blocker is not None:
+        result["blocker"] = blocker
+    if error_type is not None:
+        result["error_type"] = error_type
+    if error_stage is not None:
+        result["error_stage"] = error_stage
+    if error_code is not None:
+        result["error_code"] = error_code
+    if error_diagnostic is not None:
+        result["error_diagnostic"] = error_diagnostic
+    print(json.dumps(result, ensure_ascii=False))
+    return exit_code
 
 
 if __name__ == "__main__":

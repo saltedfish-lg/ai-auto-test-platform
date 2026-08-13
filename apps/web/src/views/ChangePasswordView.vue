@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, ref } from "vue";
+import { reactive, ref, watch } from "vue";
 import { ElMessage, type FormInstance, type FormRules } from "element-plus";
 import { useRouter } from "vue-router";
 
@@ -16,10 +16,18 @@ const form = reactive<PasswordForm>({
   confirm_password: "",
 });
 const passwordVisibility = reactive({ current: false, next: false, confirm: false });
+const passwordChangeIdempotencyKey = ref<string>();
 const errorMessage = ref("");
 const correlationId = ref<string>();
 const session = useSessionStore();
 const router = useRouter();
+
+watch(
+  () => [form.current_password, form.new_password] as const,
+  () => {
+    passwordChangeIdempotencyKey.value = undefined;
+  },
+);
 
 const rules: FormRules<PasswordForm> = {
   current_password: [
@@ -69,13 +77,19 @@ async function submit(): Promise<void> {
   const valid = await formRef.value?.validate().catch(() => false);
   if (!valid) return;
 
+  const idempotencyKey =
+    passwordChangeIdempotencyKey.value ?? `password-change-${crypto.randomUUID()}`;
+  passwordChangeIdempotencyKey.value = idempotencyKey;
   try {
-    await session.changePassword({
-      current_password: form.current_password,
-      new_password: form.new_password,
-    });
+    await session.changePassword(
+      {
+        current_password: form.current_password,
+        new_password: form.new_password,
+      },
+      idempotencyKey,
+    );
     ElMessage.success("密码已更新，旧会话已安全撤销。");
-    await router.replace("/");
+    await router.replace("/login");
   } catch (error) {
     errorMessage.value = getAuthenticationErrorMessage(
       error,

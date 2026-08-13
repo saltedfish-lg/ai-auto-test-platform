@@ -12,13 +12,17 @@ from fastapi.responses import JSONResponse
 from platform_observability import configure_logging
 
 from platform_api.audit import AuthenticationAuditService
+from platform_api.auth_hmac import AuthHmacKeyRing
 from platform_api.auth_router import router as auth_router
 from platform_api.auth_service import AuthenticationService
 from platform_api.config import ApiSettings
 from platform_api.database import create_database_engine, create_session_factory
 from platform_api.errors import PlatformError, ProblemDetails
 from platform_api.middleware import CorrelationIdMiddleware
+from platform_api.rate_limit import AuthenticationRateLimitService
 from platform_api.security import JwtKeyRing, JwtService, PasswordService
+from platform_api.user_admin_router import router as user_admin_router
+from platform_api.user_admin_service import UserAdministrationService
 
 LOGGER = logging.getLogger(__name__)
 
@@ -26,6 +30,7 @@ LOGGER = logging.getLogger(__name__)
 def create_app(settings: ApiSettings) -> FastAPI:
     configure_logging(settings.log_level)
     jwt_service = JwtService(JwtKeyRing.load(settings.jwt_key_ring_file))
+    auth_hmac = AuthHmacKeyRing.load(settings.auth_hmac_master_key_file)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -46,14 +51,29 @@ def create_app(settings: ApiSettings) -> FastAPI:
     engine = create_database_engine(settings.database_url)
     app.state.database_engine = engine
     app.state.session_factory = create_session_factory(engine)
+    password_service = PasswordService()
+    audit_service = AuthenticationAuditService()
+    app.state.auth_rate_limit_service = AuthenticationRateLimitService(
+        app.state.session_factory, auth_hmac, audit_service
+    )
     app.state.auth_service = AuthenticationService(
         app.state.session_factory,
-        PasswordService(),
+        password_service,
         jwt_service,
-        AuthenticationAuditService(),
+        audit_service,
+        auth_hmac,
+        app.state.auth_rate_limit_service,
+    )
+    app.state.user_admin_service = UserAdministrationService(
+        app.state.session_factory,
+        password_service,
+        app.state.auth_service,
+        audit_service,
+        auth_hmac,
     )
     app.add_middleware(CorrelationIdMiddleware)
     app.include_router(auth_router)
+    app.include_router(user_admin_router)
 
     @app.exception_handler(PlatformError)
     async def handle_platform_error(request: Request, error: PlatformError) -> JSONResponse:
@@ -70,20 +90,18 @@ def create_app(settings: ApiSettings) -> FastAPI:
             status_code=error.status,
             content=problem.model_dump(exclude_none=True),
             media_type="application/problem+json",
+            headers=error.headers,
         )
 
     @app.exception_handler(RequestValidationError)
     async def handle_request_validation(
         request: Request, error: RequestValidationError
     ) -> JSONResponse:
-        path = request.url.path
-        is_change_password = path == "/api/v1/auth/change-password"
-        status = 422 if is_change_password else 400
-        code = (
-            "AUTH_OPERATION_FORBIDDEN_FOR_STATE"
-            if is_change_password
-            else "AUTH_INVALID_CREDENTIALS"
-        )
+        # Pydantic/FastAPI shape validation is a request-contract failure, not an
+        # authentication credential/state failure. Keep one stable 422 semantic for
+        # every formal API so clients can distinguish malformed input from business denial.
+        status = 422
+        code = "AUTH_REQUEST_VALIDATION_FAILED"
         field_errors = []
         for item in error.errors():
             location = item.get("loc", ())

@@ -18,6 +18,7 @@ description: AI自动化测试执行平台 FastAPI 后端正式实现 Skill；�
 ## 强制规则
 
 - 编码时必须同时遵循 `$ai-auto-test-platform-code-quality` 的 **Implementation Standards Mode**；该模式只增加质量约束，不改变本实现 Skill/Agent 的写权限。
+- Implementation 完成后、进入 Verification 前，必须基于 `workspace_snapshot.py delta` v4 机械产生的本 Task `changed_symbols / changed_line_ranges` 运行 code-quality `scripts/comment_quality_gate.py --task-delta ... --checkpoint ...`；不得仅传 changed path 触发整文件历史扫描。只对本 Task 真正改动的复杂符号要求中文原因型注释/Docstring，简单 CRUD/generated 不强制。
 
 - 正式公开 API 必须来自当前 authority OpenAPI；禁止自创 Operation/DTO/状态/错误码。
 - 正式字段和关系必须来自 DDL/对象映射；`docs/authority/**` 只读。
@@ -26,7 +27,7 @@ description: AI自动化测试执行平台 FastAPI 后端正式实现 Skill；�
 - 状态、审计、Outbox、幂等记录等要求同原子动作时必须同事务提交。
 - 领域/应用/基础设施边界以“职责”而非为了形式主义强拆层；现有项目未预建完整业务目录，允许按 Engineering Autonomy 渐进建立清晰结构。
 - 日志不得包含 password/hash/access token/refresh token/cookie/secret/database credential。
-- 基线未定义的纯工程实现自主决定；涉及用户可观察行为、业务/状态、公开契约、权限安全、Runner业务/恢复或验收语义时先使用 `$ai-auto-test-platform-product-sovereignty` 检查当前权威事实，真实缺口/冲突/范围变化才升级用户裁决。
+- 当前 Authority 未定义的纯工程实现自主决定；涉及用户可观察行为、业务/状态、公开契约、权限安全、Runner业务/恢复或验收语义时先使用 `$ai-auto-test-platform-product-sovereignty` 检查当前权威事实，真实缺口/冲突/范围变化才升级用户裁决。
 
 ## 实现流程
 

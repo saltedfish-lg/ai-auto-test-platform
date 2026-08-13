@@ -1,0 +1,26 @@
+{
+  "evidence_schema_version": 1,
+  "evidence_id": "MYSQL84-FULL-SCHEMA-V3-V8-2026-08-13",
+  "evidence_type": "RUNTIME_GATE_EXECUTION",
+  "gate_id": "FULL_SCHEMA_MYSQL84_RUNTIME_GATE",
+  "authority_model": "SINGLE_LIVING_AUTHORITY",
+  "execution_date": "2026-08-13",
+  "evidence_source": "USER_CONFIRMED_REAL_EXECUTION",
+  "formal_entrypoint": "python tools/mysql84_gate.py --execute",
+  "admin_connection_source": "ATP_MYSQL_ADMIN_URL",
+  "result": "PASS",
+  "mysql_version": "8.4.11",
+  "validated_migration_head": 8,
+  "validated_migration_chain": "V3 → V4 → V5 → V6 → V7 → V8",
+  "checks": {
+    "mysql_8_4_version": "PASS",
+    "empty_db_migration": "PASS",
+    "v4_seed_idempotency": "PASS",
+    "legacy_upgrade": "PASS",
+    "schema_assertions": "PASS",
+    "temporary_db_cleanup": "PASS"
+  },
+  "legacy_upgrade_path": "V3 → V4 → V5 → V6 → legacy fixture → V7 → V8",
+  "secrets_in_evidence": false,
+  "note": "Real MySQL 8.4.11 Full Schema Gate execution was confirmed by the project owner; this immutable evidence records the confirmed outcome. Current gate status remains owned only by SYSTEM_DESIGN.runtime_gate_contract."
+}

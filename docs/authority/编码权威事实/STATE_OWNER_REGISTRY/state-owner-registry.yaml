@@ -1,11 +1,10 @@
 metadata:
   authority_model: SINGLE_LIVING_AUTHORITY
-  artifact_id: STATE-OWNER-REGISTRY-1.4.2
-  version: 1.4.2-auth-contract-completion
-  status: FROZEN_CONTRACT
-  state_dimension_count: 127
-  authentication_state_owner_count: 7
+  artifact_id: STATE-OWNER-REGISTRY-1.5.0
+  version: 1.5.0-p1-living-authority-closure
+  status: LIVING_AUTHORITY_IMPLEMENTATION_PENDING
   last_modified_at: '2026-08-11T00:00:00+08:00'
+  current_facts_source: tools/current_facts.py#domain
 rules:
 - 每个状态维度唯一Owner
 - initial_value必须属于values
@@ -6900,35 +6899,6 @@ state_owners:
     events:
     - technical_alert_endpoint.logically_deleted
   release_id: PDBR-2026.08.07-R4.2
-- state_dimension_id: STATE-REF-025
-  object_id: OBJ-085
-  object_name: 平台设计基线发布
-  dimension_name: baseline_release.release_status
-  persistence_field: release_status
-  owner: DOMAIN_AGGREGATE
-  values:
-  - DRAFT
-  - FROZEN
-  - SUPERSEDED
-  initial_value: DRAFT
-  terminal_values:
-  - SUPERSEDED
-  transitions: []
-  release_id: PDBR-2026.08.07-R4.2
-- state_dimension_id: STATE-REF-026
-  object_id: OBJ-085
-  object_name: 平台设计基线发布
-  dimension_name: baseline_release.readiness_status
-  persistence_field: readiness_status
-  owner: DOMAIN_AGGREGATE
-  values:
-  - CONDITIONAL_CODE_READY
-  - FULL_CODE_READY
-  - NOT_CODE_READY
-  initial_value: CONDITIONAL_CODE_READY
-  terminal_values: []
-  transitions: []
-  release_id: PDBR-2026.08.07-R4.2
 - state_dimension_id: STATE-REF-027
   object_id: OBJ-086
   object_name: AI候选修订
@@ -9939,140 +9909,90 @@ state_owners:
     events:
     - test_report.metadata_retained
   release_id: PDBR-2026.08.07-R4.2
-- state_dimension_id: R3-LS-011
-  object_id: OBJ-085
-  object_name: 平台设计基线发布
-  dimension_name: lifecycle_stage
-  persistence_field: lifecycle_status
-  owner: DOMAIN_AGGREGATE
-  values:
-  - CREATED
-  - DRAFT
-  - ACTIVE
-  - DISABLED
-  - RECOVERED
-  - ARCHIVED
-  - LOGICALLY_DELETED
-  initial_value: CREATED
-  terminal_values:
-  - LOGICALLY_DELETED
-  transitions:
-  - transition_id: LCT-00739
-    from: CREATED
-    to: DRAFT
-    permission_requirements:
-    - 平台级角色和权限点控制；高风险变更需审计。
-    concurrency_checks:
-    - 无专属业务并发门禁；仍需遵守聚合边界、幂等和审计要求。
-    events:
-    - platform_design_baseline_release.draft
-  - transition_id: LCT-00740
-    from: DRAFT
-    to: ACTIVE
-    permission_requirements:
-    - 平台级角色和权限点控制；高风险变更需审计。
-    concurrency_checks:
-    - 无专属业务并发门禁；仍需遵守聚合边界、幂等和审计要求。
-    events:
-    - platform_design_baseline_release.active
-  - transition_id: LCT-00741
-    from: ACTIVE
-    to: DISABLED
-    permission_requirements:
-    - 平台级角色和权限点控制；高风险变更需审计。
-    concurrency_checks:
-    - 无专属业务并发门禁；仍需遵守聚合边界、幂等和审计要求。
-    events:
-    - platform_design_baseline_release.disabled
-  - transition_id: LCT-00742
-    from: DISABLED
-    to: RECOVERED
-    permission_requirements:
-    - 平台级角色和权限点控制；高风险变更需审计。
-    concurrency_checks:
-    - 无专属业务并发门禁；仍需遵守聚合边界、幂等和审计要求。
-    events:
-    - platform_design_baseline_release.recovered
-  - transition_id: LCT-00743
-    from: RECOVERED
-    to: ACTIVE
-    permission_requirements:
-    - 平台级角色和权限点控制；高风险变更需审计。
-    concurrency_checks:
-    - 无专属业务并发门禁；仍需遵守聚合边界、幂等和审计要求。
-    events:
-    - platform_design_baseline_release.active
-  - transition_id: LCT-00744
-    from: ACTIVE
-    to: ARCHIVED
-    permission_requirements:
-    - 平台级角色和权限点控制；高风险变更需审计。
-    concurrency_checks:
-    - 无专属业务并发门禁；仍需遵守聚合边界、幂等和审计要求。
-    events:
-    - platform_design_baseline_release.archived
-  - transition_id: LCT-00745
-    from: DISABLED
-    to: ARCHIVED
-    permission_requirements:
-    - 平台级角色和权限点控制；高风险变更需审计。
-    concurrency_checks:
-    - 无专属业务并发门禁；仍需遵守聚合边界、幂等和审计要求。
-    events:
-    - platform_design_baseline_release.archived
-  - transition_id: LCT-00746
-    from: ARCHIVED
-    to: LOGICALLY_DELETED
-    permission_requirements:
-    - 平台级角色和权限点控制；高风险变更需审计。
-    concurrency_checks:
-    - 无专属业务并发门禁；仍需遵守聚合边界、幂等和审计要求。
-    events:
-    - platform_design_baseline_release.logically_deleted
-  release_id: PDBR-2026.08.07-R4.2
-
 authentication_state_owners:
 - state_semantic_id: AUTH-STATE-001
   semantic: USER_BUSINESS_LIFECYCLE
   object_id: OBJ-001
-  persistence_fields: [atp_user.lifecycle_status]
+  persistence_fields:
+  - atp_user.lifecycle_status
   owner: UserAggregateService
   login_rule: 仅ACTIVE允许登录；LOCKED、DISABLED、ARCHIVED和LOGICALLY_DELETED拒绝并撤销Session。
 - state_semantic_id: AUTH-STATE-002
   semantic: CREDENTIAL_LIFECYCLE
   object_id: AUTH-OBJ-001
-  persistence_fields: [atp_platform_user_credential.lifecycle_status]
+  persistence_fields:
+  - atp_platform_user_credential.lifecycle_status
   owner: CredentialService
-  values: [ACTIVE, REVOKED]
+  values:
+  - ACTIVE
+  - REVOKED
 - state_semantic_id: AUTH-STATE-003
   semantic: TEMPORARY_SECURITY_LOCK
   object_id: AUTH-OBJ-001
-  persistence_fields: [failed_login_count, failure_window_started_at, locked_until, last_failed_at]
+  persistence_fields:
+  - failed_login_count
+  - failure_window_started_at
+  - locked_until
+  - last_failed_at
   owner: CredentialService
-  derived_values: [NORMAL, TEMPORARILY_LOCKED]
+  derived_values:
+  - NORMAL
+  - TEMPORARILY_LOCKED
   rule: NORMAL为locked_until为空或已过期；不增加security_status，不改变用户生命周期。
 - state_semantic_id: AUTH-STATE-004
   semantic: FORCE_PASSWORD_CHANGE
   object_id: AUTH-OBJ-001
-  persistence_fields: [force_password_change]
+  persistence_fields:
+  - force_password_change
   owner: CredentialService
-  values: [false, true]
+  values:
+  - false
+  - true
 - state_semantic_id: AUTH-STATE-005
   semantic: CREDENTIAL_VERSION
   object_id: AUTH-OBJ-001
-  persistence_fields: [credential_version]
+  persistence_fields:
+  - credential_version
   owner: CredentialService
   rule: 初始值1；密码修改或重置原子递增。
 - state_semantic_id: AUTH-STATE-006
   semantic: REFRESH_SESSION_LIFECYCLE
   object_id: AUTH-OBJ-002
-  persistence_fields: [atp_auth_refresh_session.lifecycle_status, rotated_at, revoked_at, replaced_by_session_id]
+  persistence_fields:
+  - atp_auth_refresh_session.lifecycle_status
+  - rotated_at
+  - revoked_at
+  - replaced_by_session_id
   owner: SessionService
-  values: [ACTIVE, ROTATED, REVOKED, EXPIRED, COMPROMISED]
+  values:
+  - ACTIVE
+  - ROTATED
+  - REVOKED
+  - EXPIRED
+  - COMPROMISED
 - state_semantic_id: AUTH-STATE-007
   semantic: AUTH_SECURITY_AUDIT_IMMUTABILITY
   object_id: AUTH-OBJ-003
-  persistence_fields: [atp_auth_security_audit.audit_id, atp_auth_security_audit.occurred_at]
+  persistence_fields:
+  - atp_auth_security_audit.audit_id
+  - atp_auth_security_audit.occurred_at
   owner: AuthenticationAuditService
-  values: [APPEND_ONLY]
+  values:
+  - APPEND_ONLY
   rule: 只允许INSERT；任何UPDATE或DELETE由MySQL trigger拒绝；安全敏感状态变更与对应审计同事务，审计写入失败则业务变更回滚。
+- state_semantic_id: AUTH-STATE-008
+  semantic: SOURCE_RATE_LIMIT_WINDOW
+  object_id: AUTH-OBJ-004
+  persistence_fields:
+  - atp_auth_source_rate_limit.source_key_hash
+  - atp_auth_source_rate_limit.operation_id
+  - atp_auth_source_rate_limit.window_started_at
+  - atp_auth_source_rate_limit.request_count
+  - atp_auth_source_rate_limit.expires_at
+  - atp_auth_source_rate_limit.row_version
+  owner: AuthenticationRateLimitService
+  values:
+  - AVAILABLE
+  - EXHAUSTED
+  - EXPIRED
+  rule: 登录与刷新分别使用UTC固定300秒窗口；请求计数在MySQL事务内原子递增，登录第61次和刷新第301次作为拒绝哨兵；状态不可用时认证请求以503失败关闭。

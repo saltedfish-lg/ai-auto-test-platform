@@ -7,7 +7,7 @@
 - 唯一活动事实源：`docs/authority/**`
 - 当前 P1：身份认证 + 默认 admin + RBAC 可正式编码
 - authority 是受控可变事实源：不得因实现方便擅自改产品语义；用户请求或已确认的 Product/Authority 决策可在 `AUTHORITY_UPDATE_ONLY` 阶段直接同步源文档。
-- 不创建 R4.x/R5.x 整套复制目录，不维护 CURRENT marker、Baseline Manifest 或 Release Snapshot。
+- 不创建 按历史发布号复制的整套 Authority 目录，不维护 CURRENT marker、Authority Copy Manifest 或 Release Snapshot。
 
 ## 权威顺序（按职责域）
 

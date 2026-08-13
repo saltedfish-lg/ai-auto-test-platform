@@ -3,7 +3,6 @@ services:
     image: mysql:8.4
     environment:
       MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: atp
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-proot"]
       interval: 2s
@@ -15,14 +14,50 @@ services:
       mysql:
         condition: service_healthy
     volumes:
-      - ../../DATABASE_DDL:/ddl:ro
-      - ./mysql84_assertions.sql:/validation/mysql84_assertions.sql:ro
+      - type: bind
+        source: "${ATP_AUTHORITY_DDL_DIR:?ATP_AUTHORITY_DDL_DIR is required}"
+        target: /ddl
+        read_only: true
+      - type: bind
+        source: ./mysql84_assertions.sql
+        target: /validation/mysql84_assertions.sql
+        read_only: true
+      - type: bind
+        source: ./mysql84_upgrade_legacy_fixture.sql
+        target: /validation/mysql84_upgrade_legacy_fixture.sql
+        read_only: true
     entrypoint:
       - sh
       - -ec
       - |
-        mysql -hmysql -uroot -proot atp < /ddl/V3__platform_contract_rebuild.sql
-        mysql -hmysql -uroot -proot atp < /ddl/V4__rbac_seed_data.sql
-        mysql -hmysql -uroot -proot atp < /ddl/V5__platform_authentication_contract.sql
-        mysql -hmysql -uroot -proot atp < /ddl/V4__rbac_seed_data.sql
-        mysql -hmysql -uroot -proot atp < /validation/mysql84_assertions.sql
+        migration_files() {
+          for f in /ddl/V[0-9]*__*.sql; do
+            [ -f "$$f" ] || continue
+            b=$$(basename "$$f")
+            v=$${b#V}; v=$${v%%__*}
+            printf '%09d %s\n' "$$v" "$$f"
+          done | sort -n | cut -d' ' -f2-
+        }
+
+        mysql -hmysql -uroot -proot -e "DROP DATABASE IF EXISTS atp_authority_empty; CREATE DATABASE atp_authority_empty CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci; DROP DATABASE IF EXISTS atp_authority_upgrade; CREATE DATABASE atp_authority_upgrade CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;"
+
+        seed_file=""
+        migration_files | while IFS= read -r f; do
+          b=$$(basename "$$f"); v=$${b#V}; v=$${v%%__*}
+          mysql -hmysql -uroot -proot atp_authority_empty < "$$f"
+        done
+        for f in /ddl/V4__*.sql; do [ -f "$$f" ] && seed_file="$$f" && break; done
+        [ -n "$$seed_file" ] || { echo 'V4 seed migration not found' >&2; exit 1; }
+        mysql -hmysql -uroot -proot atp_authority_empty < "$$seed_file"
+        mysql -hmysql -uroot -proot atp_authority_empty < /validation/mysql84_assertions.sql
+
+        fixture_inserted=0
+        migration_files | while IFS= read -r f; do
+          b=$$(basename "$$f"); v=$${b#V}; v=$${v%%__*}
+          if [ "$$fixture_inserted" -eq 0 ] && [ "$$v" -ge 7 ]; then
+            mysql -hmysql -uroot -proot atp_authority_upgrade < /validation/mysql84_upgrade_legacy_fixture.sql
+            fixture_inserted=1
+          fi
+          mysql -hmysql -uroot -proot atp_authority_upgrade < "$$f"
+        done
+        mysql -hmysql -uroot -proot atp_authority_upgrade < /validation/mysql84_assertions.sql

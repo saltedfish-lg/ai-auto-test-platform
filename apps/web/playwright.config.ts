@@ -17,7 +17,10 @@ export default defineConfig({
     trace: "off",
     screenshot: "off",
     video: "off",
-    launchOptions: executablePath ? { executablePath } : undefined,
+    launchOptions: {
+      executablePath,
+      args: ["--no-proxy-server"],
+    },
   },
   projects: [
     {

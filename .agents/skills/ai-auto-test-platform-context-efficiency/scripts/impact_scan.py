@@ -320,7 +320,7 @@ def main() -> int:
 
     payload: dict[str, object] = {
         "policy": "SEARCH_BROAD_LOAD_NARROW_VERIFY_BROAD",
-        "authority": {"model": AUTHORITY_MODEL, "root": AUTHORITY_ROOT, "versioned_baseline_copies": False},
+        "authority": {"model": AUTHORITY_MODEL, "root": AUTHORITY_ROOT, "versioned_authority_copies": False},
         "git_access": "DISABLED",
         "scope": {
             "required_roots_complete": not missing_required,

@@ -1,10 +1,11 @@
-# 状态Owner注册表（R4.2阅读投影）
+# 状态Owner注册表（当前 Living Authority 阅读投影）
 
-> GENERATED_PROJECTION · NON_AUTHORITATIVE · DO_NOT_EDIT_MANUALLY
+> GENERATED_PROJECTION · NON_AUTHORITATIVE · DO_NOT_EDIT_MANUALLY  
+> 权威源：`state-owner-registry.yaml`；生成器：`tools/authority_projection.py`。
 
 - Authority: `SINGLE_LIVING_AUTHORITY`
-- 状态维度：127
-- 认证补充Owner：6（用户业务状态、凭据状态、临时锁、强制改密、凭据版本、Refresh Session）
+- 状态维度：124
+- 认证补充Owner：8
 
 |ID|对象|维度|初始值|值域|
 |---|---|---|---|---|
@@ -94,8 +95,6 @@
 |SD-082-LIFECYCLE|保留冻结|lifecycle_stage|CREATED|CREATED / DRAFT / ACTIVE / DISABLED / RECOVERED / ARCHIVED / LOGICALLY_DELETED|
 |SD-083-LIFECYCLE|受控清理请求|lifecycle_stage|CREATED|CREATED / VALIDATING / CLEANUP_EXECUTING / SUCCEEDED / FAILED / CANCELED / ARCHIVED|
 |SD-084-LIFECYCLE|技术告警接入端点|lifecycle_stage|CREATED|CREATED / DRAFT / ACTIVE / DISABLED / RECOVERED / ARCHIVED / LOGICALLY_DELETED|
-|STATE-REF-025|平台设计基线发布|baseline_release.release_status|DRAFT|DRAFT / FROZEN / SUPERSEDED|
-|STATE-REF-026|平台设计基线发布|baseline_release.readiness_status|CONDITIONAL_CODE_READY|CONDITIONAL_CODE_READY / FULL_CODE_READY / NOT_CODE_READY|
 |STATE-REF-027|AI候选修订|immutable_revision.status|DRAFT|DRAFT / VALIDATING / PUBLISHED / SUPERSEDED / RETIRED / ARCHIVED|
 |SD-087-LIFECYCLE|角色绑定|lifecycle_stage|CREATED|CREATED / DRAFT / ACTIVE / DISABLED / RECOVERED / ARCHIVED / LOGICALLY_DELETED|
 |SD-088-LIFECYCLE|技术告警接入批次|lifecycle_stage|CREATED|CREATED / QUEUED / PREPARING / RUNNING / SUCCEEDED / FAILED / CANCELED / ABORTED / TIMED_OUT / EXCEPTION / RECOVERING / COMPLETED / ARCHIVED|
@@ -134,4 +133,18 @@
 |R3-LS-008|AI结果|lifecycle_stage|CREATED|CREATED / DRAFT / ACTIVE / DISABLED / RECOVERED / ARCHIVED / LOGICALLY_DELETED|
 |R3-LS-009|报告生成请求|lifecycle_stage|CREATED|CREATED / QUEUED / PREPARING / RUNNING / SUCCEEDED / FAILED / CANCELED / ABORTED / TIMED_OUT / EXCEPTION / RECOVERING / COMPLETED / ARCHIVED|
 |R3-LS-010|测试报告|lifecycle_stage|PENDING|PENDING / GENERATING / GENERATED / PARTIAL / FAILED / REGENERATING / ARCHIVED / METADATA_RETAINED|
-|R3-LS-011|平台设计基线发布|lifecycle_stage|CREATED|CREATED / DRAFT / ACTIVE / DISABLED / RECOVERED / ARCHIVED / LOGICALLY_DELETED|
+
+## 认证补充Owner
+
+|ID|语义|对象|Owner|持久化字段|
+|---|---|---|---|---|
+|AUTH-STATE-001|USER_BUSINESS_LIFECYCLE|OBJ-001|UserAggregateService|atp_user.lifecycle_status|
+|AUTH-STATE-002|CREDENTIAL_LIFECYCLE|AUTH-OBJ-001|CredentialService|atp_platform_user_credential.lifecycle_status|
+|AUTH-STATE-003|TEMPORARY_SECURITY_LOCK|AUTH-OBJ-001|CredentialService|failed_login_count / failure_window_started_at / locked_until / last_failed_at|
+|AUTH-STATE-004|FORCE_PASSWORD_CHANGE|AUTH-OBJ-001|CredentialService|force_password_change|
+|AUTH-STATE-005|CREDENTIAL_VERSION|AUTH-OBJ-001|CredentialService|credential_version|
+|AUTH-STATE-006|REFRESH_SESSION_LIFECYCLE|AUTH-OBJ-002|SessionService|atp_auth_refresh_session.lifecycle_status / rotated_at / revoked_at / replaced_by_session_id|
+|AUTH-STATE-007|AUTH_SECURITY_AUDIT_IMMUTABILITY|AUTH-OBJ-003|AuthenticationAuditService|atp_auth_security_audit.audit_id / atp_auth_security_audit.occurred_at|
+|AUTH-STATE-008|SOURCE_RATE_LIMIT_WINDOW|AUTH-OBJ-004|AuthenticationRateLimitService|atp_auth_source_rate_limit.source_key_hash / atp_auth_source_rate_limit.operation_id / atp_auth_source_rate_limit.window_started_at / atp_auth_source_rate_limit.request_count / atp_auth_source_rate_limit.expires_at / atp_auth_source_rate_limit.row_version|
+
+本投影只用于阅读；状态事实以 YAML 为准。

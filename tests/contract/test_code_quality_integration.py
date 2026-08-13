@@ -41,9 +41,12 @@ def test_code_quality_skill_manifest_is_complete() -> None:
     actual_files = sorted(
         p for p in SKILL.rglob("*") if p.is_file() and p.name != "MANIFEST.sha256"
     )
-    assert sorted(expected) == [p.relative_to(SKILL).as_posix() for p in actual_files]
+    assert set(expected) == {p.relative_to(SKILL).as_posix() for p in actual_files}
     for path in actual_files:
-        assert hashlib.sha256(path.read_bytes()).hexdigest() == expected[path.relative_to(SKILL).as_posix()]
+        assert (
+            hashlib.sha256(path.read_bytes()).hexdigest()
+            == expected[path.relative_to(SKILL).as_posix()]
+        )
 
 
 def test_implementers_use_quality_implementation_mode() -> None:
@@ -60,9 +63,9 @@ def test_orchestrator_and_final_review_integrate_quality_without_recursive_dupli
     orchestrator = (
         ROOT / ".agents/skills/ai-auto-test-platform-feature-orchestrator/SKILL.md"
     ).read_text(encoding="utf-8")
-    final_review = (
-        ROOT / ".agents/skills/ai-auto-test-platform-code-review/SKILL.md"
-    ).read_text(encoding="utf-8")
+    final_review = (ROOT / ".agents/skills/ai-auto-test-platform-code-review/SKILL.md").read_text(
+        encoding="utf-8"
+    )
     assert "code_quality_reviewer" in orchestrator
     assert "$ai-auto-test-platform-code-quality" in orchestrator
     assert "同一 workspace 状态和同一 scope" in final_review

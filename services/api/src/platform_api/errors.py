@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -26,6 +28,7 @@ class PlatformError(Exception):
         code: str = "INTERNAL_ERROR",
         status: int = 500,
         type: str = "about:blank",
+        headers: Mapping[str, str] | None = None,
     ) -> None:
         super().__init__(detail)
         self.title = title
@@ -33,3 +36,4 @@ class PlatformError(Exception):
         self.code = code
         self.status = status
         self.type = type
+        self.headers = dict(headers or {})
