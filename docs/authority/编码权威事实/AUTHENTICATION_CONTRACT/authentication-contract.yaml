@@ -289,6 +289,14 @@ change_password_idempotency:
   same_key_different_fingerprint: 返回409 AUTH_IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_REQUEST。
   concurrency: 先以atp_idempotency_record唯一行claim或锁定同key请求，再按User→Credential→Session固定顺序加锁；并发相同key收敛为一次逻辑成功，竞争请求在首事务提交后读取terminal记录并返回204。
   retention: V7改密幂等记录使用contract_version=2并保留24小时后清理；response_json必须为空，不保存Access Token、Refresh Token、密码或可恢复秘密。升级前既有记录保留contract_version=1直至自然过期，V7不得假定能从旧request_hash回填principal。
+change_password_business_validation:
+  authentication_boundary: 用户已通过Access Token与服务端Session实时校验后，当前密码和新密码业务校验失败不属于未认证或权限拒绝。
+  current_password_invalid: HTTP 400 + AUTH_CURRENT_PASSWORD_INVALID
+  password_policy_violation: HTTP 400 + AUTH_PASSWORD_POLICY_VIOLATION
+  password_unchanged: HTTP 400 + AUTH_PASSWORD_UNCHANGED
+  unauthenticated_boundary: HTTP 401仅用于当前请求缺少有效认证凭据，例如Access Token或Session无效、过期或已撤销。
+  forbidden_boundary: HTTP 403仅用于身份已认证但无权执行目标操作；force_password_change等状态门禁保持各自已声明的403语义。
+  schema_validation_boundary: HTTP 422 + AUTH_REQUEST_VALIDATION_FAILED仅用于请求字段、类型、长度、枚举、格式或extra字段校验失败，不得承载改密业务校验。
 state_model:
   user_business_state_owner: UserAggregateService owns atp_user.lifecycle_status
   login_allowed_user_state: ACTIVE
@@ -380,6 +388,10 @@ operations:
   idempotency: IDEMPOTENCY_KEY_REQUIRED
   audit: ROLE_REVOKED
 error_semantics:
+  business_validation_400:
+  - AUTH_CURRENT_PASSWORD_INVALID
+  - AUTH_PASSWORD_POLICY_VIOLATION
+  - AUTH_PASSWORD_UNCHANGED
   request_validation_422:
   - AUTH_REQUEST_VALIDATION_FAILED
   request_validation_rule: 所有正式API在请求字段、类型、长度、枚举、格式或extra字段校验失败时统一返回422 application/problem+json与AUTH_REQUEST_VALIDATION_FAILED；不得复用AUTH_INVALID_CREDENTIALS或AUTH_OPERATION_FORBIDDEN_FOR_STATE。

@@ -3,6 +3,9 @@ import type { AuthenticationErrorCode, ProblemDetails } from "../generated/types
 const authenticationErrorMessages: Partial<Record<AuthenticationErrorCode, string>> = {
   AUTH_REQUIRED: "登录状态已失效，请重新登录。",
   AUTH_INVALID_CREDENTIALS: "用户名或密码不正确。",
+  AUTH_CURRENT_PASSWORD_INVALID: "当前密码不正确。",
+  AUTH_PASSWORD_POLICY_VIOLATION: "新密码不符合密码策略。",
+  AUTH_PASSWORD_UNCHANGED: "新密码不能与当前密码相同。",
   AUTH_TOKEN_INVALID: "登录凭证无效，请重新登录。",
   AUTH_TOKEN_EXPIRED: "登录状态已过期，请重新登录。",
   AUTH_SESSION_REVOKED: "当前会话已撤销，请重新登录。",
@@ -40,7 +43,11 @@ export function isProblemDetails(value: unknown): value is ProblemDetails {
   );
 }
 
-export function getAuthenticationErrorMessage(error: unknown, fallback: string): string {
+export function getAuthenticationErrorMessage(
+  error: unknown,
+  fallback: string,
+): string {
+  // 正式错误码优先于服务端 detail，确保登录防枚举文案与改密业务文案不被后端英文细节覆盖。
   if (!(error instanceof ApiRequestError)) return fallback;
   const code = error.problem?.code as AuthenticationErrorCode | undefined;
   return (

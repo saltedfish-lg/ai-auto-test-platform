@@ -63,6 +63,7 @@ const rules: FormRules<PasswordForm> = {
 };
 
 async function submit(): Promise<void> {
+  // 未知网络结果必须复用同一幂等键，只有请求内容变化后才能生成新键，避免重复改密。
   errorMessage.value = "";
   correlationId.value = undefined;
   if (!form.current_password || !form.new_password || !form.confirm_password) {

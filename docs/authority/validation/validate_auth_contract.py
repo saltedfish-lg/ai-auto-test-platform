@@ -257,7 +257,7 @@ def main() -> int:
         and "目标项目" in realtime_rule
         and "def require_project_permissions" in auth_service_source
         and "AuthorizationContext(" in auth_service_source
-        and user_admin_source.count("require_project_permissions(") >= 3
+        and user_admin_source.count("require_project_permissions_in_transaction(") >= 3
         and "binding.project_id" in user_admin_source
         and "body.project_id" in user_admin_source,
         realtime_rule,
@@ -265,17 +265,33 @@ def main() -> int:
     error_codes = set(schemas["AuthenticationErrorCode"]["enum"])
     required_401 = set(auth["error_semantics"]["unauthenticated_401"])
     required_403 = set(auth["error_semantics"]["forbidden_403"])
+    required_400 = set(auth["error_semantics"]["business_validation_400"])
     required_errors = set().union(
         *(set(value) for key, value in auth["error_semantics"].items() if key.endswith(("_400", "_401", "_403", "_409", "_422", "_429", "_503")))
     )
     add(
         "AUTH-ERROR-CODES",
-        required_errors == error_codes and required_401.isdisjoint(required_403),
+        required_errors == error_codes
+        and required_400.isdisjoint(required_401 | required_403)
+        and required_401.isdisjoint(required_403),
         f"declared={len(required_errors)}; openapi={len(error_codes)}",
     )
     change_password = operation_index["change_current_user_password"][2]
     change_responses = change_password["responses"]
     change_204 = change_responses.get("204", change_responses.get(204, {}))
+    change_400 = change_responses.get("400", change_responses.get(400, {}))
+    add(
+        "AUTH-CHANGE-PASSWORD-BUSINESS-VALIDATION-400",
+        required_400
+        == {
+            "AUTH_CURRENT_PASSWORD_INVALID",
+            "AUTH_PASSWORD_POLICY_VIOLATION",
+            "AUTH_PASSWORD_UNCHANGED",
+        }
+        and bool(change_400)
+        and all(code in str(change_400.get("description", "")) for code in required_400),
+        f"codes={sorted(required_400)}; response={change_400}",
+    )
     add(
         "AUTH-CHANGE-PASSWORD-204-NO-TOKEN",
         bool(change_204)

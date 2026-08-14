@@ -105,7 +105,7 @@ describe("改密页（组件测试，API 为 mock）", () => {
   });
 
   it("creates a new idempotency key after request content changes and preserves formal errors", async () => {
-    const problem = problemDetails(400, "AUTH_INVALID_CREDENTIALS", "当前密码不正确");
+    const problem = problemDetails(400, "AUTH_CURRENT_PASSWORD_INVALID", "当前密码不正确");
     const change = vi
       .spyOn(apiClient, "change_current_user_password")
       .mockRejectedValue(new ApiRequestError(400, problem.title, problem));
@@ -113,7 +113,7 @@ describe("改密页（组件测试，API 为 mock）", () => {
     await fillPasswordForm();
 
     await fireEvent.click(screen.getByRole("button", { name: "保存新密码" }));
-    expect(await screen.findByText("用户名或密码不正确。")).toBeTruthy();
+    expect(await screen.findByText("当前密码不正确。")).toBeTruthy();
     expect(screen.getByText("请求标识：test-correlation-id")).toBeTruthy();
     expect(useSessionStore().isAuthenticated).toBe(true);
 

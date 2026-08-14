@@ -1,11 +1,25 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { bindAuthTransport, createApiClient, createPlatformFetcher } from "../api/client";
-import { ApiRequestError } from "../api/errors";
+import { ApiRequestError, getAuthenticationErrorMessage } from "../api/errors";
 import { problemDetails } from "./auth-fixtures";
 
 afterEach(() => {
   vi.restoreAllMocks();
+});
+
+describe("change-password business errors", () => {
+  it.each([
+    ["AUTH_CURRENT_PASSWORD_INVALID", "当前密码不正确。"],
+    ["AUTH_PASSWORD_POLICY_VIOLATION", "新密码不符合密码策略。"],
+    ["AUTH_PASSWORD_UNCHANGED", "新密码不能与当前密码相同。"],
+  ])("maps %s to its operation-specific message", (code, expectedMessage) => {
+    const problem = problemDetails(400, code);
+
+    expect(
+      getAuthenticationErrorMessage(new ApiRequestError(400, problem.title, problem), "fallback"),
+    ).toBe(expectedMessage);
+  });
 });
 
 describe("认证 API 传输适配器（组件/传输层测试）", () => {

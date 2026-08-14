@@ -211,3 +211,37 @@ def test_change_password_validation_is_redacted_problem_details(key_ring_file: P
     ]
     assert secret not in response.text
     assert "input" not in response.text
+
+
+def test_unexpected_exception_is_secret_free_problem_details(
+    key_ring_file: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    app = create_app(_settings(key_ring_file))
+    secret = "sentinel-database-secret"
+    correlation_id = "44444444444444444444444444444444"
+
+    def explode() -> None:
+        raise RuntimeError(secret)
+
+    app.add_api_route("/_contract-test/unexpected", explode, methods=["GET"])
+    with TestClient(app, raise_server_exceptions=False) as client:
+        response = client.get(
+            "/_contract-test/unexpected",
+            headers={"X-Correlation-Id": correlation_id},
+        )
+
+    assert response.status_code == 500
+    assert response.headers["content-type"].startswith("application/problem+json")
+    assert response.json() == {
+        "type": "about:blank",
+        "title": "Internal server error",
+        "status": 500,
+        "code": "INTERNAL_ERROR",
+        "detail": "The request could not be completed.",
+        "correlation_id": correlation_id,
+        "field_errors": None,
+    }
+    assert secret not in response.text
+    captured_logs = capsys.readouterr().err
+    assert secret not in captured_logs
+    assert "RuntimeError" in captured_logs

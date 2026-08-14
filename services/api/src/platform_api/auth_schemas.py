@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import Literal
 
@@ -11,7 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 class LoginRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     username: str = Field(min_length=1, max_length=191)
-    password: str = Field(min_length=1, max_length=128)
+    password: str = Field(min_length=1, max_length=128, repr=False)
 
 
 class AuthCookieActionRequest(BaseModel):
@@ -20,20 +21,22 @@ class AuthCookieActionRequest(BaseModel):
 
 class ChangePasswordRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    current_password: str = Field(min_length=1, max_length=128)
+    current_password: str = Field(min_length=1, max_length=128, repr=False)
     new_password: str = Field(
         min_length=12,
         max_length=128,
+        repr=False,
         json_schema_extra={"pattern": r"^(?=.*[A-Za-z])(?=.*[0-9])(?!\s)(?!.*\s$).+$"},
     )
 
     @field_validator("new_password")
     @classmethod
     def validate_frozen_shape(cls, value: str) -> str:
+        """运行时执行 OpenAPI 的 ASCII 字符类规则, 避免 schema 与服务接受范围漂移。"""
         if (
             value != value.strip()
-            or not any(char.isalpha() for char in value)
-            or not any(char.isdigit() for char in value)
+            or re.search(r"[A-Za-z]", value) is None
+            or re.search(r"[0-9]", value) is None
         ):
             raise ValueError("new password must contain a letter and digit without edge whitespace")
         return value
@@ -52,7 +55,7 @@ class CurrentUserResource(BaseModel):
 
 class AuthenticationTokenResource(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    access_token: str = Field(min_length=32, max_length=4096)
+    access_token: str = Field(min_length=32, max_length=4096, repr=False)
     token_type: Literal["Bearer"] = "Bearer"
     expires_in: int = Field(ge=1, le=900)
     current_user: CurrentUserResource
@@ -117,7 +120,7 @@ class OneTimeCredentialDeliveryResource(BaseModel):
     model_config = ConfigDict(extra="forbid")
     user: UserResource
     delivery_status: Literal["ISSUED", "ALREADY_DELIVERED"]
-    temporary_password: str | None = Field(default=None, min_length=1)
+    temporary_password: str | None = Field(default=None, min_length=1, repr=False)
     force_password_change: Literal[True] = True
 
 

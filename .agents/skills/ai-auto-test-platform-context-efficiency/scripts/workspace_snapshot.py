@@ -64,21 +64,50 @@ def _is_within(path: Path, root: Path) -> bool:
         return False
 
 
+def _is_link_or_reparse(path: Path) -> bool:
+    """Return True for symlinks and Windows reparse points without following them."""
+    try:
+        stat_result = os.lstat(path)
+    except OSError:
+        # Fail closed for entries whose metadata cannot be read during traversal.
+        return True
+    if os.path.islink(path):
+        return True
+    return bool(getattr(stat_result, "st_file_attributes", 0) & 0x400)
+
+
 def _iter_controlled_files(root: Path) -> Iterable[Path]:
-    for path in root.rglob("*"):
-        if not path.is_file():
-            continue
-        rel = path.relative_to(root)
-        if any(part in SKIP_DIRS for part in rel.parts):
-            continue
-        if path.suffix.lower() in SKIP_SUFFIXES:
-            continue
-        yield path
+    """Walk the controlled workspace with directory-level pruning.
+
+    Ignored dependency/cache directories are removed from ``dirnames`` before os.walk
+    descends into them. This prevents CP-0 from paying metadata traversal cost for tens
+    of thousands of files that can never enter Snapshot v4. Symlink/reparse directories
+    are also pruned so Windows junctions cannot expand or escape the controlled tree.
+    """
+    root = root.resolve()
+    for dirpath, dirnames, filenames in os.walk(root, topdown=True, followlinks=False):
+        current = Path(dirpath)
+        kept_dirs: list[str] = []
+        for name in sorted(dirnames):
+            candidate = current / name
+            if name in SKIP_DIRS or _is_link_or_reparse(candidate):
+                continue
+            kept_dirs.append(name)
+        dirnames[:] = kept_dirs
+
+        for name in sorted(filenames):
+            path = current / name
+            if path.suffix.lower() in SKIP_SUFFIXES:
+                continue
+            if _is_link_or_reparse(path):
+                continue
+            yield path
 
 
-def _fingerprint_tree(root: Path) -> dict[str, str]:
+def _fingerprint_tree(root: Path, controlled_files: Iterable[Path] | None = None) -> dict[str, str]:
     result: dict[str, str] = {}
-    for path in sorted(_iter_controlled_files(root), key=lambda p: p.as_posix()):
+    paths = controlled_files if controlled_files is not None else _iter_controlled_files(root)
+    for path in sorted(paths, key=lambda p: p.as_posix()):
         rel = path.relative_to(root).as_posix()
         try:
             result[rel] = f"sha256:{_sha256_file(path)}"
@@ -163,10 +192,14 @@ def _web_symbols(text: str) -> dict[str, dict[str, object]]:
     return result
 
 
-def _source_evidence(root: Path) -> tuple[dict[str, dict[str, dict[str, object]]], dict[str, list[str]]]:
+def _source_evidence(
+    root: Path,
+    controlled_files: Iterable[Path] | None = None,
+) -> tuple[dict[str, dict[str, dict[str, object]]], dict[str, list[str]]]:
     symbols: dict[str, dict[str, dict[str, object]]] = {}
     line_hashes: dict[str, list[str]] = {}
-    for path in sorted(_iter_controlled_files(root), key=lambda p: p.as_posix()):
+    paths = controlled_files if controlled_files is not None else _iter_controlled_files(root)
+    for path in sorted(paths, key=lambda p: p.as_posix()):
         if not _is_business_source(path, root):
             continue
         rel = path.relative_to(root).as_posix()
@@ -230,8 +263,11 @@ def validate_snapshot_evidence(snapshot: dict[str, object]) -> tuple[bool, str |
 
 def capture_workspace(root: Path) -> dict[str, object]:
     root = root.resolve()
-    files = _fingerprint_tree(root)
-    source_symbols, source_line_hashes = _source_evidence(root)
+    # Enumerate the workspace exactly once per capture, then reuse that stable file set
+    # for hashing and source-symbol evidence. Snapshot v4 schema/semantics stay unchanged.
+    controlled_files = tuple(_iter_controlled_files(root))
+    files = _fingerprint_tree(root, controlled_files)
+    source_symbols, source_line_hashes = _source_evidence(root, controlled_files)
     snapshot: dict[str, object] = {
         "snapshot_version": SNAPSHOT_VERSION,
         "captured_at": datetime.now(timezone.utc).isoformat(),

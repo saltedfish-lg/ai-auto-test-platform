@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import NoReturn
 
 from sqlalchemy import Select, or_, select
-from sqlalchemy.dialects.mysql import insert as mysql_insert
 from sqlalchemy.orm import Session, sessionmaker
 
 from platform_api.audit import (
@@ -15,13 +14,12 @@ from platform_api.audit import (
     AuthenticationAuditAction,
     AuthenticationAuditService,
 )
-from platform_api.auth_hmac import AuthHmacKeyRing
 from platform_api.auth_schemas import CurrentUserResource
 from platform_api.errors import PlatformError
+from platform_api.idempotency import IdempotencyCoordinator
 from platform_api.models import (
     AuthRefreshSession,
     DataScopeGrant,
-    IdempotencyRecord,
     PermissionCode,
     PlatformUser,
     PlatformUserCredential,
@@ -36,12 +34,10 @@ from platform_api.security import (
     JwtService,
     PasswordPolicyError,
     PasswordService,
-    client_context_hash,
-    new_refresh_token,
-    new_ulid,
     refresh_token_hash,
     utc_now,
 )
+from platform_api.session_service import SessionService
 
 ACTIVE = "ACTIVE"
 FROZEN_DATA_SCOPE_TYPES = {
@@ -84,20 +80,6 @@ AUTH_PATHS_ALLOWED_DURING_PASSWORD_CHANGE = {
 }
 
 
-def _framed(*values: str) -> bytes:
-    encoded = [value.encode("utf-8") for value in values]
-    return b"".join(len(value).to_bytes(4, "big") + value for value in encoded)
-
-
-def _idempotency_conflict() -> PlatformError:
-    return PlatformError(
-        title="Idempotency key conflict",
-        detail="The idempotency key was reused with a different request.",
-        status=409,
-        code="AUTH_IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_REQUEST",
-    )
-
-
 @dataclass(frozen=True, slots=True)
 class AuthenticatedIdentity:
     user: PlatformUser
@@ -107,8 +89,8 @@ class AuthenticatedIdentity:
 
 @dataclass(frozen=True, slots=True)
 class AuthenticationResult:
-    access_token: str
-    refresh_token: str
+    access_token: str = field(repr=False)
+    refresh_token: str = field(repr=False)
     current_user: CurrentUserResource
 
 
@@ -127,16 +109,18 @@ class AuthenticationService:
         passwords: PasswordService,
         jwt_service: JwtService,
         audit_service: AuthenticationAuditService,
-        auth_hmac: AuthHmacKeyRing,
         rate_limits: AuthenticationRateLimitService,
+        sessions: SessionService,
+        idempotency: IdempotencyCoordinator,
     ) -> None:
         """认证服务统一持有密码、JWT与审计依赖，确保同一业务事务不会绕过既定安全组件。"""
         self._session_factory = session_factory
         self._passwords = passwords
         self._jwt = jwt_service
         self._audit = audit_service
-        self._auth_hmac = auth_hmac
         self._rate_limits = rate_limits
+        self._sessions = sessions
+        self._idempotency = idempotency
 
     def login(
         self,
@@ -253,7 +237,7 @@ class AuthenticationService:
             credential.last_failed_at = None
             credential.last_successful_login_at = now
             credential.row_version += 1
-            session, refresh_token = self._create_session(
+            session, refresh_token = self._sessions.create(
                 db,
                 credential,
                 audit_context,
@@ -317,11 +301,188 @@ class AuthenticationService:
         permission_codes: tuple[str, ...],
         audit_context: AuditContext,
     ) -> AuthenticatedIdentity:
-        """权限判断统一基于当前关系映射，确保RBAC变更后不会沿用过期授权结果。"""
-        identity, current_user = self.authenticate_access(token, operation_id, audit_context)
-        if not set(permission_codes).issubset(current_user.permissions):
-            self._raise_permission_denied(identity, operation_id, audit_context)
+        """平台命令只接受实时平台Binding与数据范围交集, 避免复用``/me``权限并集越权。"""
+        if not permission_codes:
+            raise ValueError("permission_codes must not be empty")
+        identity, _ = self.authenticate_access(token, operation_id, audit_context)
+        with self._session_factory() as db:
+            self.require_platform_permissions_in_transaction(
+                db, identity, operation_id, permission_codes, audit_context
+            )
         return identity
+
+    def require_platform_permissions_in_transaction(
+        self,
+        db: Session,
+        identity: AuthenticatedIdentity,
+        operation_id: str,
+        permission_codes: tuple[str, ...],
+        audit_context: AuditContext,
+    ) -> None:
+        """平台授权在调用方事务中重算Binding与Grant, 避免项目级权限投影授权平台写入。"""
+        now = utc_now()
+        context = AuthorizationContext(None, "PLATFORM_TECHNICAL", None, True)
+        for permission_code in permission_codes:
+            mappings = list(
+                db.execute(
+                    select(
+                        UserRoleBinding.binding_id,
+                        Role.role_code,
+                        RolePermission.decision,
+                        RolePermission.conditions,
+                    )
+                    .join(Role, Role.role_id == UserRoleBinding.role_id)
+                    .join(RolePermission, RolePermission.role_id == Role.role_id)
+                    .join(
+                        PermissionCode,
+                        PermissionCode.permission_code_id == RolePermission.permission_id,
+                    )
+                    .where(
+                        UserRoleBinding.user_id == identity.user.user_id,
+                        UserRoleBinding.project_id.is_(None),
+                        UserRoleBinding.valid_from <= now,
+                        or_(UserRoleBinding.valid_to.is_(None), UserRoleBinding.valid_to > now),
+                        Role.lifecycle_status == ACTIVE,
+                        PermissionCode.lifecycle_status == ACTIVE,
+                        PermissionCode.permission_code == permission_code,
+                    )
+                )
+            )
+            applicable: list[tuple[str, str | None, str]] = []
+            for binding_id, role_code, decision, conditions in mappings:
+                if role_code != "ROLE-SUPER-ADMIN":
+                    grant = db.scalar(
+                        select(DataScopeGrant.grant_id).where(
+                            DataScopeGrant.binding_id == binding_id,
+                            DataScopeGrant.scope_type.in_(("PLATFORM_ALL", "PLATFORM_TECHNICAL")),
+                            DataScopeGrant.scope_id.is_(None),
+                            or_(
+                                DataScopeGrant.permission_code.is_(None),
+                                DataScopeGrant.permission_code == permission_code,
+                            ),
+                        )
+                    )
+                    if grant is None:
+                        continue
+                applicable.append((decision, conditions, role_code))
+            if any(decision in {"DENIED", "FORBIDDEN"} for decision, _, _ in applicable):
+                self._raise_permission_denied(identity, operation_id, audit_context, db=db)
+            if not any(
+                decision == "ALLOWED"
+                and self._condition_satisfied(conditions, identity.user.user_id, context)
+                for decision, conditions, _ in applicable
+            ):
+                self._raise_permission_denied(identity, operation_id, audit_context, db=db)
+
+    def authenticate_access_in_transaction(
+        self,
+        db: Session,
+        token: str,
+        operation_id: str,
+        audit_context: AuditContext,
+    ) -> AuthenticatedIdentity:
+        """目标敏感命令在caller事务内重新装载身份, 避免授权与写入之间出现状态竞态。"""
+        claims = self._jwt.decode(token)
+        try:
+            identity = self._load_access_identity(
+                db,
+                claims,
+                audit_context=audit_context,
+                operation_id=operation_id,
+            )
+        except PlatformError:
+            # 调用点均在幂等claim之前。到期/撤销等安全终态及其审计必须先提交,
+            # 不能被随后抛出的认证错误随外层命令事务一起回滚。
+            db.commit()
+            raise
+        if (
+            identity.credential.force_password_change
+            and operation_id not in AUTH_PATHS_ALLOWED_DURING_PASSWORD_CHANGE
+        ):
+            raise PlatformError(
+                title="Password change required",
+                detail="The password must be changed before this operation.",
+                status=403,
+                code="AUTH_PASSWORD_CHANGE_REQUIRED",
+            )
+        return identity
+
+    def require_project_permissions_in_transaction(
+        self,
+        db: Session,
+        identity: AuthenticatedIdentity,
+        operation_id: str,
+        permission_codes: tuple[str, ...],
+        project_id: str,
+        audit_context: AuditContext,
+    ) -> None:
+        """项目写授权重算Binding、Grant与项目职责交集, 避免跨项目权限被聚合复用。"""
+        now = utc_now()
+        context = AuthorizationContext(project_id, "AUTHORIZED_PROJECT_ACTIVE", project_id, True)
+        for permission_code in permission_codes:
+            mappings = list(
+                db.execute(
+                    select(
+                        UserRoleBinding.binding_id,
+                        UserRoleBinding.project_id,
+                        UserRoleBinding.role_id,
+                        Role.role_code,
+                        RolePermission.decision,
+                        RolePermission.conditions,
+                    )
+                    .join(Role, Role.role_id == UserRoleBinding.role_id)
+                    .join(RolePermission, RolePermission.role_id == Role.role_id)
+                    .join(
+                        PermissionCode,
+                        PermissionCode.permission_code_id == RolePermission.permission_id,
+                    )
+                    .where(
+                        UserRoleBinding.user_id == identity.user.user_id,
+                        UserRoleBinding.valid_from <= now,
+                        or_(UserRoleBinding.valid_to.is_(None), UserRoleBinding.valid_to > now),
+                        Role.lifecycle_status == ACTIVE,
+                        PermissionCode.lifecycle_status == ACTIVE,
+                        PermissionCode.permission_code == permission_code,
+                    )
+                )
+            )
+            applicable: list[tuple[str, str | None, str]] = []
+            for (
+                binding_id,
+                binding_project_id,
+                role_id,
+                role_code,
+                decision,
+                conditions,
+            ) in mappings:
+                if role_code != "ROLE-SUPER-ADMIN":
+                    if binding_project_id is not None and binding_project_id != project_id:
+                        continue
+                    if db.scalar(
+                        select(DataScopeGrant.grant_id).where(
+                            DataScopeGrant.binding_id == binding_id,
+                            DataScopeGrant.scope_type == "AUTHORIZED_PROJECT_ACTIVE",
+                            DataScopeGrant.scope_id == project_id,
+                            or_(
+                                DataScopeGrant.permission_code.is_(None),
+                                DataScopeGrant.permission_code == permission_code,
+                            ),
+                        )
+                    ) is None:
+                        continue
+                    if role_code != "ROLE-PLATFORM-ADMIN" and not self._has_matching_project_duty(
+                        db, identity.user.user_id, project_id, role_id
+                    ):
+                        continue
+                applicable.append((decision, conditions, role_code))
+            if any(decision in {"DENIED", "FORBIDDEN"} for decision, _, _ in applicable):
+                self._raise_permission_denied(identity, operation_id, audit_context, db=db)
+            if not any(
+                decision == "ALLOWED"
+                and self._condition_satisfied(conditions, identity.user.user_id, context)
+                for decision, conditions, _ in applicable
+            ):
+                self._raise_permission_denied(identity, operation_id, audit_context, db=db)
 
     def require_project_permissions(
         self,
@@ -439,7 +600,7 @@ class AuthenticationService:
                 )
             now = utc_now()
             if old.lifecycle_status == "ROTATED":
-                self._compromise_family(
+                self._sessions.compromise_family(
                     db,
                     old.family_id,
                     now,
@@ -469,17 +630,13 @@ class AuthenticationService:
                     session_id=old.session_id,
                 )
             if old.expires_at <= now:
-                old.lifecycle_status = "EXPIRED"
-                old.row_version += 1
-                self._audit.append(
+                self._sessions.expire_if_due(
                     db,
+                    old,
+                    now,
                     audit_context,
-                    action="SESSION_REVOKED",
-                    operation_id="refresh_platform_session",
-                    result_code="EXPIRED",
                     actor_id=user.user_id,
-                    target_user_id=user.user_id,
-                    session_id=old.session_id,
+                    operation_id="refresh_platform_session",
                 )
                 self._raise_audited_failure(
                     db,
@@ -549,22 +706,15 @@ class AuthenticationService:
                     target_user_id=user.user_id,
                     session_id=old.session_id,
                 )
-            replacement, refresh_token = self._create_session(
+            replacement, refresh_token = self._sessions.rotate(
                 db,
+                old,
                 credential,
                 audit_context,
-                family_id=old.family_id,
-                operation_id="refresh_platform_session",
                 actor_id=user.user_id,
-                expires_at=old.expires_at,
-                enforce_limit=False,
+                operation_id="refresh_platform_session",
+                now=now,
             )
-            db.flush()
-            old.lifecycle_status = "ROTATED"
-            old.last_used_at = now
-            old.rotated_at = now
-            old.replaced_by_session_id = replacement.session_id
-            old.row_version += 1
             current_user = self._current_user(db, user, credential)
             self._audit.append(
                 db,
@@ -684,18 +834,21 @@ class AuthenticationService:
                     if role_code == "ROLE-SUPER-ADMIN":
                         allowed = True
                         break
-                    if context.project_id is not None and role_code != "ROLE-PLATFORM-ADMIN":
-                        # Project-scoped realtime authorization is the intersection of
-                        # the effective UserRoleBinding and the current project duty.
-                        # Merely being a member of the project is insufficient: the
-                        # ProjectMember duty must carry the same role as the binding.
-                        if not self._has_matching_project_duty(
+                    if (
+                        context.project_id is not None
+                        and role_code != "ROLE-PLATFORM-ADMIN"
+                        and not self._has_matching_project_duty(
                             db,
                             identity.user.user_id,
                             context.project_id,
                             binding_role_id,
-                        ):
-                            continue
+                        )
+                    ):
+                        # Project-scoped realtime authorization is the intersection of
+                        # the effective UserRoleBinding and the current project duty.
+                        # Merely being a member of the project is insufficient: the
+                        # ProjectMember duty must carry the same role as the binding.
+                        continue
                     allowed = True
                     break
         if not allowed:
@@ -745,7 +898,7 @@ class AuthenticationService:
         *,
         db: Session | None = None,
     ) -> NoReturn:
-        """拒绝权限前统一写入安全审计，确保失败路径与成功路径具有可追溯的授权证据。"""
+        """拒绝权限前统一写入安全审计, 同时禁止提交调用方未完成的命令状态。"""
         error = PlatformError(
             title="Permission denied",
             detail="The current identity is not permitted to perform this operation.",
@@ -753,18 +906,14 @@ class AuthenticationService:
             code="AUTH_PERMISSION_DENIED",
         )
         if db is not None:
-            self._audit.append(
-                db,
-                audit_context,
-                action="PERMISSION_DENIED",
-                operation_id=operation_id,
-                result_code=error.code,
-                actor_id=identity.user.user_id,
-                target_user_id=identity.user.user_id,
-                session_id=identity.session.session_id,
-            )
-            db.commit()
-            raise error
+            # 授权可能发生在调用方已经claim幂等键或锁定目标的事务中。拒绝时必须先
+            # 回滚整笔命令, 再用独立审计事务落证据; 禁止把未完成幂等记录提交成毒化状态。
+            actor_id = identity.user.user_id
+            session_id = identity.session.session_id
+            db.rollback()
+        else:
+            actor_id = identity.user.user_id
+            session_id = identity.session.session_id
         with self._session_factory() as audit_db:
             self._audit.append(
                 audit_db,
@@ -772,9 +921,9 @@ class AuthenticationService:
                 action="PERMISSION_DENIED",
                 operation_id=operation_id,
                 result_code=error.code,
-                actor_id=identity.user.user_id,
-                target_user_id=identity.user.user_id,
-                session_id=identity.session.session_id,
+                actor_id=actor_id,
+                target_user_id=actor_id,
+                session_id=session_id,
             )
             audit_db.commit()
         raise error
@@ -797,21 +946,16 @@ class AuthenticationService:
                 return
             credential = db.get(PlatformUserCredential, refresh_session.credential_id)
             user_id = credential.user_id if credential is not None else None
-            if refresh_session is not None and refresh_session.lifecycle_status == ACTIVE:
-                refresh_session.lifecycle_status = "REVOKED"
-                refresh_session.revoked_at = utc_now()
-                refresh_session.revoke_reason = "LOGOUT"
-                refresh_session.row_version += 1
-                self._audit.append(
+            if self._sessions.revoke(
                     db,
+                    refresh_session,
+                    "LOGOUT",
+                    utc_now(),
                     audit_context,
-                    action="SESSION_REVOKED",
-                    operation_id="logout_platform_user",
-                    result_code="LOGOUT",
                     actor_id=user_id,
                     target_user_id=user_id,
-                    session_id=refresh_session.session_id,
-                )
+                    operation_id="logout_platform_user",
+                ):
                 result_code = "SUCCESS"
             else:
                 result_code = "ALREADY_INACTIVE"
@@ -838,7 +982,7 @@ class AuthenticationService:
         """改密必须在同一事务中更新凭据版本、撤销会话并写审计，避免旧凭据或旧令牌继续有效。"""
         claims = self._jwt.decode(access_token)
         with self._session_factory() as db:
-            record, replay = self._claim_change_password(
+            record, replay = self._idempotency.claim_change_password(
                 db,
                 claims.user_id,
                 idempotency_key,
@@ -860,7 +1004,7 @@ class AuthenticationService:
                     title="Current password is invalid",
                     detail="The current password is invalid.",
                     status=400,
-                    code="AUTH_INVALID_CREDENTIALS",
+                    code="AUTH_CURRENT_PASSWORD_INVALID",
                 )
             try:
                 self._passwords.validate(new_password, identity.user.username or "")
@@ -869,14 +1013,14 @@ class AuthenticationService:
                     title="New password is invalid",
                     detail=str(error),
                     status=400,
-                    code="AUTH_OPERATION_FORBIDDEN_FOR_STATE",
+                    code="AUTH_PASSWORD_POLICY_VIOLATION",
                 ) from error
             if self._passwords.verify(credential.password_hash, new_password):
                 raise PlatformError(
                     title="New password is unchanged",
                     detail="The new password must differ from the current password.",
                     status=400,
-                    code="AUTH_OPERATION_FORBIDDEN_FOR_STATE",
+                    code="AUTH_PASSWORD_UNCHANGED",
                 )
             now = utc_now()
             credential.password_hash = self._passwords.hash(new_password)
@@ -888,7 +1032,7 @@ class AuthenticationService:
             credential.locked_until = None
             credential.last_failed_at = None
             credential.row_version += 1
-            self._revoke_active_sessions(
+            self._sessions.revoke_active_for_credential(
                 db,
                 credential,
                 "PASSWORD_CHANGED",
@@ -897,10 +1041,7 @@ class AuthenticationService:
                 actor_id=identity.user.user_id,
                 operation_id="change_current_user_password",
             )
-            record.response_status = 204
-            record.response_json = None
-            record.completed_at = now
-            record.expires_at = now + timedelta(days=1)
+            self._idempotency.complete(record, 204, None)
             self._audit.append(
                 db,
                 audit_context,
@@ -912,101 +1053,6 @@ class AuthenticationService:
                 session_id=identity.session.session_id,
             )
             db.commit()
-
-    def _claim_change_password(
-        self,
-        db: Session,
-        principal_id: str,
-        raw_key: str,
-        current_password: str,
-        new_password: str,
-    ) -> tuple[IdempotencyRecord, bool]:
-        """幂等声明必须先于聚合锁完成并收敛并发重试，避免同一改密意图产生重复或冲突副作用。"""
-        operation_id = "change_current_user_password"
-        storage_payload = _framed(principal_id, operation_id, raw_key)
-        storage_keys = self._auth_hmac.hex_digests("idempotency-storage-key", storage_payload)
-        fingerprint_payload = _framed(current_password, new_password)
-        fingerprints = self._auth_hmac.hex_digests(
-            "change-password-fingerprint", fingerprint_payload
-        )
-        now = utc_now()
-        candidates = (raw_key, *storage_keys)
-        existing_rows = list(
-            db.scalars(
-                select(IdempotencyRecord)
-                .where(IdempotencyRecord.idempotency_key.in_(candidates))
-                .order_by(IdempotencyRecord.idempotency_key)
-                .with_for_update()
-            )
-        )
-        existing = next((row for row in existing_rows if row.expires_at > now), None)
-        if existing is not None:
-            if existing.contract_version == 1:
-                raise _idempotency_conflict()
-            if (
-                existing.operation_id != operation_id
-                or existing.principal_id != principal_id
-                or existing.request_hash not in fingerprints
-            ):
-                raise _idempotency_conflict()
-            if existing.response_status == 204 and existing.completed_at is not None:
-                return existing, True
-            raise PlatformError(
-                title="Concurrent idempotent request is incomplete",
-                detail="The idempotent command has not reached a terminal state.",
-                status=409,
-                code="AUTH_CONCURRENCY_CONFLICT",
-            )
-
-        active_storage_key = storage_keys[0]
-        active_fingerprint = fingerprints[0]
-        expired_active = next(
-            (
-                row
-                for row in existing_rows
-                if row.idempotency_key == active_storage_key and row.contract_version == 2
-            ),
-            None,
-        )
-        if expired_active is not None:
-            expired_active.principal_id = principal_id
-            expired_active.operation_id = operation_id
-            expired_active.request_hash = active_fingerprint
-            expired_active.response_status = None
-            expired_active.response_json = None
-            expired_active.completed_at = None
-            expired_active.expires_at = now + timedelta(days=1)
-            return expired_active, False
-        statement = mysql_insert(IdempotencyRecord).values(
-            idempotency_key=active_storage_key,
-            contract_version=2,
-            principal_id=principal_id,
-            operation_id=operation_id,
-            request_hash=active_fingerprint,
-            response_status=None,
-            response_json=None,
-            completed_at=None,
-            expires_at=now + timedelta(days=1),
-        )
-        db.execute(
-            statement.on_duplicate_key_update(idempotency_key=IdempotencyRecord.idempotency_key)
-        )
-        claimed = db.scalar(
-            select(IdempotencyRecord)
-            .where(IdempotencyRecord.idempotency_key == active_storage_key)
-            .with_for_update()
-        )
-        if claimed is None:
-            raise RuntimeError("idempotency claim was not materialized")
-        if (
-            claimed.operation_id != operation_id
-            or claimed.principal_id != principal_id
-            or claimed.request_hash not in fingerprints
-        ):
-            raise _idempotency_conflict()
-        if claimed.response_status == 204 and claimed.completed_at is not None:
-            return claimed, True
-        return claimed, False
 
     def _load_access_identity(
         self,
@@ -1071,19 +1117,31 @@ class AuthenticationService:
             actor_id=user.user_id,
         )
         now = utc_now()
-        if refresh_session.lifecycle_status == ACTIVE and refresh_session.expires_at <= now:
-            refresh_session.lifecycle_status = "EXPIRED"
-            refresh_session.row_version += 1
-            self._audit.append(
-                db,
-                audit_context,
-                action="SESSION_REVOKED",
-                operation_id=operation_id,
-                result_code="EXPIRED",
-                actor_id=user.user_id,
-                target_user_id=user.user_id,
-                session_id=refresh_session.session_id,
+        was_due_candidate = (
+            refresh_session.lifecycle_status == ACTIVE and refresh_session.expires_at <= now
+        )
+        if was_due_candidate and not for_update:
+            locked_session = db.scalar(
+                select(AuthRefreshSession)
+                .where(AuthRefreshSession.session_id == claims.session_id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
             )
+            if locked_session is None:
+                raise self._session_revoked()
+            refresh_session = locked_session
+            # 竞争请求等待首个到期事务提交后会看到终态; 该转换已经有唯一审计,
+            # 后到请求只返回撤销语义, 不重复写 SESSION_REVOKED。
+            if refresh_session.lifecycle_status != ACTIVE:
+                raise self._session_revoked()
+        if self._sessions.expire_if_due(
+            db,
+            refresh_session,
+            now,
+            audit_context,
+            actor_id=user.user_id,
+            operation_id=operation_id,
+        ):
             raise self._session_revoked()
         if (
             credential.lifecycle_status != ACTIVE
@@ -1118,7 +1176,7 @@ class AuthenticationService:
         """登录前集中校验用户与凭据可用状态，确保禁用、锁定或强制改密规则不会被入口绕过。"""
         if user.lifecycle_status == ACTIVE:
             return
-        self._revoke_active_sessions(
+        self._sessions.revoke_active_for_credential(
             db,
             credential,
             "USER_STATE_CHANGED",
@@ -1161,155 +1219,6 @@ class AuthenticationService:
         if credential.failed_login_count >= 5:
             credential.locked_until = current + timedelta(seconds=900)
         credential.row_version += 1
-
-    def _create_session(
-        self,
-        db: Session,
-        credential: PlatformUserCredential,
-        audit_context: AuditContext,
-        family_id: str | None,
-        operation_id: str,
-        actor_id: str,
-        *,
-        expires_at: datetime | None = None,
-        enforce_limit: bool = True,
-    ) -> tuple[AuthRefreshSession, str]:
-        """会话创建统一生成令牌家族和审计关联，确保刷新旋转、撤销与追踪使用同一身份边界。"""
-        now = utc_now()
-        if enforce_limit:
-            active = list(
-                db.scalars(
-                    select(AuthRefreshSession)
-                    .where(
-                        AuthRefreshSession.credential_id == credential.credential_id,
-                        AuthRefreshSession.lifecycle_status == ACTIVE,
-                    )
-                    .order_by(AuthRefreshSession.issued_at)
-                    .with_for_update()
-                )
-            )
-            unexpired: list[AuthRefreshSession] = []
-            for candidate in active:
-                if candidate.expires_at <= now:
-                    candidate.lifecycle_status = "EXPIRED"
-                    candidate.row_version += 1
-                else:
-                    unexpired.append(candidate)
-            active = unexpired
-            while len(active) >= 5:
-                oldest = active.pop(0)
-                oldest.lifecycle_status = "REVOKED"
-                oldest.revoked_at = now
-                oldest.revoke_reason = "SESSION_LIMIT"
-                oldest.row_version += 1
-                self._audit.append(
-                    db,
-                    audit_context,
-                    action="SESSION_REVOKED",
-                    operation_id=operation_id,
-                    result_code="SESSION_LIMIT",
-                    actor_id=actor_id,
-                    target_user_id=credential.user_id,
-                    session_id=oldest.session_id,
-                )
-        raw_token = new_refresh_token()
-        session_id = new_ulid()
-        refresh_session = AuthRefreshSession(
-            session_id=session_id,
-            credential_id=credential.credential_id,
-            family_id=family_id or session_id,
-            token_hash=refresh_token_hash(raw_token),
-            session_version=1,
-            credential_version=credential.credential_version,
-            lifecycle_status=ACTIVE,
-            issued_at=now,
-            expires_at=expires_at or now + timedelta(seconds=604800),
-            last_used_at=None,
-            rotated_at=None,
-            revoked_at=None,
-            revoke_reason=None,
-            replaced_by_session_id=None,
-            client_context_hash=client_context_hash(audit_context.source_context),
-            row_version=0,
-            created_at=now,
-            updated_at=now,
-        )
-        db.add(refresh_session)
-        return refresh_session, raw_token
-
-    def _compromise_family(
-        self,
-        db: Session,
-        family_id: str,
-        now: datetime,
-        audit_context: AuditContext,
-        *,
-        actor_id: str,
-        operation_id: str,
-    ) -> None:
-        """检测刷新令牌重放后必须标记整个令牌家族失陷，避免攻击者继续使用同族旧令牌。"""
-        sessions = list(
-            db.scalars(
-                select(AuthRefreshSession)
-                .where(AuthRefreshSession.family_id == family_id)
-                .order_by(AuthRefreshSession.session_id)
-                .with_for_update()
-            )
-        )
-        for refresh_session in sessions:
-            refresh_session.lifecycle_status = "COMPROMISED"
-            refresh_session.revoked_at = now
-            refresh_session.revoke_reason = "REFRESH_REPLAY"
-            refresh_session.row_version += 1
-            self._audit.append(
-                db,
-                audit_context,
-                action="SESSION_REVOKED",
-                operation_id=operation_id,
-                result_code="REFRESH_REPLAY",
-                actor_id=actor_id,
-                target_user_id=actor_id,
-                session_id=refresh_session.session_id,
-            )
-
-    def _revoke_active_sessions(
-        self,
-        db: Session,
-        credential: PlatformUserCredential,
-        reason: str,
-        now: datetime,
-        audit_context: AuditContext,
-        *,
-        actor_id: str | None,
-        operation_id: str,
-    ) -> None:
-        """安全敏感变更后统一撤销活动会话，确保旧刷新凭据不能绕过新的用户或凭据状态。"""
-        sessions = list(
-            db.scalars(
-                select(AuthRefreshSession)
-                .where(
-                    AuthRefreshSession.credential_id == credential.credential_id,
-                    AuthRefreshSession.lifecycle_status == ACTIVE,
-                )
-                .order_by(AuthRefreshSession.session_id)
-                .with_for_update()
-            )
-        )
-        for refresh_session in sessions:
-            refresh_session.lifecycle_status = "REVOKED"
-            refresh_session.revoked_at = now
-            refresh_session.revoke_reason = reason
-            refresh_session.row_version += 1
-            self._audit.append(
-                db,
-                audit_context,
-                action="SESSION_REVOKED",
-                operation_id=operation_id,
-                result_code=reason,
-                actor_id=actor_id,
-                target_user_id=credential.user_id,
-                session_id=refresh_session.session_id,
-            )
 
     def _current_user(
         self, db: Session, user: PlatformUser, credential: PlatformUserCredential

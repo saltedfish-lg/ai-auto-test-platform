@@ -43,13 +43,12 @@ from platform_api.security import PasswordService, new_refresh_token, new_ulid, 
 from sqlalchemy import func, select, text, update
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import DBAPIError, IntegrityError
+from sqlalchemy.orm import Session, sessionmaker
+
+from tools.current_facts import derive_current_facts
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-import sys
-sys.path.insert(0, str(REPO_ROOT / "tools"))
-from current_facts import derive_current_facts
 CURRENT_FACTS = derive_current_facts(REPO_ROOT)
-from sqlalchemy.orm import Session, sessionmaker
 
 DATABASE_URL_ENV = "ATP_DATABASE_URL"
 GATE_DATABASE_PREFIX = "ai_auto_test_platform_gate_auth_"
@@ -383,9 +382,15 @@ def test_p1_auth_rbac_real_mysql_runtime_gate(
     assert second.status == "ALREADY_INITIALIZED"
 
     with factory() as db:
-        assert db.scalar(select(func.count()).select_from(PermissionCode)) == CURRENT_FACTS["rbac"]["permission_count"]
-        assert db.scalar(select(func.count()).select_from(Role)) == CURRENT_FACTS["rbac"]["role_count"]
-        assert db.scalar(select(func.count()).select_from(RolePermission)) == CURRENT_FACTS["rbac"]["mapping_count"]
+        assert db.scalar(select(func.count()).select_from(PermissionCode)) == (
+            CURRENT_FACTS["rbac"]["permission_count"]
+        )
+        assert db.scalar(select(func.count()).select_from(Role)) == (
+            CURRENT_FACTS["rbac"]["role_count"]
+        )
+        assert db.scalar(select(func.count()).select_from(RolePermission)) == (
+            CURRENT_FACTS["rbac"]["mapping_count"]
+        )
         assert db.scalar(select(func.count()).select_from(Admin)) == 1
         assert (
             db.scalar(
@@ -645,6 +650,48 @@ def test_p1_auth_rbac_real_mysql_runtime_gate(
             )
         assert scoped_denial.value.code == "AUTH_PERMISSION_DENIED"
     with factory.begin() as db:
+        platform_binding_id = db.scalar(
+            select(UserRoleBinding.binding_id)
+            .join(Role, Role.role_id == UserRoleBinding.role_id)
+            .where(
+                UserRoleBinding.user_id == normal_user_id,
+                UserRoleBinding.project_id.is_(None),
+                UserRoleBinding.valid_to.is_(None),
+                Role.role_code == "ROLE-PLATFORM-ADMIN",
+            )
+        )
+        assert platform_binding_id is not None
+        db.add(
+            DataScopeGrant(
+                grant_id=new_ulid(),
+                binding_id=platform_binding_id,
+                scope_type="PLATFORM_TECHNICAL",
+                scope_id=None,
+                permission_code="USER_CREATE",
+                created_at=utc_now(),
+            )
+        )
+    auth.require_permissions(
+        normal.access_token,
+        "runtime_gate_platform_authorization",
+        ("USER_CREATE",),
+        _audit_context("runtime-gate-platform-allow"),
+    )
+    with factory.begin() as db:
+        db.execute(
+            update(UserRoleBinding)
+            .where(UserRoleBinding.binding_id == platform_binding_id)
+            .values(valid_to=utc_now(), row_version=UserRoleBinding.row_version + 1)
+        )
+    with pytest.raises(PlatformError) as revoked_platform_denial:
+        auth.require_permissions(
+            normal.access_token,
+            "runtime_gate_platform_authorization",
+            ("USER_CREATE",),
+            _audit_context("runtime-gate-platform-revoked"),
+        )
+    assert revoked_platform_denial.value.code == "AUTH_PERMISSION_DENIED"
+    with factory.begin() as db:
         normal_user = db.scalar(
             select(PlatformUser).where(PlatformUser.username == normal_username)
         )
@@ -717,21 +764,43 @@ def test_p1_auth_rbac_real_mysql_runtime_gate(
         )
         newest_normal = refresh_future.result(timeout=20)
         assert login_future.result(timeout=20).current_user.username == normal_username
-    newest_session_id = auth._jwt.decode(newest_normal.access_token).session_id
-    with factory.begin() as db:
-        session = db.get(AuthRefreshSession, newest_session_id)
-        assert session is not None
-        session.expires_at = utc_now()
-    with pytest.raises(PlatformError):
-        auth.authenticate_access(
-            newest_normal.access_token,
-            "runtime_gate_expired",
-            _audit_context("runtime-gate-expired"),
-        )
-    with factory() as db:
-        session = db.get(AuthRefreshSession, newest_session_id)
-        assert session is not None
-        assert session.lifecycle_status == "EXPIRED"
+        newest_session_id = auth._jwt.decode(newest_normal.access_token).session_id
+        with factory.begin() as db:
+            session = db.get(AuthRefreshSession, newest_session_id)
+            assert session is not None
+            session.expires_at = utc_now()
+            expired_row_version_before = session.row_version
+        def authenticate_expired(index: int) -> str:
+            try:
+                auth.authenticate_access(
+                    newest_normal.access_token,
+                    "runtime_gate_expired",
+                    _audit_context(f"runtime-gate-expired-{index}"),
+                )
+            except PlatformError as error:
+                return error.code
+            return "UNEXPECTED_SUCCESS"
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            expired_results = list(pool.map(authenticate_expired, range(2)))
+        assert expired_results == ["AUTH_SESSION_REVOKED", "AUTH_SESSION_REVOKED"]
+        with factory() as db:
+            session = db.get(AuthRefreshSession, newest_session_id)
+            assert session is not None
+            assert session.lifecycle_status == "EXPIRED"
+            assert session.row_version == expired_row_version_before + 1
+            assert (
+                db.scalar(
+                    select(func.count())
+                    .select_from(AuthSecurityAudit)
+                    .where(
+                        AuthSecurityAudit.session_id == newest_session_id,
+                        AuthSecurityAudit.action == "SESSION_REVOKED",
+                        AuthSecurityAudit.result_code == "EXPIRED",
+                    )
+                )
+                == 1
+            )
 
     with TestClient(app, base_url="http://localhost") as client:
         with factory() as db:
@@ -779,7 +848,9 @@ def test_p1_auth_rbac_real_mysql_runtime_gate(
         login_data = login.json()["data"]
         assert login_data["expires_in"] == 900
         assert login_data["current_user"]["force_password_change"] is True
-        assert len(login_data["current_user"]["permissions"]) == CURRENT_FACTS["rbac"]["permission_count"]
+        assert len(login_data["current_user"]["permissions"]) == CURRENT_FACTS["rbac"][
+            "permission_count"
+        ]
         cookie_header = login.headers["set-cookie"].lower()
         assert "httponly" in cookie_header
         assert "samesite=strict" in cookie_header
@@ -797,18 +868,166 @@ def test_p1_auth_rbac_real_mysql_runtime_gate(
         assert refresh_before_change.status_code == 403
         assert refresh_before_change.json()["code"] == "AUTH_PASSWORD_CHANGE_REQUIRED"
 
-        change_password_key = new_ulid()
-        changed = client.post(
+        # 已认证改密请求的业务校验保持在400边界; 每次失败都必须回滚幂等声明,
+        # 避免同一用户后续合法改密被遗留的非终态记录阻塞。
+        invalid_current = client.post(
             "/api/v1/auth/change-password",
             headers={
                 "Authorization": f"Bearer {access_before_change}",
-                "Idempotency-Key": change_password_key,
+                "Idempotency-Key": new_ulid(),
             },
-            json={"current_password": initial_password, "new_password": changed_password},
+            json={
+                "current_password": _password("WrongCurrent"),
+                "new_password": _password("Candidate"),
+            },
         )
-        assert changed.status_code == 204
-        assert changed.content == b""
-        assert client.cookies.get("atp_refresh") is None
+        assert invalid_current.status_code == 400
+        assert invalid_current.json()["code"] == "AUTH_CURRENT_PASSWORD_INVALID"
+
+        policy_violation = client.post(
+            "/api/v1/auth/change-password",
+            headers={
+                "Authorization": f"Bearer {access_before_change}",
+                "Idempotency-Key": new_ulid(),
+            },
+            json={
+                "current_password": initial_password,
+                "new_password": "password1234",
+            },
+        )
+        assert policy_violation.status_code == 400
+        assert policy_violation.json()["code"] == "AUTH_PASSWORD_POLICY_VIOLATION"
+
+        unchanged_password = client.post(
+            "/api/v1/auth/change-password",
+            headers={
+                "Authorization": f"Bearer {access_before_change}",
+                "Idempotency-Key": new_ulid(),
+            },
+            json={
+                "current_password": initial_password,
+                "new_password": initial_password,
+            },
+        )
+        assert unchanged_password.status_code == 400
+        assert unchanged_password.json()["code"] == "AUTH_PASSWORD_UNCHANGED"
+
+        change_password_key = new_ulid()
+        admin_claims = auth._jwt.decode(access_before_change)
+        with factory() as db:
+            admin_credential = db.scalar(
+                select(PlatformUserCredential).where(
+                    PlatformUserCredential.user_id == admin_claims.user_id
+                )
+            )
+            assert admin_credential is not None
+            credential_version_before = admin_credential.credential_version
+            active_sessions_before = {
+                session.session_id: session.row_version
+                for session in db.scalars(
+                    select(AuthRefreshSession).where(
+                        AuthRefreshSession.credential_id == admin_credential.credential_id,
+                        AuthRefreshSession.lifecycle_status == "ACTIVE",
+                    )
+                )
+            }
+            password_audits_before = db.scalar(
+                select(func.count())
+                .select_from(AuthSecurityAudit)
+                .where(
+                    AuthSecurityAudit.action == "PASSWORD_CHANGED",
+                    AuthSecurityAudit.target_user_id == admin_claims.user_id,
+                )
+            )
+            assert (
+                db.scalar(
+                    select(func.count())
+                    .select_from(IdempotencyRecord)
+                    .where(
+                        IdempotencyRecord.contract_version == 2,
+                        IdempotencyRecord.principal_id == admin_claims.user_id,
+                        IdempotencyRecord.operation_id == "change_current_user_password",
+                        IdempotencyRecord.completed_at.is_(None),
+                    )
+                )
+                == 0
+            )
+        assert active_sessions_before
+
+        # 两个事务在同一物理幂等键上竞争; 第二个必须读取首事务的204终态,
+        # 不能在旧Access Session已撤销后重新做身份校验而误报401。
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            changes = [
+                pool.submit(
+                    auth.change_password,
+                    access_before_change,
+                    initial_password,
+                    changed_password,
+                    change_password_key,
+                    _audit_context(f"mysql-gate-concurrent-change-{index}"),
+                )
+                for index in range(2)
+            ]
+            assert [future.result(timeout=20) for future in changes] == [None, None]
+
+        with factory() as db:
+            changed_credential = db.scalar(
+                select(PlatformUserCredential).where(
+                    PlatformUserCredential.user_id == admin_claims.user_id
+                )
+            )
+            assert changed_credential is not None
+            assert changed_credential.credential_version == credential_version_before + 1
+            assert (
+                db.scalar(
+                    select(func.count())
+                    .select_from(AuthSecurityAudit)
+                    .where(
+                        AuthSecurityAudit.action == "PASSWORD_CHANGED",
+                        AuthSecurityAudit.target_user_id == admin_claims.user_id,
+                    )
+                )
+                == password_audits_before + 1
+            )
+            revoked_sessions = {
+                session.session_id: session
+                for session in db.scalars(
+                    select(AuthRefreshSession).where(
+                        AuthRefreshSession.session_id.in_(active_sessions_before)
+                    )
+                )
+            }
+            assert set(revoked_sessions) == set(active_sessions_before)
+            for session_id, previous_version in active_sessions_before.items():
+                revoked = revoked_sessions[session_id]
+                assert revoked.lifecycle_status == "REVOKED"
+                assert revoked.revoke_reason == "PASSWORD_CHANGED"
+                assert revoked.row_version == previous_version + 1
+            terminal_count = db.scalar(
+                select(func.count())
+                .select_from(IdempotencyRecord)
+                .where(
+                    IdempotencyRecord.contract_version == 2,
+                    IdempotencyRecord.principal_id == admin_claims.user_id,
+                    IdempotencyRecord.operation_id == "change_current_user_password",
+                    IdempotencyRecord.response_status == 204,
+                    IdempotencyRecord.completed_at.is_not(None),
+                )
+            )
+            assert terminal_count == 1
+            assert (
+                db.scalar(
+                    text(
+                        "SELECT COUNT(*) FROM atp_idempotency_record "
+                        "WHERE contract_version = 2 "
+                        "AND principal_id = :principal_id "
+                        "AND operation_id = 'change_current_user_password' "
+                        "AND response_json IS NULL"
+                    ),
+                    {"principal_id": admin_claims.user_id},
+                )
+                == 1
+            )
         changed_replay = client.post(
             "/api/v1/auth/change-password",
             headers={
@@ -818,6 +1037,7 @@ def test_p1_auth_rbac_real_mysql_runtime_gate(
             json={"current_password": initial_password, "new_password": changed_password},
         )
         assert changed_replay.status_code == 204
+        assert client.cookies.get("atp_refresh") is None
         changed_conflict = client.post(
             "/api/v1/auth/change-password",
             headers={

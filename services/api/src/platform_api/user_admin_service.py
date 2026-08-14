@@ -11,7 +11,6 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from platform_api.audit import AuditContext, AuthenticationAuditService
-from platform_api.auth_hmac import AuthHmacKeyRing
 from platform_api.auth_schemas import (
     CreateUserRequest,
     CreateUserRoleBindingRequest,
@@ -27,7 +26,6 @@ from platform_api.errors import PlatformError
 from platform_api.idempotency import IdempotencyCoordinator
 from platform_api.models import (
     Admin,
-    AuthRefreshSession,
     DataScopeGrant,
     PlatformUser,
     PlatformUserCredential,
@@ -35,6 +33,7 @@ from platform_api.models import (
     UserRoleBinding,
 )
 from platform_api.security import PasswordService, new_ulid, utc_now
+from platform_api.session_service import SessionService
 
 ACTIVE = "ACTIVE"
 SUPER_ADMIN_ROLE = "ROLE-SUPER-ADMIN"
@@ -55,13 +54,16 @@ class UserAdministrationService:
         passwords: PasswordService,
         authentication: AuthenticationService,
         audit: AuthenticationAuditService,
-        hmac_keys: AuthHmacKeyRing,
+        idempotency: IdempotencyCoordinator,
+        sessions: SessionService,
     ) -> None:
+        """共享状态 Owner 与幂等协调器由组合根注入, 避免命令自行创建平行写路径。"""
         self._factory = factory
         self._passwords = passwords
         self._authentication = authentication
         self._audit = audit
-        self._idempotency = IdempotencyCoordinator(hmac_keys)
+        self._idempotency = idempotency
+        self._sessions = sessions
 
     def create_user(
         self,
@@ -70,33 +72,38 @@ class UserAdministrationService:
         idempotency_key: str,
         audit_context: AuditContext,
     ) -> DeliveryResult:
+        """创建用户在单事务内完成实时授权、幂等、凭据与绑定, 确保任一步失败整体回滚。"""
         # User creation is a platform operation, while every project-scoped initial
         # Role Binding is authorized separately against its realtime target project.
-        actor = self._authentication.require_permissions(
-            token, "create_user", ("USER_CREATE",), audit_context
-        )
         platform_bindings = [item for item in body.role_bindings if item.project_id is None]
-        if platform_bindings:
-            platform_required = ("ROLE_BIND",) + (
-                ("PROJECT_MEMBER_MANAGE",)
-                if any(item.data_scope_grants for item in platform_bindings)
-                else ()
-            )
-            self._authentication.require_permissions(
-                token, "create_user", platform_required, audit_context
-            )
-        for project_id in sorted(
-            {item.project_id for item in body.role_bindings if item.project_id is not None}
-        ):
-            self._authentication.require_project_permissions(
-                token,
-                "create_user",
-                ("ROLE_BIND", "PROJECT_MEMBER_MANAGE"),
-                project_id,
-                audit_context,
-            )
         temporary_password: str | None = None
         with self._factory.begin() as db:
+            actor = self._authentication.authenticate_access_in_transaction(
+                db, token, "create_user", audit_context
+            )
+            self._authentication.require_platform_permissions_in_transaction(
+                db, actor, "create_user", ("USER_CREATE",), audit_context
+            )
+            if platform_bindings:
+                platform_required = ("ROLE_BIND",) + (
+                    ("PROJECT_MEMBER_MANAGE",)
+                    if any(item.data_scope_grants for item in platform_bindings)
+                    else ()
+                )
+                self._authentication.require_platform_permissions_in_transaction(
+                    db, actor, "create_user", platform_required, audit_context
+                )
+            for project_id in sorted(
+                {item.project_id for item in body.role_bindings if item.project_id is not None}
+            ):
+                self._authentication.require_project_permissions_in_transaction(
+                    db,
+                    actor,
+                    "create_user",
+                    ("ROLE_BIND", "PROJECT_MEMBER_MANAGE"),
+                    project_id,
+                    audit_context,
+                )
             record, replay = self._idempotency.claim(
                 db,
                 actor.user.user_id,
@@ -233,11 +240,15 @@ class UserAdministrationService:
         idempotency_key: str,
         audit_context: AuditContext,
     ) -> DeliveryResult:
-        actor = self._authentication.require_permissions(
-            token, "reset_user_credential", ("USER_CREATE",), audit_context
-        )
+        """凭据重置与会话撤销共享事务和状态 Owner, 避免新凭据生效后旧会话仍可用。"""
         temporary_password: str | None = None
         with self._factory.begin() as db:
+            actor = self._authentication.authenticate_access_in_transaction(
+                db, token, "reset_user_credential", audit_context
+            )
+            self._authentication.require_platform_permissions_in_transaction(
+                db, actor, "reset_user_credential", ("USER_CREATE",), audit_context
+            )
             record, replay = self._idempotency.claim(
                 db,
                 actor.user.user_id,
@@ -276,8 +287,14 @@ class UserAdministrationService:
             credential.locked_until = None
             credential.last_failed_at = None
             credential.row_version += 1
-            self._revoke_sessions(
-                db, credential, "CREDENTIAL_RESET", actor.user.user_id, audit_context
+            self._sessions.revoke_active_for_credential(
+                db,
+                credential,
+                "CREDENTIAL_RESET",
+                now,
+                audit_context,
+                actor_id=actor.user.user_id,
+                operation_id="reset_user_credential",
             )
             self._audit.append(
                 db,
@@ -310,11 +327,15 @@ class UserAdministrationService:
         *,
         enable: bool,
     ) -> UserResource:
+        """用户状态转换与禁用撤销共享事务, 确保业务状态和认证状态不会部分提交。"""
         operation_id = "enable_user" if enable else "disable_user"
-        actor = self._authentication.require_permissions(
-            token, operation_id, ("USER_CREATE",), audit_context
-        )
         with self._factory.begin() as db:
+            actor = self._authentication.authenticate_access_in_transaction(
+                db, token, operation_id, audit_context
+            )
+            self._authentication.require_platform_permissions_in_transaction(
+                db, actor, operation_id, ("USER_CREATE",), audit_context
+            )
             record, replay = self._idempotency.claim(
                 db,
                 actor.user.user_id,
@@ -347,8 +368,14 @@ class UserAdministrationService:
                     .with_for_update()
                 )
                 if credential is not None:
-                    self._revoke_sessions(
-                        db, credential, "USER_DISABLED", actor.user.user_id, audit_context
+                    self._sessions.revoke_active_for_credential(
+                        db,
+                        credential,
+                        "USER_DISABLED",
+                        utc_now(),
+                        audit_context,
+                        actor_id=actor.user.user_id,
+                        operation_id="disable_user",
                     )
             self._audit.append(
                 db,
@@ -370,22 +397,31 @@ class UserAdministrationService:
         idempotency_key: str,
         audit_context: AuditContext,
     ) -> UserRoleBindingResource:
-        if body.project_id is not None:
-            actor = self._authentication.require_project_permissions(
-                token,
-                "create_user_role_binding",
-                ("ROLE_BIND", "PROJECT_MEMBER_MANAGE"),
-                body.project_id,
-                audit_context,
-            )
-        else:
-            required = ("ROLE_BIND",) + (
-                ("PROJECT_MEMBER_MANAGE",) if body.data_scope_grants else ()
-            )
-            actor = self._authentication.require_permissions(
-                token, "create_user_role_binding", required, audit_context
-            )
+        """创建绑定按目标范围实时授权并锁定目标用户, 避免聚合权限或并发写绕过边界。"""
         with self._factory.begin() as db:
+            actor = self._authentication.authenticate_access_in_transaction(
+                db, token, "create_user_role_binding", audit_context
+            )
+            if body.project_id is not None:
+                self._authentication.require_project_permissions_in_transaction(
+                    db,
+                    actor,
+                    "create_user_role_binding",
+                    ("ROLE_BIND", "PROJECT_MEMBER_MANAGE"),
+                    body.project_id,
+                    audit_context,
+                )
+            else:
+                required = ("ROLE_BIND",) + (
+                    ("PROJECT_MEMBER_MANAGE",) if body.data_scope_grants else ()
+                )
+                self._authentication.require_platform_permissions_in_transaction(
+                    db,
+                    actor,
+                    "create_user_role_binding",
+                    required,
+                    audit_context,
+                )
             record, replay = self._idempotency.claim(
                 db,
                 actor.user.user_id,
@@ -462,13 +498,33 @@ class UserAdministrationService:
         idempotency_key: str,
         audit_context: AuditContext,
     ) -> UserRoleBindingResource:
-        # Resolve the target binding before permission evaluation so a project-scoped write
-        # is authorized only by the target project's live relationships, not by an aggregate
-        # permission projection from another project. Authentication still happens before lookup.
-        actor, _ = self._authentication.authenticate_access(
-            token, "revoke_user_role_binding", audit_context
-        )
         with self._factory.begin() as db:
+            # 身份、幂等键、目标Binding锁和授权必须共享同一事务快照, 避免撤销并发中的TOCTOU。
+            actor = self._authentication.authenticate_access_in_transaction(
+                db, token, "revoke_user_role_binding", audit_context
+            )
+            # 先只读目标上下文完成实时授权; 取得幂等唯一行后再按User→Binding锁序
+            # 复核目标。所有正式写路径都先锁User, 因而不会在两次读取间越过该边界。
+            binding_hint = db.get(UserRoleBinding, binding_id)
+            if binding_hint is None:
+                raise _not_found("The role binding does not exist.")
+            if binding_hint.project_id is not None:
+                self._authentication.require_project_permissions_in_transaction(
+                    db,
+                    actor,
+                    "revoke_user_role_binding",
+                    ("ROLE_BIND", "PROJECT_MEMBER_MANAGE"),
+                    binding_hint.project_id,
+                    audit_context,
+                )
+            else:
+                self._authentication.require_platform_permissions_in_transaction(
+                    db,
+                    actor,
+                    "revoke_user_role_binding",
+                    ("ROLE_BIND",),
+                    audit_context,
+                )
             record, replay = self._idempotency.claim(
                 db,
                 actor.user.user_id,
@@ -476,11 +532,6 @@ class UserAdministrationService:
                 idempotency_key,
                 _canonical_payload(body, binding_id),
             )
-            if replay:
-                return _stored_binding(record.response_json)
-            binding_hint = db.get(UserRoleBinding, binding_id)
-            if binding_hint is None:
-                raise _not_found("The role binding does not exist.")
             self._locked_user(db, binding_hint.user_id)
             binding = db.scalar(
                 select(UserRoleBinding)
@@ -489,20 +540,8 @@ class UserAdministrationService:
             )
             if binding is None:
                 raise _not_found("The role binding does not exist.")
-            if binding.project_id is not None:
-                # The target binding determines the project authorization context;
-                # permissions from another project must never authorize this write.
-                actor = self._authentication.require_project_permissions(
-                    token,
-                    "revoke_user_role_binding",
-                    ("ROLE_BIND", "PROJECT_MEMBER_MANAGE"),
-                    binding.project_id,
-                    audit_context,
-                )
-            else:
-                actor = self._authentication.require_permissions(
-                    token, "revoke_user_role_binding", ("ROLE_BIND",), audit_context
-                )
+            if replay:
+                return _stored_binding(record.response_json)
             role = db.get(Role, binding.role_id)
             if role is not None and role.role_code == SUPER_ADMIN_ROLE:
                 raise _protected_binding()
@@ -557,45 +596,6 @@ class UserAdministrationService:
     def _protect_admin(db: Session, user_id: str) -> None:
         if db.scalar(select(Admin.admin_id).where(Admin.user_id == user_id)) is not None:
             raise _admin_immutable()
-
-    def _revoke_sessions(
-        self,
-        db: Session,
-        credential: PlatformUserCredential,
-        reason: str,
-        actor_id: str,
-        audit_context: AuditContext,
-    ) -> None:
-        now = utc_now()
-        sessions = list(
-            db.scalars(
-                select(AuthRefreshSession)
-                .where(
-                    AuthRefreshSession.credential_id == credential.credential_id,
-                    AuthRefreshSession.lifecycle_status == ACTIVE,
-                )
-                .order_by(AuthRefreshSession.session_id)
-                .with_for_update()
-            )
-        )
-        for refresh_session in sessions:
-            refresh_session.lifecycle_status = "REVOKED"
-            refresh_session.revoked_at = now
-            refresh_session.revoke_reason = reason
-            refresh_session.row_version += 1
-            self._audit.append(
-                db,
-                audit_context,
-                action="SESSION_REVOKED",
-                operation_id="reset_user_credential"
-                if reason == "CREDENTIAL_RESET"
-                else "disable_user",
-                result_code=reason,
-                actor_id=actor_id,
-                target_user_id=credential.user_id,
-                session_id=refresh_session.session_id,
-            )
-
 
 def _canonical_payload(body: BaseModel, resource_id: str | None = None) -> bytes:
     value: dict[str, object] = body.model_dump(mode="json", exclude_none=False)

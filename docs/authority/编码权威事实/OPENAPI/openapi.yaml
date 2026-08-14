@@ -276,7 +276,7 @@ paths:
         '204':
           description: 密码修改成功或相同幂等键与相同指纹的终态重放；全部Refresh Session已撤销，不签发新Token
         '400':
-          description: 当前密码错误或新密码不符合策略
+          description: 已认证用户的当前密码错误、新密码不符合策略或新密码未变化；分别返回AUTH_CURRENT_PASSWORD_INVALID、AUTH_PASSWORD_POLICY_VIOLATION或AUTH_PASSWORD_UNCHANGED
           content:
             application/problem+json:
               schema:
@@ -21811,6 +21811,9 @@ components:
       - AUTH_REQUIRED
       - AUTH_REQUEST_VALIDATION_FAILED
       - AUTH_INVALID_CREDENTIALS
+      - AUTH_CURRENT_PASSWORD_INVALID
+      - AUTH_PASSWORD_POLICY_VIOLATION
+      - AUTH_PASSWORD_UNCHANGED
       - AUTH_TOKEN_INVALID
       - AUTH_TOKEN_EXPIRED
       - AUTH_SESSION_REVOKED

@@ -602,7 +602,9 @@ def test_project_scoped_role_binding_denies_when_matching_project_duty_is_absent
     )
 
 
-def test_require_project_permissions_binds_every_permission_to_target_project(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_require_project_permissions_binds_every_permission_to_target_project(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     calls: list[tuple[str, AuthorizationContext]] = []
     sentinel = object()
 
@@ -636,8 +638,12 @@ def test_require_project_permissions_binds_every_permission_to_target_project(mo
 
 
 def test_role_binding_write_paths_use_target_project_authorization() -> None:
-    source = (Path(__file__).resolve().parents[1] / "src/platform_api/user_admin_service.py").read_text(encoding="utf-8")
-    assert source.count("require_project_permissions(") >= 3
+    source = (
+        Path(__file__).resolve().parents[1] / "src/platform_api/user_admin_service.py"
+    ).read_text(encoding="utf-8")
+    assert source.count("require_project_permissions_in_transaction(") >= 3
+    assert source.count("require_platform_permissions_in_transaction(") >= 4
+    assert source.count("authenticate_access_in_transaction(") >= 5
     assert '"create_user_role_binding"' in source
     assert '"revoke_user_role_binding"' in source
     assert 'binding.project_id' in source

@@ -86,6 +86,20 @@ describe("登录页（组件测试，API 为 mock）", () => {
     expect(screen.getByText("请求标识：test-correlation-id")).toBeTruthy();
   });
 
+  it("keeps invalid-credential login errors enumeration-safe", async () => {
+    const problem = problemDetails(401, "AUTH_INVALID_CREDENTIALS");
+    vi.spyOn(apiClient, "login_platform_user").mockRejectedValue(
+      new ApiRequestError(401, problem.title, problem),
+    );
+    await renderLogin();
+    await fillCredentials();
+
+    await fireEvent.click(screen.getByRole("button", { name: "登录" }));
+
+    expect(await screen.findByText("用户名或密码不正确。")).toBeTruthy();
+    expect(screen.queryByText("当前密码不正确。")).toBeNull();
+  });
+
   it("routes a force-password-change identity to the required page", async () => {
     vi.spyOn(apiClient, "login_platform_user").mockResolvedValue(
       authenticationResponse(currentUser({ force_password_change: true })),

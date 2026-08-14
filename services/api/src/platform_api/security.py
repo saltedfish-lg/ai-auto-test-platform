@@ -105,9 +105,7 @@ class PasswordService:
             raise PasswordPolicyError("password length must be between 12 and 128")
         if password != password.strip() or not password.strip():
             raise PasswordPolicyError("password must not have leading or trailing whitespace")
-        if not any(char.isalpha() for char in password) or not any(
-            char.isdigit() for char in password
-        ):
+        if re.search(r"[A-Za-z]", password) is None or re.search(r"[0-9]", password) is None:
             raise PasswordPolicyError("password must contain a letter and a digit")
         if password.casefold() == username.casefold():
             raise PasswordPolicyError("password must differ from username")

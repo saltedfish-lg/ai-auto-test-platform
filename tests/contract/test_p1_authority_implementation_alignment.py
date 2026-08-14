@@ -2,10 +2,9 @@ from pathlib import Path
 
 import yaml
 
+from tools.current_facts import derive_current_facts, discover_migrations
+
 ROOT = Path(__file__).resolve().parents[2]
-import sys
-sys.path.insert(0, str(ROOT / "tools"))
-from current_facts import derive_current_facts, discover_migrations
 AUTHORITY = ROOT / "docs" / "authority"
 
 
@@ -79,7 +78,9 @@ def test_p1_migration_and_state_owner_alignment() -> None:
     facts = derive_current_facts(ROOT)
     assert [item["name"] for item in discover_migrations(AUTHORITY)] == facts["migration"]["files"]
     assert len(schema["tables"]) == facts["database"]["table_count"]
-    assert len(schema["table_classification"]["technical_table_names"]) == facts["database"]["technical_table_count"]
+    assert len(schema["table_classification"]["technical_table_names"]) == (
+        facts["database"]["technical_table_count"]
+    )
     auth_owners = owners["authentication_state_owners"]
     assert len(auth_owners) == 8
     assert any(item["semantic"] == "AUTH_SECURITY_AUDIT_IMMUTABILITY" for item in auth_owners)
@@ -94,9 +95,15 @@ def test_auth_implementation_status_matches_existing_implementation() -> None:
             encoding="utf-8"
         )
     )
-    design = yaml.safe_load((AUTHORITY / "编码权威事实/SYSTEM_DESIGN.yaml").read_text(encoding="utf-8"))
-    assert contract["metadata"]["implementation_status_source"] == "SYSTEM_DESIGN.runtime_gate_contract.implementation_status"
-    assert design["runtime_gate_contract"]["implementation_status"] == "IMPLEMENTED_PENDING_RUNTIME_VALIDATION"
+    design = yaml.safe_load(
+        (AUTHORITY / "编码权威事实/SYSTEM_DESIGN.yaml").read_text(encoding="utf-8")
+    )
+    assert contract["metadata"]["implementation_status_source"] == (
+        "SYSTEM_DESIGN.runtime_gate_contract.implementation_status"
+    )
+    assert design["runtime_gate_contract"]["implementation_status"] == (
+        "IMPLEMENTED_PENDING_RUNTIME_VALIDATION"
+    )
     assert contract["metadata"]["deferred_product_decisions"] == 0
     for relative in (
         "services/api/src/platform_api/auth_service.py",
@@ -142,9 +149,11 @@ def test_confirmed_p1_governance_items_have_no_placeholders_and_are_implemented(
     hmac_ring = contract["auth_hmac_key_ring"]
     assert hmac_ring["configuration"] == "ATP_AUTH_HMAC_MASTER_KEY_FILE"
     assert hmac_ring["format"] == "STRICT_JSON_RING"
-    service = (ROOT / "services/api/src/platform_api/auth_service.py").read_text(encoding="utf-8")
+    idempotency = (ROOT / "services/api/src/platform_api/idempotency.py").read_text(
+        encoding="utf-8"
+    )
     router = (ROOT / "services/api/src/platform_api/auth_router.py").read_text(encoding="utf-8")
     generated = (ROOT / "apps/web/src/generated/client.ts").read_text(encoding="utf-8")
-    assert "contract_version=2" in service or "contract_version = 2" in service
+    assert "contract_version=2" in idempotency or "contract_version = 2" in idempotency
     assert 'alias="Idempotency-Key"' in router
     assert "change_current_user_password" in generated and "Promise<void>" in generated

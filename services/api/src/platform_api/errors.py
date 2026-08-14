@@ -15,7 +15,7 @@ class ProblemDetails(BaseModel):
     status: int = Field(ge=400, le=599)
     code: str
     detail: str | None = None
-    correlation_id: str | None = None
+    correlation_id: str
     field_errors: list[dict[str, str]] | None = None
 
 
