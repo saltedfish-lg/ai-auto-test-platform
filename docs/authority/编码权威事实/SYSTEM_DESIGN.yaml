@@ -138,7 +138,7 @@ database_contract:
     browser:
       command: python tools/gates/auth_browser_gate.py
       status_name: AUTH_BROWSER_RUNTIME_GATE
-      historical_or_blocker_evidence: WINDOWS_NETWORK_SERVICE_LOOPBACK_EXEMPTION_REQUIRES_ADMINISTRATOR
+      historical_or_blocker_evidence: RESOLVED_BY_AUTH_BROWSER_RUNTIME_GATE_PASS_2026_08_14
       browser: REAL_CHROMIUM
       database_policy: 使用同一管理员连接创建独立认证Gate临时数据库，不得使用开发库
       current_status_source: SYSTEM_DESIGN.runtime_gate_contract.gates[AUTH_BROWSER_RUNTIME_GATE].status
@@ -234,7 +234,7 @@ release_gate:
 runtime_gate_contract:
   authority_owner: 编码权威事实/SYSTEM_DESIGN.yaml#runtime_gate_contract
   implementation_scope: P1_AUTH_RBAC_CURRENT_IMPLEMENTATION
-  implementation_status: IMPLEMENTED_PENDING_RUNTIME_VALIDATION
+  implementation_status: IMPLEMENTED_RUNTIME_VALIDATED
   platform_release_status: FULL_PLATFORM_IMPLEMENTATION_NOT_YET_EVALUATED
   truth_rule: 所有当前 Runtime Gate 状态只在本结构维护；其它 Authority/Agent/Skill 只能引用 gate_id/status_source，不得复制当前状态值。
   gates:
@@ -244,8 +244,17 @@ runtime_gate_contract:
     status: PASS_HISTORICAL_V3_TO_V7
   - gate_id: AUTH_BROWSER_RUNTIME_GATE
     scope: P1_AUTH_RBAC
-    blocker: WINDOWS_NETWORK_SERVICE_LOOPBACK_EXEMPTION_REQUIRES_ADMINISTRATOR
-    status: BLOCKED
+    command: python tools/gates/auth_browser_gate.py
+    status: PASS
+    last_execution_evidence:
+      result: PASS
+      task_id: P1-CLOSURE-EVIDENCE-FINALIZATION-20260814-01
+      mysql_version: 8.4.11
+      browser: chromium
+      browser_exit_code: 0
+      authentication_browser_closure: 1 passed
+      isolated_database_removed: true
+      runtime_secrets_removed: true
   - gate_id: FULL_SCHEMA_MYSQL84_RUNTIME_GATE
     scope: CURRENT_SCHEMA
     command: python tools/mysql84_gate.py --execute --evidence-output outputs/runtime-gates/mysql84-full-schema.json

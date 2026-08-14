@@ -561,7 +561,7 @@ def main() -> int:
         sd = _yaml_load((root / "编码权威事实/SYSTEM_DESIGN.yaml").read_text(encoding="utf-8"))
         runtime = sd.get("runtime_gate_contract", {})
         gates = {g.get("gate_id"): g for g in runtime.get("gates", []) if isinstance(g, dict)}
-        if runtime.get("implementation_status") != "IMPLEMENTED_PENDING_RUNTIME_VALIDATION":
+        if runtime.get("implementation_status") != "IMPLEMENTED_RUNTIME_VALIDATED":
             runtime_errors.append(f"implementation_status={runtime.get('implementation_status')}")
         full_gate = gates.get("FULL_SCHEMA_MYSQL84_RUNTIME_GATE", {})
         if full_gate.get("evaluation_mode") != "MIGRATION_HEAD_FRESHNESS":

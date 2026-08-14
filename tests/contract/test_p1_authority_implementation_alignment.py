@@ -102,7 +102,7 @@ def test_auth_implementation_status_matches_existing_implementation() -> None:
         "SYSTEM_DESIGN.runtime_gate_contract.implementation_status"
     )
     assert design["runtime_gate_contract"]["implementation_status"] == (
-        "IMPLEMENTED_PENDING_RUNTIME_VALIDATION"
+        "IMPLEMENTED_RUNTIME_VALIDATED"
     )
     assert contract["metadata"]["deferred_product_decisions"] == 0
     for relative in (
@@ -144,7 +144,7 @@ def test_confirmed_p1_governance_items_have_no_placeholders_and_are_implemented(
     for decision_id, selected_option in expected.items():
         assert decision_id in traceability
         assert selected_option in traceability
-    assert "GOV_P1_002_003_005 = IMPLEMENTED_PENDING_RUNTIME_VALIDATION" in traceability
+    assert "GOV_P1_002_003_005 = IMPLEMENTED_RUNTIME_VALIDATED" in traceability
 
     hmac_ring = contract["auth_hmac_key_ring"]
     assert hmac_ring["configuration"] == "ATP_AUTH_HMAC_MASTER_KEY_FILE"

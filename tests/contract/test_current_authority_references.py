@@ -44,7 +44,7 @@ def test_p1_traceability_uses_current_authority_only() -> None:
     assert AUTHORITY_MODEL in current
     assert "docs/authority/**" in current
     assert "READY_FOR_P1_IMPLEMENTATION" in current
-    assert "IMPLEMENTED_PENDING_RUNTIME_VALIDATION" in current
+    assert "IMPLEMENTED_RUNTIME_VALIDATED" in current
     assert "docs/baseline/" not in current
     assert not (ROOT / "docs/implementation/history").exists()
 

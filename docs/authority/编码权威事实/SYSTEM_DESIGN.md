@@ -13,7 +13,7 @@
 - 状态维度：124。
 - 数据库：85 张表；Migration：`V3__platform_contract_rebuild.sql → V4__rbac_seed_data.sql → V5__platform_authentication_contract.sql → V6__p1_auth_governance_closure.sql → V7__p1_remaining_authentication_closure.sql → V8__retire_platform_design_baseline_release.sql`。
 - RBAC：50 个权限点、12 个角色模板、600 条映射。
-- 认证实现状态：`IMPLEMENTED_PENDING_RUNTIME_VALIDATION`。
+- 认证实现状态：`IMPLEMENTED_RUNTIME_VALIDATED`。
 - 平台发布状态：`FULL_PLATFORM_IMPLEMENTATION_NOT_YET_EVALUATED`。
 - 权限解析：每个受保护请求实时读取关系型RBAC、项目职责和数据范围。
 
@@ -22,7 +22,7 @@
 |Gate|Status|Evidence/Blocker|
 |---|---|---|
 |AUTH_MYSQL_RUNTIME_GATE|PASS_HISTORICAL_V3_TO_V7|MySQL 8.4.11 authentication-specific V3→V7 runtime evidence; not current full-schema evidence.|
-|AUTH_BROWSER_RUNTIME_GATE|BLOCKED|WINDOWS_NETWORK_SERVICE_LOOPBACK_EXEMPTION_REQUIRES_ADMINISTRATOR|
+|AUTH_BROWSER_RUNTIME_GATE|PASS||
 |FULL_SCHEMA_MYSQL84_RUNTIME_GATE|PASS||
 |REAL_ACCEPTANCE_EVIDENCE|NOT_EVALUATED_FULL_PLATFORM_NOT_IMPLEMENTED||
 

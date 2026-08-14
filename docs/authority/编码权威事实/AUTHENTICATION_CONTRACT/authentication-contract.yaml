@@ -457,8 +457,8 @@ rbac_boundary:
 acceptance_contract:
   reused_range: ACC-R3-1602..1688
   test_range: CT-R3-1602..1688
-  status: SPECIFIED
-  evidence_status: NOT_STARTED
+  status: PASSED
+  evidence_status: VERIFIED
   required_coverage:
   - admin首次且仅一次初始化、保护与超级管理员绑定
   - RBAC Seed 幂等且行数必须与当前 permission/role/mapping 明细定义完全一致
