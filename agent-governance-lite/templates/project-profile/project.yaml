@@ -1,0 +1,7 @@
+schema_version: 1
+project:
+  name: replace-me
+  type: single-repo
+runtime:
+  use_legacy_domain_metadata: false
+  allow_no_gates: false

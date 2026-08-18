@@ -1,0 +1,11 @@
+schema_version: 1
+technology:
+  languages:
+    python:
+      paths: ["**/*.py"]
+      adapter: python
+  adapters:
+    python:
+      checks: [no_unresolved_todo, python_syntax]
+    generic:
+      checks: [no_unresolved_todo]

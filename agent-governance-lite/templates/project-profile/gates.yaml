@@ -1,0 +1,28 @@
+schema_version: 1
+gates:
+  app_test:
+    command:
+    - python
+    - -m
+    - pytest
+    - -q
+  code_quality_gate:
+    command:
+    - python
+    - tools/governance/code_quality_gate.py
+    - --root
+    - .
+    - --task-id
+    - '{task_id}'
+  governance_lite_validator:
+    command:
+    - python
+    - tools/governance/governance_lite_validator.py
+    - --root
+    - .
+  governance_contract_test:
+    command:
+    - python
+    - tools/governance/governance_contract_test.py
+    - --root
+    - .

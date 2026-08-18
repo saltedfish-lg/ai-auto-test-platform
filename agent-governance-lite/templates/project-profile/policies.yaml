@@ -1,0 +1,6 @@
+schema_version: 1
+policies:
+  request_domain_signals:
+    APP:
+    - application
+    - app

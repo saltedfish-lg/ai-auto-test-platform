@@ -1,0 +1,22 @@
+schema_version: 1
+domains:
+  APP:
+    kind: implementation
+    paths:
+    - src/**
+    gates:
+    - app_test
+  GOVERNANCE:
+    kind: infrastructure
+    paths:
+    - AGENTS.md
+    - .governance/**
+    - .agents/**
+    - .codex/**
+    - tools/governance/**
+    - agent-governance-lite/**
+    gates:
+    - governance_lite_validator
+    - governance_contract_test
+    reviewer_risks:
+    - HIGH_REGRESSION_RISK
