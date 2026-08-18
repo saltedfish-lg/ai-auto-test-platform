@@ -5,6 +5,8 @@ GOVERNANCE_TEST_GROUP = 'workspace'
 
 from pathlib import Path
 
+import pytest
+
 from tools.governance.git_readonly_adapter import read_git_summary
 from tools.governance.task_context import (
     load_context,
@@ -136,6 +138,27 @@ def test_governance_tmp_runtime_state_is_not_task_change(tmp_path: Path):
         finish(tmp_path, 'TMP', 'ABORTED')
 
 
+def test_workspace_baseline_uses_current_tracking_policy_for_both_sides(tmp_path: Path):
+    _profile(tmp_path)
+    policy_path = tmp_path / '.governance/workspace-path-policy.yaml'
+    policy_text = (Path(__file__).resolve().parents[2] / 'tools/governance/workspace-path-policy.yaml').read_text(
+        encoding='utf-8',
+    )
+    policy_path.write_text(policy_text.replace('    - .idea\n', ''), encoding='utf-8')
+    idea_file = tmp_path / '.idea/workspace.xml'
+    idea_file.parent.mkdir()
+    idea_file.write_text('<project/>\n', encoding='utf-8')
+    (tmp_path / 'src/a.py').write_text('x=1\n', encoding='utf-8')
+    start(tmp_path, 'POLICY-CHANGE', 'change tracking policy', ['src/a.py'])
+    try:
+        policy_path.write_text(policy_text, encoding='utf-8')
+        changed = set(workspace_changes_since_start(tmp_path, 'POLICY-CHANGE'))
+        assert '.governance/workspace-path-policy.yaml' in changed
+        assert '.idea/workspace.xml' not in changed
+    finally:
+        finish(tmp_path, 'POLICY-CHANGE', 'ABORTED')
+
+
 def test_gate_freshness_is_workspace_content_based_with_fake_git_directory(tmp_path: Path):
     _start(tmp_path, 'DIGEST')
     (tmp_path / '.git').mkdir()
@@ -205,9 +228,32 @@ def test_workspace_baseline_reports_unicode_added_modified_and_deleted(tmp_path:
 def test_task_start_baseline_does_not_hash_repository_files(tmp_path: Path, monkeypatch):
     from tools.governance import task_context
     _profile(tmp_path)
-    (tmp_path / 'src/a.py').write_text('x=1\n', encoding='utf-8')
+    content = b'x=1\n'
+    (tmp_path / 'src/a.py').write_bytes(content)
     monkeypatch.setattr(task_context, '_workspace_file_hash', lambda path: (_ for _ in ()).throw(AssertionError('baseline must not hash content')))
     path = task_context.save_workspace_snapshot(tmp_path, 'METADATAONLY')
     payload = __import__('json').loads(path.read_text(encoding='utf-8'))
-    assert payload['files']['src/a.py']['size'] == 4
+    assert payload['files']['src/a.py']['size'] == len(content)
     task_context.cleanup_task(tmp_path, 'METADATAONLY')
+
+
+@pytest.mark.parametrize(
+    ('task_id', 'original', 'changed'),
+    [
+        ('NEWLINE_LF', b'x=1\n', b'x=22\n'),
+        ('NEWLINE_CRLF', b'x=1\r\n', b'x=22\r\n'),
+    ],
+)
+def test_workspace_tracking_detects_changes_for_lf_and_crlf(
+    tmp_path: Path, task_id: str, original: bytes, changed: bytes,
+):
+    _profile(tmp_path)
+    target = tmp_path / 'src/a.py'
+    target.write_bytes(original)
+    start(tmp_path, task_id, 'change app', ['src/a.py'])
+    try:
+        target.write_bytes(changed)
+        records = {item['path']: item['change'] for item in workspace_change_records_since_start(tmp_path, task_id)}
+        assert records['src/a.py'] == 'MODIFIED'
+    finally:
+        finish(tmp_path, task_id, 'ABORTED')

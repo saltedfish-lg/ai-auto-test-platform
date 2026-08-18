@@ -163,12 +163,13 @@ def _metadata_owner(root: Path, meta: Path) -> tuple[str, bool]:
 def load_domain_metadata(root: Path) -> list[DomainRecord]:
     """Load the legacy distributed metadata format for backward compatibility."""
     root = root.resolve()
-    paths = set(root.rglob('.governance-domain.yaml')) | set(root.rglob('*.governance-domain.yaml'))
+    policy = load_policy(root)
+    paths = {
+        path for path in iter_policy_files(root, 'impact_scan', policy)
+        if path.name == '.governance-domain.yaml' or path.name.endswith('.governance-domain.yaml')
+    }
     records: list[DomainRecord] = []
     for meta in sorted(paths):
-        rel_meta = meta.relative_to(root).as_posix()
-        if not consumer_allows_relative(root, rel_meta, 'impact_scan', load_policy(root)):
-            continue
         try:
             raw = yaml.safe_load(meta.read_text(encoding='utf-8')) or {}
         except Exception:

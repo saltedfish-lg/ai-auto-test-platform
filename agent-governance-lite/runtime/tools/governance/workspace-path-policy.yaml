@@ -13,7 +13,9 @@ categories:
     - .mypy_cache
     - .ruff_cache
     - .git
+    - .idea
     - .venv
+    - venv
   CACHE:
     directory_names:
     - __pycache__

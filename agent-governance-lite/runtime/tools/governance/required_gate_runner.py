@@ -42,7 +42,26 @@ def _gate_env(root: Path) -> dict[str, str]:
         paths.append(current)
     if paths:
         env['PYTHONPATH'] = os.pathsep.join(paths)
+    # Gate reports are UTF-8 artifacts. Pin Python child streams to the same
+    # encoding so Windows' active code page cannot corrupt captured output.
+    env['PYTHONIOENCODING'] = 'utf-8'
     return env
+
+
+def _sanitized_captured_text(message: object, env: dict[str, str]) -> str:
+    credential_urls = tuple(
+        value for value in env.values()
+        if isinstance(value, str) and '://' in value and '@' in value
+    )
+    return sanitize_database_error(message, *credential_urls)
+
+
+def _captured_output_tail(message: object, env: dict[str, str], limit: int = 2000) -> str:
+    return _sanitized_captured_text(message, env)[-limit:]
+
+
+def _report_command(command: list[str], env: dict[str, str]) -> str:
+    return _sanitized_captured_text(' '.join(shlex.quote(str(x)) for x in command), env)
 
 
 def _nested(data: dict[str, Any], key: str) -> Any:
@@ -207,34 +226,46 @@ def run_required(root: Path, task_id: str, timeout: int = 600) -> dict[str, Any]
             })
             continue
         started = time.time()
+        gate_env = _gate_env(root)
         try:
-            proc = subprocess.run(cmd, cwd=root, text=True, capture_output=True, timeout=timeout, env=_gate_env(root))
+            proc = subprocess.run(
+                cmd,
+                cwd=root,
+                text=True,
+                encoding='utf-8',
+                errors='replace',
+                capture_output=True,
+                timeout=timeout,
+                env=gate_env,
+            )
+            stdout = proc.stdout or ''
+            stderr = proc.stderr or ''
             status = 'PASS' if proc.returncode == 0 else 'FAIL'
-            text = f'{proc.stdout}\n{proc.stderr}'
+            text = f'{stdout}\n{stderr}'
             if proc.returncode != 0 and ('BLOCKED' in text or 'ENVIRONMENT_UNAVAILABLE' in text or 'NOT_EXECUTED' in text):
                 status = 'BLOCKED'
             results.append({
                 'task_id': task_id, 'gate': gate, 'status': status,
                 'workspace_digest': gate_digest,
-                'command': ' '.join(shlex.quote(str(x)) for x in cmd), 'exit_code': proc.returncode,
+                'command': _report_command(cmd, gate_env), 'exit_code': proc.returncode,
                 'duration_ms': round((time.time() - started) * 1000),
-                'stdout_tail': sanitize_database_error(proc.stdout[-2000:]), 'stderr_tail': sanitize_database_error(proc.stderr[-2000:]),
+                'stdout_tail': _captured_output_tail(stdout, gate_env), 'stderr_tail': _captured_output_tail(stderr, gate_env),
             })
         except subprocess.TimeoutExpired as exc:
-            results.append({'task_id': task_id, 'gate': gate, 'status': 'TIMEOUT', 'reason': 'TIMEOUT', 'workspace_digest': gate_digest, 'command': ' '.join(map(str, cmd)), 'exit_code': None,
-                            'duration_ms': round((time.time() - started) * 1000), 'stderr_tail': sanitize_database_error(str(exc)[-2000:])})
+            results.append({'task_id': task_id, 'gate': gate, 'status': 'TIMEOUT', 'reason': 'TIMEOUT', 'workspace_digest': gate_digest, 'command': _report_command(cmd, gate_env), 'exit_code': None,
+                            'duration_ms': round((time.time() - started) * 1000), 'stderr_tail': _captured_output_tail(exc, gate_env)})
         except FileNotFoundError as exc:
-            results.append({'task_id': task_id, 'gate': gate, 'status': 'BLOCKED', 'reason': 'COMMAND_NOT_FOUND', 'workspace_digest': gate_digest, 'command': ' '.join(map(str, cmd)), 'exit_code': None,
-                            'duration_ms': round((time.time() - started) * 1000), 'stderr_tail': sanitize_database_error(str(exc)[-2000:])})
+            results.append({'task_id': task_id, 'gate': gate, 'status': 'BLOCKED', 'reason': 'COMMAND_NOT_FOUND', 'workspace_digest': gate_digest, 'command': _report_command(cmd, gate_env), 'exit_code': None,
+                            'duration_ms': round((time.time() - started) * 1000), 'stderr_tail': _captured_output_tail(exc, gate_env)})
         except PermissionError as exc:
-            results.append({'task_id': task_id, 'gate': gate, 'status': 'BLOCKED', 'reason': 'PERMISSION_ERROR', 'workspace_digest': gate_digest, 'command': ' '.join(map(str, cmd)), 'exit_code': None,
-                            'duration_ms': round((time.time() - started) * 1000), 'stderr_tail': sanitize_database_error(str(exc)[-2000:])})
+            results.append({'task_id': task_id, 'gate': gate, 'status': 'BLOCKED', 'reason': 'PERMISSION_ERROR', 'workspace_digest': gate_digest, 'command': _report_command(cmd, gate_env), 'exit_code': None,
+                            'duration_ms': round((time.time() - started) * 1000), 'stderr_tail': _captured_output_tail(exc, gate_env)})
         except OSError as exc:
-            results.append({'task_id': task_id, 'gate': gate, 'status': 'BLOCKED', 'reason': 'OS_EXECUTION_ERROR', 'workspace_digest': gate_digest, 'command': ' '.join(map(str, cmd)), 'exit_code': None,
-                            'duration_ms': round((time.time() - started) * 1000), 'stderr_tail': sanitize_database_error(str(exc)[-2000:])})
+            results.append({'task_id': task_id, 'gate': gate, 'status': 'BLOCKED', 'reason': 'OS_EXECUTION_ERROR', 'workspace_digest': gate_digest, 'command': _report_command(cmd, gate_env), 'exit_code': None,
+                            'duration_ms': round((time.time() - started) * 1000), 'stderr_tail': _captured_output_tail(exc, gate_env)})
         except subprocess.SubprocessError as exc:
-            results.append({'task_id': task_id, 'gate': gate, 'status': 'FAIL', 'reason': 'SUBPROCESS_ERROR', 'workspace_digest': gate_digest, 'command': ' '.join(map(str, cmd)), 'exit_code': None,
-                            'duration_ms': round((time.time() - started) * 1000), 'stderr_tail': sanitize_database_error(str(exc)[-2000:])})
+            results.append({'task_id': task_id, 'gate': gate, 'status': 'FAIL', 'reason': 'SUBPROCESS_ERROR', 'workspace_digest': gate_digest, 'command': _report_command(cmd, gate_env), 'exit_code': None,
+                            'duration_ms': round((time.time() - started) * 1000), 'stderr_tail': _captured_output_tail(exc, gate_env)})
 
     # A workspace mutation during gate execution invalidates the whole run.
     current_digest = workspace_state_digest(root, affected_files)

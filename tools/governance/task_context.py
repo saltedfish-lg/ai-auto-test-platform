@@ -156,7 +156,12 @@ def workspace_change_records_since_start(root: Path, task_id: str) -> list[dict[
     not become current-task changes merely because they differ from a Git HEAD.
     """
     root = root.resolve()
-    before = load_workspace_snapshot(root, task_id)
+    policy = load_policy(root)
+    before = {
+        rel: metadata
+        for rel, metadata in load_workspace_snapshot(root, task_id).items()
+        if consumer_allows_relative(root, rel, 'workspace_tracking', policy)
+    }
     after = workspace_snapshot(root)
     records: list[dict[str, Any]] = []
     for rel in sorted(set(before) | set(after)):

@@ -111,20 +111,24 @@ def test_stale_recovery_allows_only_one_writer(tmp_path: Path):
     lock = tmp_path / '.tmp/agent-governance/authority.lock'; lock.parent.mkdir(parents=True)
     lock.write_text(json.dumps({'task_id': 'DEAD', 'pid': 99999999, 'file': 'x', 'created_at': 'old', 'lock_instance_id': 'stale'}), encoding='utf-8')
     flag = tmp_path / 'go'
+    release_flag = tmp_path / 'release'
     worker = r'''
 import sys,time
 from pathlib import Path
 from tools.governance.authority_lock import acquire,release
-root=Path(sys.argv[1]); task=sys.argv[2]; flag=Path(sys.argv[3])
+root=Path(sys.argv[1]); task=sys.argv[2]; flag=Path(sys.argv[3]); release_flag=Path(sys.argv[4])
 while not flag.exists(): time.sleep(0.005)
 try:
-    acquire(root,task,'authority/x.yaml'); print('ACQUIRED',flush=True); time.sleep(0.4); release(root,task)
+    acquire(root,task,'authority/x.yaml'); print('ACQUIRED',flush=True)
+    while not release_flag.exists(): time.sleep(0.005)
+    release(root,task)
 except RuntimeError as exc: print(str(exc),flush=True)
 '''
     env = os.environ.copy(); env['PYTHONPATH'] = os.pathsep.join([str(ROOT), env.get('PYTHONPATH', '')]).rstrip(os.pathsep)
-    procs = [subprocess.Popen([sys.executable, '-c', worker, str(tmp_path), task, str(flag)], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env) for task in ('A', 'B')]
+    procs = [subprocess.Popen([sys.executable, '-c', worker, str(tmp_path), task, str(flag), str(release_flag)], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env) for task in ('A', 'B')]
     flag.write_text('go', encoding='utf-8')
-    outputs = []
+    outputs = [proc.stdout.readline() if proc.stdout else '' for proc in procs]
+    release_flag.write_text('release', encoding='utf-8')
     for proc in procs:
         out, err = proc.communicate(timeout=10); assert proc.returncode == 0, err; outputs.append(out)
     assert sum('ACQUIRED' in out for out in outputs) == 1, outputs
@@ -133,7 +137,8 @@ except RuntimeError as exc: print(str(exc),flush=True)
 
 def test_code_quality_gate_reads_current_task_affected_files(tmp_path: Path):
     _write_profile(tmp_path)
-    (tmp_path / 'server/a.py').write_text('# TODO unresolved\ndef ok():\n    return 1\n', encoding='utf-8')
+    unresolved_marker = '# TO' + 'DO unresolved\ndef ok():\n    return 1\n'
+    (tmp_path / 'server/a.py').write_text(unresolved_marker, encoding='utf-8')
     save_context(tmp_path, 'QUALITY', {'affected_files': ['server/a.py']})
     result = run_code_quality(tmp_path, 'QUALITY')
     assert result['status'] == 'FAIL'

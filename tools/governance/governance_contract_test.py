@@ -11,14 +11,43 @@ import argparse
 import ast
 import json
 import os
+import signal
 import subprocess
 import sys
 import tempfile
 import shutil
+import time
 from pathlib import Path
 from typing import Any
 
 import yaml
+
+from .workspace_path_policy import classify_relative_path, consumer_categories, is_link_or_reparse, load_policy
+
+
+CONTRACT_GROUP_TIMEOUT_ENV = 'ATP_GOVERNANCE_CONTRACT_GROUP_TIMEOUT_SECONDS'
+DEFAULT_CONTRACT_GROUP_TIMEOUT_SECONDS = 600
+MIN_CONTRACT_GROUP_TIMEOUT_SECONDS = 1
+MAX_CONTRACT_GROUP_TIMEOUT_SECONDS = 1800
+
+
+def contract_group_timeout_seconds(environ: dict[str, str] | None = None) -> int:
+    raw = (environ if environ is not None else os.environ).get(CONTRACT_GROUP_TIMEOUT_ENV)
+    if raw is None or not raw.strip():
+        return DEFAULT_CONTRACT_GROUP_TIMEOUT_SECONDS
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise ValueError('GOVERNANCE_CONTRACT_GROUP_TIMEOUT_INVALID') from exc
+    return _validated_contract_group_timeout_seconds(value)
+
+
+def _validated_contract_group_timeout_seconds(value: int) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError('GOVERNANCE_CONTRACT_GROUP_TIMEOUT_INVALID')
+    if not MIN_CONTRACT_GROUP_TIMEOUT_SECONDS <= value <= MAX_CONTRACT_GROUP_TIMEOUT_SECONDS:
+        raise ValueError('GOVERNANCE_CONTRACT_GROUP_TIMEOUT_OUT_OF_RANGE')
+    return value
 
 
 def discover_governance_tests(root: Path) -> list[Path]:
@@ -260,60 +289,140 @@ def _execution_group(path: Path) -> str:
     return 'default'
 
 
-def _clean_group_runtime_state(root: Path) -> None:
-    """Reset only transient Governance state between test-file subprocesses in a group."""
-    for rel in ('.tmp/agent-governance', '.pytest_cache'):
-        path = root / rel
-        if path.exists() or path.is_symlink():
-            if path.is_symlink() or path.is_file():
-                path.unlink(missing_ok=True)
-            else:
-                shutil.rmtree(path, ignore_errors=True)
+def _contract_copy_ignore(root: Path):
+    root = root.resolve()
+    policy = load_policy(root)
+    included = consumer_categories(policy, 'delivery_package')
+
+    def ignore(directory: str, names: list[str]) -> list[str]:
+        current = Path(directory)
+        ignored: list[str] = []
+        for name in names:
+            candidate = current / name
+            rel = candidate.relative_to(root)
+            probe = rel / '__policy_probe__' if candidate.is_dir() else rel
+            if is_link_or_reparse(candidate) or classify_relative_path(probe, policy) not in included:
+                ignored.append(name)
+        return ignored
+
+    return ignore
 
 
-def _run_isolated_group(root: Path, group: str, paths: list[Path]) -> dict[str, Any]:
-    """Copy the workspace once and execute one stable capability group in one pytest process."""
-    rel_paths = [path.relative_to(root).as_posix() for path in paths]
-    ignore = shutil.ignore_patterns(
-        '.git', '.tmp', '__pycache__', '.pytest_cache', '.venv',
-        'node_modules', 'dist', 'build', 'coverage', 'test-results', '.runtime',
-    )
+def _terminate_process_tree(proc: subprocess.Popen[Any]) -> str | None:
+    if proc.poll() is not None:
+        return None
+    error: str | None = None
+    if os.name == 'nt':
+        terminated = subprocess.run(
+            ['taskkill', '/PID', str(proc.pid), '/T', '/F'],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            timeout=10, check=False,
+        )
+        if terminated.returncode != 0:
+            error = f'TASKKILL_EXIT_{terminated.returncode}'
+    else:
+        try:
+            os.killpg(proc.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
     try:
-        with tempfile.TemporaryDirectory(prefix=f'governance-contract-{group}-') as temp:
-            isolated_root = Path(temp) / 'project'
-            shutil.copytree(root, isolated_root, ignore=ignore)
-            log_dir = Path(temp) / 'logs'; log_dir.mkdir(exist_ok=True)
-            stdout_path = log_dir / 'pytest.out'; stderr_path = log_dir / 'pytest.err'
+        proc.wait(timeout=2)
+    except subprocess.TimeoutExpired:
+        if os.name != 'nt':
             try:
-                with stdout_path.open('w', encoding='utf-8') as stdout_fh, stderr_path.open('w', encoding='utf-8') as stderr_fh:
-                    env = os.environ.copy()
-                    # Governance contracts use pytest core only. Disabling unrelated auto-loaded
-                    # third-party plugins keeps nested isolated runs deterministic and lightweight.
-                    env['PYTEST_DISABLE_PLUGIN_AUTOLOAD'] = '1'
-                    proc = subprocess.run(
-                        [sys.executable, '-m', 'pytest', '-q', *rel_paths],
-                        cwd=isolated_root, stdout=stdout_fh, stderr=stderr_fh, text=True, env=env,
-                        timeout=180, check=False,
-                    )
-                result: dict[str, Any] = {
-                    'group': group,
-                    'files': rel_paths,
-                    'workspace_copies': 1,
-                    'pytest_processes': 1,
-                    'exit_code': int(proc.returncode),
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+        else:
+            proc.kill()
+        proc.wait(timeout=5)
+    if os.name != 'nt':
+        try:
+            os.killpg(proc.pid, 0)
+        except ProcessLookupError:
+            pass
+        else:
+            os.killpg(proc.pid, signal.SIGKILL)
+            error = 'PROCESS_GROUP_REQUIRED_SIGKILL'
+    return error
+
+
+def _remove_isolated_workspace(path: Path) -> str | None:
+    last_error: OSError | None = None
+    for _ in range(3):
+        try:
+            shutil.rmtree(path)
+            return None
+        except FileNotFoundError:
+            return None
+        except OSError as exc:
+            last_error = exc
+            time.sleep(0.1)
+    return str(last_error) if last_error else 'UNKNOWN_CLEANUP_ERROR'
+
+
+def _run_isolated_group(root: Path, group: str, paths: list[Path], timeout_seconds: int) -> dict[str, Any]:
+    """Copy the workspace once and execute one stable capability group in one pytest process."""
+    timeout_seconds = _validated_contract_group_timeout_seconds(timeout_seconds)
+    rel_paths = [path.relative_to(root).as_posix() for path in paths]
+    temp_path = Path(tempfile.mkdtemp(prefix=f'governance-contract-{group}-'))
+    result: dict[str, Any]
+    try:
+        isolated_root = temp_path / 'project'
+        shutil.copytree(root, isolated_root, ignore=_contract_copy_ignore(root))
+        log_dir = temp_path / 'logs'; log_dir.mkdir(exist_ok=True)
+        stdout_path = log_dir / 'pytest.out'; stderr_path = log_dir / 'pytest.err'
+        with stdout_path.open('w', encoding='utf-8') as stdout_fh, stderr_path.open('w', encoding='utf-8') as stderr_fh:
+            env = os.environ.copy()
+            env['PYTEST_DISABLE_PLUGIN_AUTOLOAD'] = '1'
+            env['PYTHONIOENCODING'] = 'utf-8'
+            env['PYTHONUTF8'] = '1'
+            popen_options: dict[str, Any] = {'start_new_session': True} if os.name != 'nt' else {
+                'creationflags': getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0),
+            }
+            proc = subprocess.Popen(
+                [sys.executable, '-m', 'pytest', '-q', *rel_paths],
+                cwd=isolated_root, stdout=stdout_fh, stderr=stderr_fh, env=env,
+                **popen_options,
+            )
+            try:
+                return_code = proc.wait(timeout=timeout_seconds)
+            except subprocess.TimeoutExpired:
+                termination_error = _terminate_process_tree(proc)
+                result = {
+                    'group': group, 'files': rel_paths, 'workspace_copies': 1,
+                    'pytest_processes': 1, 'timeout_seconds': timeout_seconds,
+                    'exit_code': 124, 'reason': 'TIMEOUT',
                 }
-                if proc.returncode != 0:
+                if termination_error:
+                    result['process_tree_cleanup_error'] = termination_error
+            else:
+                result = {
+                    'group': group, 'files': rel_paths, 'workspace_copies': 1,
+                    'pytest_processes': 1, 'timeout_seconds': timeout_seconds,
+                    'exit_code': int(return_code),
+                }
+                if return_code != 0:
                     result['stdout_tail'] = stdout_path.read_text(encoding='utf-8', errors='replace')[-6000:]
                     result['stderr_tail'] = stderr_path.read_text(encoding='utf-8', errors='replace')[-6000:]
-                return result
-            except subprocess.TimeoutExpired:
-                return {'group': group, 'files': rel_paths, 'workspace_copies': 1, 'pytest_processes': 1, 'exit_code': 124, 'reason': 'TIMEOUT'}
     except Exception as exc:
-        return {'group': group, 'files': rel_paths, 'workspace_copies': 0, 'pytest_processes': 0, 'exit_code': 125, 'reason': f'ISOLATION_ERROR: {exc}'}
+        result = {
+            'group': group, 'files': rel_paths, 'workspace_copies': 0,
+            'pytest_processes': 0, 'timeout_seconds': timeout_seconds,
+            'exit_code': 125, 'reason': f'ISOLATION_ERROR: {exc}',
+        }
+    cleanup_error = _remove_isolated_workspace(temp_path)
+    if cleanup_error:
+        result['cleanup_error'] = cleanup_error
+        if result.get('reason') != 'TIMEOUT':
+            result['exit_code'] = 125
+            result['reason'] = 'ISOLATION_CLEANUP_ERROR'
+    return result
 
 
-def run(root: Path) -> dict[str, Any]:
+def run(root: Path, timeout_seconds: int | None = None) -> dict[str, Any]:
     root = root.resolve()
+    timeout_seconds = contract_group_timeout_seconds() if timeout_seconds is None else _validated_contract_group_timeout_seconds(timeout_seconds)
     tests = discover_governance_tests(root)
     if not tests:
         return _standalone_self_contract(root)
@@ -328,7 +437,7 @@ def run(root: Path) -> dict[str, Any]:
     # sequentially because process/packaging/concurrency suites are I/O heavy; grouping
     # already removes the dominant copy amplification without sacrificing isolation.
     max_workers = 1
-    group_results = [_run_isolated_group(root, name, paths) for name, paths in ordered_groups]
+    group_results = [_run_isolated_group(root, name, paths, timeout_seconds) for name, paths in ordered_groups]
     overall = 0 if all(item.get('exit_code') == 0 for item in group_results) else 1
     rel = [p.relative_to(root).as_posix() for p in tests]
     return {
@@ -338,6 +447,7 @@ def run(root: Path) -> dict[str, Any]:
         'test_file_count': len(rel),
         'worker_count': max_workers,
         'group_count': len(group_results),
+        'group_timeout_seconds': timeout_seconds,
         'workspace_copy_count': sum(int(item.get('workspace_copies', 0)) for item in group_results),
         'legacy_workspace_copy_count': len(rel),
         'exit_code': overall,
@@ -352,12 +462,20 @@ def main() -> int:
     parser.add_argument('--group', default=None, help=argparse.SUPPRESS)
     args = parser.parse_args()
     root = Path(args.root).resolve()
+    try:
+        timeout_seconds = contract_group_timeout_seconds()
+    except ValueError as exc:
+        print(json.dumps({'status': 'FAIL', 'reason': str(exc), 'environment_variable': CONTRACT_GROUP_TIMEOUT_ENV}, ensure_ascii=False, indent=2))
+        return 1
     if args.group:
         tests = [p for p in discover_governance_tests(root) if _execution_group(p) == args.group]
-        result = _run_isolated_group(root, args.group, tests) if tests else {'group': args.group, 'files': [], 'workspace_copies': 0, 'exit_code': 125, 'reason': 'UNKNOWN_GROUP'}
+        result = _run_isolated_group(root, args.group, tests, timeout_seconds) if tests else {
+            'group': args.group, 'files': [], 'workspace_copies': 0,
+            'timeout_seconds': timeout_seconds, 'exit_code': 125, 'reason': 'UNKNOWN_GROUP',
+        }
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0 if result.get('exit_code') == 0 else 1
-    result = run(root)
+    result = run(root, timeout_seconds)
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0 if result['status'] == 'PASS' else 1
 

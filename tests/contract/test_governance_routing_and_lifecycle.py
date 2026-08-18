@@ -3,6 +3,7 @@ from __future__ import annotations
 GOVERNANCE_TEST_GROUP = 'routing'
 
 import shutil
+import sys
 from pathlib import Path
 import pytest
 
@@ -15,6 +16,7 @@ from tools.governance.required_gate_runner import (
 )
 from tools.governance.task_context import cleanup_task, load_context, save_context, task_dir
 from tools.governance.task_governance import lifecycle, start, finish
+from tools.governance.workspace_path_policy import iter_policy_files, load_policy
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -225,21 +227,41 @@ def test_all_governance_domain_metadata_files_are_loaded():
     loaded = {r.meta_path for r in load_domain_metadata(ROOT)}
     on_disk = {
         p.relative_to(ROOT).as_posix()
-        for p in ROOT.rglob('*.governance-domain.yaml')
-        if '.tmp' not in p.parts
-    } | {
-        p.relative_to(ROOT).as_posix()
-        for p in ROOT.rglob('.governance-domain.yaml')
-        if '.tmp' not in p.parts
+        for p in iter_policy_files(ROOT, 'impact_scan', load_policy(ROOT))
+        if p.name == '.governance-domain.yaml' or p.name.endswith('.governance-domain.yaml')
     }
     assert on_disk == loaded
+
+
+@pytest.mark.parametrize('excluded_root', ['node_modules', '.venv', 'venv', 'dist', 'build', 'coverage', '.tmp', '.idea'])
+def test_governance_domain_metadata_discovery_excludes_dependencies(tmp_path: Path, excluded_root: str):
+    policy_dir = tmp_path / '.governance'
+    policy_dir.mkdir()
+    shutil.copy2(ROOT / '.governance/workspace-path-policy.yaml', policy_dir / 'workspace-path-policy.yaml')
+    project_meta = tmp_path / 'src/nested/.governance-domain.yaml'
+    dependency_meta = tmp_path / excluded_root / 'dependency/.governance-domain.yaml'
+    for path in (project_meta, dependency_meta):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text('domains: [GOVERNANCE]\n', encoding='utf-8')
+    loaded = {record.meta_path for record in load_domain_metadata(tmp_path)}
+    assert 'src/nested/.governance-domain.yaml' in loaded
+    assert f'{excluded_root}/dependency/.governance-domain.yaml' not in loaded
+
+
+def _create_symlink_or_skip(link: Path, target: Path) -> None:
+    try:
+        link.symlink_to(target, target_is_directory=True)
+    except OSError as exc:
+        if sys.platform == 'win32' and getattr(exc, 'winerror', None) == 1314:
+            pytest.skip('Windows symlink privilege unavailable')
+        raise
 
 
 def test_task_temp_root_symlink_escape_is_rejected(tmp_path: Path):
     outside = tmp_path / 'outside-dir'
     outside.mkdir()
     (tmp_path / '.tmp').mkdir()
-    (tmp_path / '.tmp/agent-governance').symlink_to(outside, target_is_directory=True)
+    _create_symlink_or_skip(tmp_path / '.tmp/agent-governance', outside)
     with pytest.raises(ValueError, match='TASK_PATH_OUTSIDE_GOVERNANCE_TMP'):
         task_dir(tmp_path, 'SAFE')
 

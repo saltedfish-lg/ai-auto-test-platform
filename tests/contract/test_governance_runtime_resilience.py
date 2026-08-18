@@ -4,6 +4,7 @@ GOVERNANCE_TEST_GROUP = 'runtime-resilience'
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -11,10 +12,18 @@ from pathlib import Path
 
 import pytest
 
-from tools.governance import required_gate_runner
+from tools.governance import governance_contract_test as contract_test_module, required_gate_runner
+from tools.governance.governance_contract_test import (
+    DEFAULT_CONTRACT_GROUP_TIMEOUT_SECONDS,
+    MAX_CONTRACT_GROUP_TIMEOUT_SECONDS,
+    MIN_CONTRACT_GROUP_TIMEOUT_SECONDS,
+    _run_isolated_group,
+    contract_group_timeout_seconds,
+)
 from tools.governance.authority_lock import acquire, cleanup_stale as cleanup_stale_lock, current_owner, release
 from tools.governance.impact_scan import load_domain_metadata, scan
 from tools.governance.incremental_closure import expand
+from tools.governance.process_identity import NOT_RUNNING, inspect_process
 from tools.governance.project_profile import gate_config
 from tools.governance.required_gate_runner import ENGINEERING_GATE_COMMANDS, formal_gate_ids, runtime_supported_formal_gate_ids
 from tools.governance.task_context import cleanup_other_tasks, cleanup_task, governance_tmp_root, save_context, save_workspace_snapshot, task_dir
@@ -197,12 +206,13 @@ def test_code_quality_gate_has_normal_high_risk_trigger_path():
     assert 'code_quality_gate' in out['required_gates']
 
 
-def _save_gate_context(tmp_path: Path, task_id: str, gate: str) -> None:
+def _save_gate_context(tmp_path: Path, task_id: str, gate: str, command: list[str] | None = None) -> None:
     profile = tmp_path / '.governance'
     profile.mkdir(parents=True, exist_ok=True)
-    command = '[definitely-not-a-real-executable-xyz]' if gate == 'missing_gate' else '[python, -c, "print(1)"]'
+    if command is None:
+        command = ['definitely-not-a-real-executable-xyz'] if gate == 'missing_gate' else [sys.executable, '-c', 'print(1)']
     (profile / 'gates.yaml').write_text(
-        f'schema_version: 1\ngates:\n  {gate}:\n    command: {command}\n',
+        f'schema_version: 1\ngates:\n  {gate}:\n    command: {json.dumps(command, ensure_ascii=False)}\n',
         encoding='utf-8',
     )
     save_workspace_snapshot(tmp_path, task_id)
@@ -237,6 +247,137 @@ def test_gate_runner_reports_timeout_structurally(tmp_path: Path, monkeypatch: p
     report = required_gate_runner.run_required(tmp_path, 'TIME', timeout=1)
     assert report['results'][0]['status'] == 'TIMEOUT'
     assert report['results'][0]['reason'] == 'TIMEOUT'
+
+
+def test_gate_runner_captures_utf8_stdout_stderr_and_nonzero_exit(tmp_path: Path):
+    command = [
+        sys.executable,
+        '-c',
+        "import sys; print('标准输出中文'); print('标准错误中文', file=sys.stderr); raise SystemExit(7)",
+    ]
+    _save_gate_context(tmp_path, 'UTF8_OUTPUT', 'unicode_gate', command)
+    report = required_gate_runner.run_required(tmp_path, 'UTF8_OUTPUT', timeout=5)
+    result = report['results'][0]
+    assert result['status'] == 'FAIL'
+    assert result['exit_code'] == 7
+    assert '标准输出中文' in result['stdout_tail']
+    assert '标准错误中文' in result['stderr_tail']
+
+
+def test_gate_runner_handles_empty_utf8_streams(tmp_path: Path):
+    command = [sys.executable, '-c', 'raise SystemExit(0)']
+    _save_gate_context(tmp_path, 'UTF8_EMPTY', 'empty_gate', command)
+    report = required_gate_runner.run_required(tmp_path, 'UTF8_EMPTY', timeout=5)
+    result = report['results'][0]
+    assert result['status'] == 'PASS'
+    assert result['stdout_tail'] == ''
+    assert result['stderr_tail'] == ''
+
+
+def test_gate_runner_redacts_database_secret_before_tail_truncation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    password = 'super-secret-boundary-password'
+    database_url = f'mysql+pymysql://user:{password}@localhost:3306/app'
+    command = [sys.executable, '-c', f"print({database_url!r} + 'x' * 1990)"]
+    monkeypatch.setenv('TEST_DATABASE_URL', database_url)
+    _save_gate_context(tmp_path, 'UTF8_REDACTION', 'redaction_gate', command)
+    report = required_gate_runner.run_required(tmp_path, 'UTF8_REDACTION', timeout=5)
+    result = report['results'][0]
+    assert result['status'] == 'PASS'
+    assert password not in result['stdout_tail']
+    assert password not in json.dumps(report, ensure_ascii=False)
+
+
+def test_governance_contract_group_timeout_configuration_is_bounded():
+    assert DEFAULT_CONTRACT_GROUP_TIMEOUT_SECONDS == 600
+    assert DEFAULT_CONTRACT_GROUP_TIMEOUT_SECONDS > 180
+    assert contract_group_timeout_seconds({}) == DEFAULT_CONTRACT_GROUP_TIMEOUT_SECONDS
+    assert contract_group_timeout_seconds({'ATP_GOVERNANCE_CONTRACT_GROUP_TIMEOUT_SECONDS': str(MIN_CONTRACT_GROUP_TIMEOUT_SECONDS)}) == MIN_CONTRACT_GROUP_TIMEOUT_SECONDS
+    assert contract_group_timeout_seconds({'ATP_GOVERNANCE_CONTRACT_GROUP_TIMEOUT_SECONDS': str(MAX_CONTRACT_GROUP_TIMEOUT_SECONDS)}) == MAX_CONTRACT_GROUP_TIMEOUT_SECONDS
+    for raw in ('invalid', str(MIN_CONTRACT_GROUP_TIMEOUT_SECONDS - 1), str(MAX_CONTRACT_GROUP_TIMEOUT_SECONDS + 1)):
+        with pytest.raises(ValueError):
+            contract_group_timeout_seconds({'ATP_GOVERNANCE_CONTRACT_GROUP_TIMEOUT_SECONDS': raw})
+
+
+def test_governance_contract_group_timeout_is_reported_as_failure(tmp_path: Path):
+    test_file = tmp_path / 'tests/contract/test_governance_timeout_probe.py'
+    test_file.parent.mkdir(parents=True)
+    test_file.write_text('import time\ndef test_slow():\n    time.sleep(2)\n', encoding='utf-8')
+    result = _run_isolated_group(tmp_path, 'timeout-probe', [test_file], timeout_seconds=1)
+    assert result['group'] == 'timeout-probe'
+    assert result['timeout_seconds'] == 1
+    assert result['exit_code'] == 124, result
+    assert result['reason'] == 'TIMEOUT'
+
+
+def test_governance_contract_copy_uses_workspace_path_policy(tmp_path: Path):
+    policy_dir = tmp_path / '.governance'
+    policy_dir.mkdir()
+    shutil.copy2(ROOT / '.governance/workspace-path-policy.yaml', policy_dir / 'workspace-path-policy.yaml')
+    test_file = tmp_path / 'tests/contract/test_governance_copy_policy_probe.py'
+    test_file.parent.mkdir(parents=True)
+    excluded = ['.env', '.env.local', 'secret.pem', 'secret.key', '.idea/workspace.xml', 'venv/noise.py', 'outputs/result.json', 'playwright-report/index.html']
+    for rel in excluded:
+        path = tmp_path / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text('secret-or-runtime-output', encoding='utf-8')
+    (tmp_path / '.env.example').write_text('SAFE_PLACEHOLDER=\n', encoding='utf-8')
+    test_file.write_text(
+        'from pathlib import Path\n'
+        f'EXCLUDED = {excluded!r}\n'
+        'def test_copy_policy():\n'
+        '    assert Path(".env.example").is_file()\n'
+        '    assert not [path for path in EXCLUDED if Path(path).exists()]\n',
+        encoding='utf-8',
+    )
+    result = _run_isolated_group(tmp_path, 'copy-policy-probe', [test_file], timeout_seconds=10)
+    assert result['exit_code'] == 0, result
+
+
+def test_governance_contract_copy_rejects_reparse_points(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    policy_dir = tmp_path / '.governance'
+    policy_dir.mkdir()
+    shutil.copy2(ROOT / '.governance/workspace-path-policy.yaml', policy_dir / 'workspace-path-policy.yaml')
+    candidate = tmp_path / 'junction-like-directory'
+    candidate.mkdir()
+    monkeypatch.setattr(contract_test_module, 'is_link_or_reparse', lambda path: path == candidate)
+    ignored = contract_test_module._contract_copy_ignore(tmp_path)(str(tmp_path), [candidate.name])
+    assert ignored == [candidate.name]
+
+
+def test_governance_contract_timeout_terminates_child_process_tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    pid_file = tmp_path / 'child.pid'
+    test_file = tmp_path / 'tests/contract/test_governance_process_tree_probe.py'
+    test_file.parent.mkdir(parents=True)
+    test_file.write_text(
+        'import os, subprocess, sys, time\n'
+        'from pathlib import Path\n'
+        'child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])\n'
+        'Path(os.environ["ATP_CONTRACT_CHILD_PID_FILE"]).write_text(str(child.pid), encoding="utf-8")\n'
+        'def test_child_process_tree():\n'
+        '    time.sleep(30)\n',
+        encoding='utf-8',
+    )
+    monkeypatch.setenv('ATP_CONTRACT_CHILD_PID_FILE', str(pid_file))
+    result = _run_isolated_group(tmp_path, 'process-tree-probe', [test_file], timeout_seconds=5)
+    assert result['exit_code'] == 124
+    child_pid = int(pid_file.read_text(encoding='utf-8'))
+    deadline = time.time() + 5
+    while time.time() < deadline and inspect_process(child_pid).status != NOT_RUNNING:
+        time.sleep(0.05)
+    assert inspect_process(child_pid).status == NOT_RUNNING
+
+
+def test_standalone_runtime_mirrors_current_governance_capabilities():
+    runtime = ROOT / 'agent-governance-lite/runtime/tools/governance'
+    for name in (
+        'required_gate_runner.py',
+        'governance_contract_test.py',
+        'impact_scan.py',
+        'task_context.py',
+        'workspace_path_policy.py',
+        'workspace-path-policy.yaml',
+    ):
+        assert (ROOT / 'tools/governance' / name).read_bytes() == (runtime / name).read_bytes()
 
 
 def test_task_lifecycle_documentation_has_one_formal_start_entry():

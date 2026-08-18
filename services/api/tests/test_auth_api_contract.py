@@ -76,7 +76,9 @@ def test_exact_user_governance_operations_are_registered(key_ring_file: Path) ->
     }
 
 
-def test_invalid_configured_key_ring_fails_app_creation() -> None:
+def test_invalid_configured_key_ring_fails_app_creation(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("ATP_JWT_KEY_RING_FILE", raising=False)
+    monkeypatch.delenv("ATP_AUTH_HMAC_MASTER_KEY_FILE", raising=False)
     directory = Path.cwd() / ".runtime" / f"invalid-ring-{secrets.token_hex(8)}"
     directory.mkdir(parents=True, exist_ok=False)
     try:

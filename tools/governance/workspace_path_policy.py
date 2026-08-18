@@ -94,7 +94,7 @@ def consumer_allows_relative(root: Path, rel: str | Path, consumer: str, policy:
     return classify_relative_path(rel, policy) in consumer_categories(policy, consumer)
 
 
-def _is_link_or_reparse(path: Path) -> bool:
+def is_link_or_reparse(path: Path) -> bool:
     try:
         stat_result = os.lstat(path)
     except OSError:
@@ -111,7 +111,7 @@ def iter_policy_files(root: Path, consumer: str, policy: dict | None = None) -> 
         kept: list[str] = []
         for name in sorted(dirnames):
             candidate = current / name
-            if _is_link_or_reparse(candidate):
+            if is_link_or_reparse(candidate):
                 continue
             rel_probe = (candidate.relative_to(root) / "__policy_probe__")
             if classify_relative_path(rel_probe, policy) in include:
@@ -119,7 +119,7 @@ def iter_policy_files(root: Path, consumer: str, policy: dict | None = None) -> 
         dirnames[:] = kept
         for name in sorted(filenames):
             path = current / name
-            if _is_link_or_reparse(path):
+            if is_link_or_reparse(path):
                 continue
             rel = path.relative_to(root)
             if classify_relative_path(rel, policy) in include:
@@ -135,7 +135,7 @@ def forbidden_persisted_paths(root: Path, policy: dict | None = None) -> list[st
         current = Path(dirpath)
         for name in list(dirnames):
             candidate = current / name
-            if _is_link_or_reparse(candidate):
+            if is_link_or_reparse(candidate):
                 dirnames.remove(name)
                 continue
             rel_probe = candidate.relative_to(root) / "__policy_probe__"

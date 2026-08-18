@@ -19,7 +19,7 @@ def test_validator_failure_propagates_as_overall_failure(tmp_path):
     script=tmp_path/'failed_validator.py'; script.write_text('raise SystemExit(7)\n',encoding='utf-8'); report=_module().execute_validators(root=tmp_path,commands={'failed_validator':[str(script)]},env=dict(os.environ),timeout_seconds=1); assert report['status']=='FAIL'; assert report['summary']['failed']==1; assert report['steps'][0]['status']=='FAIL'
 def test_dev_authority_delegates_to_canonical_aggregator(monkeypatch):
     from tools import dev
-    calls=[]; monkeypatch.setattr(dev,'run',lambda command,**_kwargs:calls.append(tuple(str(x) for x in command))); dev.authority(); assert len(calls)==1; assert calls[0][0]==sys.executable; assert calls[0][1].endswith('docs/authority/validation/run_all_validation.py')
+    calls=[]; monkeypatch.setattr(dev,'run',lambda command,**_kwargs:calls.append(tuple(str(x) for x in command))); dev.authority(); assert len(calls)==1; assert calls[0][0]==sys.executable; assert Path(calls[0][1]).resolve() == (ROOT / 'docs/authority/validation/run_all_validation.py').resolve()
 
 
 def test_validator_execution_error_propagates_as_overall_failure(tmp_path, monkeypatch):
