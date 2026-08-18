@@ -125,3 +125,8 @@ python tools/governance/task_governance.py finish --root . --task-id TASK-001 --
 `Task Governance Start → Workspace Baseline → Single Full Impact Scan → Shared Task Context → Product Decision Check → Implementation → Workspace Change Detection → Incremental Closure → Final Reconciliation → Required Gates → Workspace Digest / Gate Freshness → SUCCESS Finish → Optional Git Read-only Review Summary → User Review / Git Commit`
 
 Workspace 是 Task 变更事实源，Task Context 是治理状态源，Authority 是规则事实源，Gate Result 是验证事实源。Git 只是可选只读辅助信息源，不参与 affected-files、Impact、Required Gates、Product Decision、Freshness、Reconciliation 或 SUCCESS 判断。项目没有 Git、Git 命令失败或不可执行时 Governance 仍必须正常完成。用户需要最终 Review 信息时可单独运行 `python tools/governance/git_readonly_adapter.py --root .`。Agent/Runtime 不得自动 add、commit、push、reset、checkout、switch、merge、rebase、stash、tag、cherry-pick 或 clean；提交由用户人工 Review 后自行执行。
+
+
+## Local process ownership safety
+
+Process liveness checks are platform-aware. Windows never uses `os.kill(pid, 0)` as a liveness probe. Lock ownership uses PID plus process creation identity where available; inaccessible or unverifiable process identity is handled conservatively rather than deleting a lock.

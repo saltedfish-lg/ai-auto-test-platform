@@ -32,6 +32,7 @@ from .project_profile import (
     runtime_config,
 )
 from .required_gate_runner import formal_gate_ids, formal_gates_for_conditions
+from .process_identity import current_process_identity
 from .task_context import context_path, save_context, validate_task_id
 from .workspace_path_policy import consumer_allows_relative, iter_policy_files, load_policy
 
@@ -751,8 +752,11 @@ def scan(root: Path, task_id: str, request: str, seed_files: list[str] | None = 
         scope_level = 'DOMAIN'
 
     derived = recompute_metadata(root, request, affected, request_domains if scope_level == 'DOMAIN' else ())
+    effective_pid = int(task_owner_pid if task_owner_pid is not None else os.getpid())
+    process_identity = current_process_identity(effective_pid)
     payload: dict[str, Any] = {
-        'schema_version': 5, 'request': request, 'task_pid': int(task_owner_pid if task_owner_pid is not None else os.getpid()),
+        'schema_version': 5, 'request': request, 'task_pid': effective_pid,
+        'task_process_creation_time': process_identity.creation_time,
         'task_status': 'ACTIVE', 'task_started_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
         'scan_mode': 'SINGLE_FULL_IMPACT_SCAN', 'seed_candidates': seeds, 'scope_level': scope_level,
         'changed_files_source': 'LOCAL_WORKSPACE_BASELINE', 'metadata_finalized_after_scope': True,

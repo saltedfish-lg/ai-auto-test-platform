@@ -18,7 +18,7 @@ def test_release_deletes_lock(tmp_path:Path):
  save_context(tmp_path,'a',{}); p=acquire(tmp_path,'a','docs/authority/x.yaml'); assert p.exists(); release(tmp_path,'a'); assert not p.exists(); cleanup_task(tmp_path,'a')
 
 def test_lock_payload_is_minimal(tmp_path:Path):
- save_context(tmp_path,'a',{}); p=acquire(tmp_path,'a','docs/authority/x.yaml'); d=json.loads(p.read_text()); assert set(d)=={'task_id','pid','file','created_at','lock_instance_id'}; release(tmp_path,'a'); cleanup_task(tmp_path,'a')
+ save_context(tmp_path,'a',{}); p=acquire(tmp_path,'a','docs/authority/x.yaml'); d=json.loads(p.read_text()); assert set(d)=={'task_id','pid','process_creation_time','file','created_at','lock_instance_id'}; release(tmp_path,'a'); cleanup_task(tmp_path,'a')
 
 def test_stale_dead_pid_lock_is_cleaned(tmp_path:Path):
  save_context(tmp_path,'dead',{}); p=tmp_path/'.tmp/agent-governance/authority.lock'; p.parent.mkdir(parents=True,exist_ok=True); p.write_text(json.dumps({'task_id':'dead','pid':99999999,'file':'x','created_at':'old'}))

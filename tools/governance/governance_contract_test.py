@@ -158,6 +158,18 @@ def _standalone_semantic_probe_errors() -> list[str]:
             try: holder.wait(timeout=2)
             except subprocess.TimeoutExpired: holder.kill(); holder.wait(timeout=2)
 
+
+    # Process identity safety: probe current process without changing state and detect reuse.
+    from .process_identity import PID_REUSED, RUNNING_MATCH, current_process_identity, inspect_process
+    identity = current_process_identity()
+    current = inspect_process(identity.pid, identity.creation_time)
+    if identity.creation_time and current.status != RUNNING_MATCH:
+        errors.append(f'process identity live-owner probe failed: {current.status}')
+    if identity.creation_time:
+        reused = inspect_process(identity.pid, 'synthetic-different-creation-identity')
+        if reused.status != PID_REUSED:
+            errors.append(f'process identity PID reuse probe failed: {reused.status}')
+
     # Workspace writer ownership: one writer, readonly reviewer may coexist.
     with tempfile.TemporaryDirectory() as temp:
         probe = Path(temp); _write_self_probe_profile(probe); (probe / 'src/a.py').write_text('x=1\n', encoding='utf-8')
@@ -190,7 +202,7 @@ def _standalone_self_contract(root: Path) -> dict[str, Any]:
         'governance_lite_validator.py', 'governance_contract_test.py', 'impact_scan.py',
         'incremental_closure.py', 'final_reconciliation.py', 'required_gate_runner.py',
         'task_governance.py', 'project_profile.py', 'task_context.py', 'authority_lock.py',
-        'workspace_writer_lock.py', 'workspace_path_policy.py', 'workspace-path-policy.yaml', 'git_readonly_adapter.py',
+        'workspace_writer_lock.py', 'process_identity.py', 'workspace_path_policy.py', 'workspace-path-policy.yaml', 'git_readonly_adapter.py',
     }
     missing = sorted(name for name in required_runtime if not (runtime / name).is_file())
     errors.extend(f'missing runtime file: {name}' for name in missing)
@@ -230,7 +242,7 @@ def _standalone_self_contract(root: Path) -> dict[str, Any]:
     return {
         'status': 'PASS' if not errors else 'FAIL',
         'mode': 'STANDALONE_SELF_CONTRACT',
-        'test_count': 8,
+        'test_count': 9,
         'errors': errors,
     }
 

@@ -215,3 +215,8 @@ python tools/dev.py auth-browser-gate
 python tools/package_delivery.py create --output ..\ai-auto-test-platform-delivery.zip
 python tools/package_delivery.py verify --archive ..\ai-auto-test-platform-delivery.zip
 ```
+
+
+### Local process ownership safety
+
+Governance lock/task owner checks are platform-aware. On Windows, GovernanceLite never uses `os.kill(pid, 0)` as a liveness probe. Where available, lock ownership is matched with `PID + process creation identity` so a reused PID is not treated as the original owner. A query that cannot establish identity is handled conservatively and does not authorize stale-lock deletion.

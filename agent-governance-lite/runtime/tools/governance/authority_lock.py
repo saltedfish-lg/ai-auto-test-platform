@@ -16,6 +16,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
+from .process_identity import current_process_identity, owner_is_mechanically_stale
 from .task_context import governance_tmp_root, validate_task_id
 
 LOCK_NAME = 'authority.lock'
@@ -29,16 +30,6 @@ def _lock_path(root: Path) -> Path:
 def _recovery_path(root: Path) -> Path:
     return governance_tmp_root(root.resolve()) / RECOVERY_LOCK_NAME
 
-
-def _pid_alive(pid: int) -> bool:
-    try:
-        os.kill(pid, 0); return True
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    except OSError:
-        return False
 
 
 def _read_owner(path: Path) -> dict:
@@ -105,7 +96,9 @@ def cleanup_stale(root: Path) -> bool:
             pid = int(owner.get('pid', -1))
         except (TypeError, ValueError):
             return False
-        if pid > 0 and _pid_alive(pid):
+        expected_creation = owner.get('process_creation_time')
+        stale, _ = owner_is_mechanically_stale(pid, str(expected_creation) if expected_creation else None)
+        if not stale:
             return False
         # Revalidate immediately before unlink. If the path was replaced, leave it alone.
         current = _read_owner(path); current_identity = _identity(path)
@@ -123,9 +116,11 @@ def acquire(root: Path, task_id: str, file: str) -> Path:
     """Acquire the one local Authority writer lock with atomic create semantics."""
     root = root.resolve(); validate_task_id(task_id); base = governance_tmp_root(root); base.mkdir(parents=True, exist_ok=True); path = _lock_path(root)
     cleanup_stale(root)
+    process_identity = current_process_identity()
     payload = {
         'task_id': task_id,
-        'pid': os.getpid(),
+        'pid': process_identity.pid,
+        'process_creation_time': process_identity.creation_time,
         'file': file,
         'created_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
         'lock_instance_id': uuid.uuid4().hex,

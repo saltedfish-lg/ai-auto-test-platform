@@ -11,6 +11,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
+from .process_identity import current_process_identity, owner_is_mechanically_stale
 from .workspace_path_policy import consumer_allows_relative, iter_policy_files, load_policy, policy_digest
 
 TMP_REL = Path('.tmp/agent-governance')
@@ -271,17 +272,6 @@ def cleanup_task(root: Path, task_id: str) -> None:
         _safe_remove_task_path(root, path)
 
 
-def _pid_alive(pid: int) -> bool:
-    try:
-        os.kill(pid, 0)
-        return True
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    except OSError:
-        return False
-
 
 def _task_metadata(path: Path) -> dict[str, Any] | None:
     ctx = path / 'context.json'
@@ -321,7 +311,9 @@ def _mechanically_stale_task(root: Path, path: Path, current_task_id: str | None
         return False
     if pid <= 0:
         return False
-    return not _pid_alive(pid)
+    expected_creation = metadata.get('task_process_creation_time')
+    stale, _ = owner_is_mechanically_stale(pid, str(expected_creation) if expected_creation else None)
+    return stale
 
 
 def cleanup_other_tasks(root: Path, current_task_id: str) -> list[str]:
@@ -371,7 +363,9 @@ def task_session(root: Path, task_id: str, initial: dict[str, Any] | None = None
     if initial is not None:
         initial = dict(initial)
         initial.setdefault('workspace_change_source', 'LOCAL_WORKSPACE_BASELINE')
-        initial.setdefault('task_pid', os.getpid())
+        task_pid = int(initial.setdefault('task_pid', os.getpid()))
+        identity = current_process_identity(task_pid)
+        initial.setdefault('task_process_creation_time', identity.creation_time)
         initial.setdefault('task_status', 'ACTIVE')
         initial.setdefault('task_started_at', time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()))
         save_context(root, task_id, initial)

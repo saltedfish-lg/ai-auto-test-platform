@@ -16,6 +16,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
+from .process_identity import current_process_identity, owner_is_mechanically_stale
 from .task_context import governance_tmp_root, validate_task_id
 
 LOCK_NAME = 'workspace-writer.lock'
@@ -29,17 +30,6 @@ def _lock_path(root: Path) -> Path:
 def _recovery_path(root: Path) -> Path:
     return governance_tmp_root(root.resolve()) / RECOVERY_LOCK_NAME
 
-
-def _pid_alive(pid: int) -> bool:
-    try:
-        os.kill(pid, 0)
-        return True
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    except OSError:
-        return False
 
 
 def _read_owner(path: Path) -> dict:
@@ -108,7 +98,9 @@ def cleanup_stale(root: Path) -> bool:
             pid = int(owner.get('pid', -1))
         except (TypeError, ValueError):
             return False
-        if pid > 0 and _pid_alive(pid):
+        expected_creation = owner.get('process_creation_time')
+        stale, _ = owner_is_mechanically_stale(pid, str(expected_creation) if expected_creation else None)
+        if not stale:
             return False
         current = _read_owner(path)
         current_identity = _identity(path)
@@ -130,9 +122,12 @@ def acquire(root: Path, task_id: str, owner_pid: int | None = None) -> Path:
     base.mkdir(parents=True, exist_ok=True)
     path = _lock_path(root)
     cleanup_stale(root)
+    effective_pid = int(owner_pid if owner_pid is not None else os.getpid())
+    process_identity = current_process_identity(effective_pid)
     payload = {
         'task_id': task_id,
-        'pid': int(owner_pid if owner_pid is not None else os.getpid()),
+        'pid': process_identity.pid,
+        'process_creation_time': process_identity.creation_time,
         'created_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
         'workspace': str(root),
         'mode': 'writer',

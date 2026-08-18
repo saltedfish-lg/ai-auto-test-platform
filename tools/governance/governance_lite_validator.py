@@ -367,6 +367,7 @@ def _standalone_errors(root: Path) -> list[str]:
             'tools/governance/governance_contract_test.py',
             'tools/governance/git_readonly_adapter.py',
             'tools/governance/workspace_writer_lock.py',
+            'tools/governance/process_identity.py',
             'tools/governance/workspace-path-policy.yaml',
         ]
         for rel in installed_required:
@@ -391,6 +392,7 @@ def _standalone_errors(root: Path) -> list[str]:
         'runtime/tools/governance/governance_contract_test.py',
         'runtime/tools/governance/git_readonly_adapter.py',
         'runtime/tools/governance/workspace_writer_lock.py',
+        'runtime/tools/governance/process_identity.py',
         'runtime/tools/governance/workspace-path-policy.yaml',
         *[f'templates/project-profile/.governance/{name}' for name in ('project.yaml','domains.yaml','authorities.yaml','gates.yaml','reviewers.yaml','policies.yaml','technology.yaml','workspace-path-policy.yaml')],
     ]
@@ -431,6 +433,15 @@ def _standalone_errors(root: Path) -> list[str]:
     runtime_text = '\n'.join(p.read_text(encoding='utf-8', errors='ignore') for p in (base / 'runtime/tools/governance').glob('*.py') if p.name != 'governance_lite_validator.py')
     if 'docs/authority/' in runtime_text:
         errors.append('agent-governance-lite/runtime: fixed docs/authority path remains')
+    for runtime_dir, label in ((root / 'tools/governance', 'tools/governance'), (base / 'runtime/tools/governance', 'agent-governance-lite/runtime')):
+        if not runtime_dir.is_dir():
+            continue
+        for candidate in runtime_dir.glob('*.py'):
+            if candidate.name in {'process_identity.py', 'governance_lite_validator.py'}:
+                continue
+            text = candidate.read_text(encoding='utf-8', errors='ignore')
+            if 'os.kill(' in text:
+                errors.append(f'{label}/{candidate.name}: direct os.kill liveness probe forbidden; use process_identity')
     req = (base / 'requirements.txt').read_text(encoding='utf-8', errors='ignore')
     if 'PyYAML' not in req: errors.append('agent-governance-lite/requirements.txt: PyYAML missing')
     snippet = (base / 'templates/AGENTS.governance-snippet.md').read_text(encoding='utf-8', errors='ignore')
