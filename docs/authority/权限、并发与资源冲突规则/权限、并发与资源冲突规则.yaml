@@ -5,10 +5,10 @@ metadata:
   document_status: ACTIVE_CONTROLLED_MUTABLE_AUTHORITY
   generation_date: '2026-08-05'
   independence_status: INDEPENDENT_SELF_CONTAINED
-  coding_readiness: READY_FOR_P1_IMPLEMENTATION
+  coding_readiness: IMPLEMENTATION_INPUT_READY
   scope: 权限、数据范围、并发、锁、租约、Runner资源、冲突处置、异常回收、幂等、审计和可观测性
   responsibility_boundary: 提供规则级统一当前事实源，不定义数据库物理表、OpenAPI完整参数、中间件实现、具体容量和超时数值
-  platform_code_readiness: READY_FOR_P1_IMPLEMENTATION
+  platform_code_readiness: IMPLEMENTATION_INPUT_READY
   canonical_format: YAML
   projection_formats:
   - Markdown
@@ -21,7 +21,7 @@ metadata:
   runtime_dependency_on_historical_sources: false
   version: 1.4.2-auth-contract-completion
   status: CURRENT_AUTHORITY_CONTRACT
-  code_readiness: READY_FOR_P1_IMPLEMENTATION
+  code_readiness: IMPLEMENTATION_INPUT_READY
   last_modified_at: '2026-08-06T17:13:00+08:00'
   pending_user_decisions: 0
 independence_declaration:
@@ -402,7 +402,7 @@ external_subjects:
 - subject_id: EXT-CODEX
   subject_name: Codex编码环境
   subject_type: EXTERNAL_DEVELOPMENT_ENVIRONMENT
-  relationship: 仅在当前Living Authority通过正式validators且code_readiness=READY_FOR_P1_IMPLEMENTATION时生成实现；历史BSL-CONSISTENCY-REPAIR-1.0.0仅作为建立阶段provenance，不构成当前运行依赖。
+  relationship: 仅在当前Living Authority通过正式validators且code_readiness=IMPLEMENTATION_INPUT_READY时生成实现；历史BSL-CONSISTENCY-REPAIR-1.0.0仅作为建立阶段provenance，不构成当前运行依赖。
   external_responsibility: 当前包不得直接编码；FULL准入时严格按当前 Living Authority 实现，不自行补充业务规则。
   failure_boundary: 非FULL准入、未获准输入、旧基线或hash漂移必须阻断代码生成。
   platform_menu_access: false
@@ -16267,7 +16267,7 @@ test_readiness:
     - 等待/超时控制
     - 用户提示和审计
 coding_readiness:
-  status: READY_FOR_P1_IMPLEMENTATION
+  status: IMPLEMENTATION_INPUT_READY
   direct_code_input: true
   needs_refinement_record_count: 0
   open_decision_ids: []
@@ -16421,7 +16421,6 @@ p1_authentication_rbac_boundary:
 current_governance_state:
   current_authority_model: SINGLE_LIVING_AUTHORITY
   current_authority: CURRENT_LIVING_AUTHORITY
-  governance_status: P1_AUTHENTICATION_CONTRACT_COMPLETED
-  code_readiness: READY_FOR_P1_IMPLEMENTATION
-  implementation_status_source: 编码权威事实/SYSTEM_DESIGN.yaml#runtime_gate_contract.implementation_status
+  governance_status: AUTHENTICATION_CONTRACT_DEFINED
+  code_readiness: IMPLEMENTATION_INPUT_READY
   pending_user_decisions: 0

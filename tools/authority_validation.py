@@ -15,7 +15,7 @@ AUTHORITY_VALIDATOR_COMMANDS = OrderedDict(
         ("validate_all", ["docs/authority/validation/validate_all.py", "--root", "docs/authority"]),
         ("validate_governance", ["docs/authority/validation/validate_governance.py", "--root", "docs/authority"]),
         ("validate_auth_contract", ["docs/authority/validation/validate_auth_contract.py", "--root", "docs/authority"]),
-        ("authority_projection_check", ["tools/authority_projection.py", "check"]),
+        ("validate_acceptance_evidence", ["docs/authority/validation/validate_acceptance_evidence.py", "--root", "docs/authority"]),        ("authority_projection_check", ["tools/authority_projection.py", "check"]),
         ("current_facts_check", ["tools/current_facts.py", "check"]),
         ("authority_referential_integrity", ["tools/authority_referential_integrity.py", "check"]),
         ("openapi_client_check", ["tools/openapi_client.py", "check"]),

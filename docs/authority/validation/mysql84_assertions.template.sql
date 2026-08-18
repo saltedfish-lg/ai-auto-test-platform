@@ -19,16 +19,16 @@ BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.tables
     WHERE table_schema=DATABASE() AND table_name='atp_auth_source_rate_limit' AND table_type='BASE TABLE'
-  ) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='V7 table atp_auth_source_rate_limit missing';
+  ) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='required auth source-rate-limit table missing';
   END IF;
   IF (SELECT COUNT(*) FROM information_schema.columns
       WHERE table_schema=DATABASE() AND table_name='atp_idempotency_record'
         AND column_name IN ('contract_version','principal_id','completed_at')) <> 3 THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='V7 idempotency compatibility columns missing';
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='required idempotency compatibility columns missing';
   END IF;
   IF EXISTS (SELECT 1 FROM atp_idempotency_record WHERE idempotency_key='FULL_SCHEMA_GATE_LEGACY_V1')
      AND NOT EXISTS (SELECT 1 FROM atp_idempotency_record WHERE idempotency_key='FULL_SCHEMA_GATE_LEGACY_V1' AND contract_version=1 AND principal_id IS NULL AND completed_at IS NULL) THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='V7 failed to preserve pre-V7 idempotency row compatibility';
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='legacy-upgrade boundary failed to preserve idempotency compatibility';
   END IF;
   IF (SELECT column_name FROM information_schema.key_column_usage
       WHERE table_schema=DATABASE() AND table_name='atp_credential_revision' AND constraint_name='PRIMARY'

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the current authentication gate in an isolated MySQL 8.4 database."""
+"""Run the authentication MySQL gate with dynamically discovered current migrations."""
 
 from __future__ import annotations
 
@@ -11,29 +11,39 @@ import subprocess
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
-import pymysql  # type: ignore[import-untyped]
-from pymysql.constants import CLIENT  # type: ignore[import-untyped]
 from sqlalchemy.engine import URL, make_url
 
-ROOT = Path(__file__).resolve().parents[2]
+_BOOTSTRAP_ROOT = Path(__file__).resolve().parents[2]
+if str(_BOOTSTRAP_ROOT) not in sys.path:
+    sys.path.insert(0, str(_BOOTSTRAP_ROOT))
+from tools._bootstrap import ensure_repo_root_on_path  # noqa: E402
+ROOT = ensure_repo_root_on_path(__file__)
+from tools.current_facts import discover_migrations  # noqa: E402
+from tools.environment import get_env, load_project_environment, project_environment  # noqa: E402
+from tools.governance.migration_registry import migration_for_capability  # noqa: E402
+from tools.governance.runtime_gate_result import finalize_runtime_result, runtime_result_base  # noqa: E402
+
 AUTHORITY_ROOT = ROOT / "docs" / "authority"
 DATABASE_PREFIX = "ai_auto_test_platform_gate_auth_"
 ADMIN_URL_ENV = "ATP_MYSQL_ADMIN_URL"
 DATABASE_URL_ENV = "ATP_DATABASE_URL"
 GATE_STATUS_NAME = "AUTH_MYSQL_RUNTIME_GATE"
-SUPPORTED_MYSQL_PREFIX = "8.4."
-MIGRATION_CANDIDATES = (
-    "V3__platform_contract_rebuild.sql",
-    "V4__rbac_seed_data.sql",
-    "V5__platform_authentication_contract.sql",
-    "V6__p1_auth_governance_closure.sql",
-    "V7__p1_remaining_authentication_closure.sql",
-)
+SUPPORTED_MYSQL_SERIES = "8.4"
 
 
 class GateBlocked(RuntimeError):
-    """Represent a safe, non-secret environment blocker for a runtime Gate."""
+    """Represent a safe, non-secret environment blocker for a runtime gate."""
+
+
+def _pymysql():
+    try:
+        import pymysql  # type: ignore[import-untyped]
+        from pymysql.constants import CLIENT  # type: ignore[import-untyped]
+    except ModuleNotFoundError as exc:
+        raise GateBlocked("PYMYSQL_NOT_INSTALLED") from exc
+    return pymysql, CLIENT
 
 
 def _resolve_authority() -> Path:
@@ -42,19 +52,17 @@ def _resolve_authority() -> Path:
     return AUTHORITY_ROOT
 
 
+def _migrations(authority: Path) -> list[dict[str, Any]]:
+    return discover_migrations(authority)
+
+
 def _migration_names(authority: Path) -> tuple[str, ...]:
-    migrations = tuple(
-        name for name in MIGRATION_CANDIDATES if len(list(authority.rglob(name))) == 1
-    )
-    if migrations != MIGRATION_CANDIDATES:
-        raise RuntimeError(
-            "current authority must contain the V3/V4/V5/V6/V7 migration chain exactly once"
-        )
-    return migrations
+    """Compatibility helper: values are discovered, never coded as a permanent chain."""
+    return tuple(item["name"] for item in _migrations(authority))
 
 
 def _admin_url() -> URL:
-    raw_url = os.getenv(ADMIN_URL_ENV)
+    raw_url = get_env(ADMIN_URL_ENV, root=ROOT)
     if not raw_url:
         raise GateBlocked(f"{ADMIN_URL_ENV} is required")
     try:
@@ -66,7 +74,8 @@ def _admin_url() -> URL:
     return url
 
 
-def _connection(database: str | None = None) -> pymysql.Connection:
+def _connection(database: str | None = None):
+    pymysql, client = _pymysql()
     url = _admin_url()
     try:
         return pymysql.connect(
@@ -77,18 +86,16 @@ def _connection(database: str | None = None) -> pymysql.Connection:
             database=database,
             charset="utf8mb4",
             autocommit=True,
-            client_flag=CLIENT.MULTI_STATEMENTS,
+            client_flag=client.MULTI_STATEMENTS,
         )
     except pymysql.MySQLError:
         raise GateBlocked(f"cannot connect to MySQL at {url.host}:{url.port or 3306}") from None
 
 
 def _migration_path(authority: Path, name: str) -> Path:
-    matches = list(authority.rglob(name))
+    matches = [item["path"] for item in _migrations(authority) if item["name"] == name]
     if len(matches) != 1:
-        raise RuntimeError(
-            f"expected one current-authority migration named {name}, found {len(matches)}"
-        )
+        raise RuntimeError(f"expected one current-authority migration named {name}, found {len(matches)}")
     return matches[0]
 
 
@@ -100,25 +107,22 @@ def _execute_script(database: str, path: Path) -> None:
             pass
 
 
-def _seed_v6_legacy_idempotency_record(database: str) -> None:
-    """Materialize a pre-V7 row so the gate proves additive legacy upgrade semantics."""
+def _seed_legacy_idempotency_record(database: str) -> None:
+    """Materialize the canonical pre-boundary row used by the legacy-upgrade probe."""
     with _connection(database) as connection, connection.cursor() as cursor:
         cursor.execute(
             "INSERT INTO atp_idempotency_record "
-            "(idempotency_key, operation_id, request_hash, response_status, "
-            "response_json, expires_at) "
+            "(idempotency_key, operation_id, request_hash, response_status, response_json, expires_at) "
             "VALUES (%s, %s, %s, 200, NULL, DATE_ADD(NOW(6), INTERVAL 1 DAY))",
             ("AUTH_GATE_LEGACY_V1", "legacy_gate", "0" * 64),
         )
 
 
 def _test_database_url(database: str) -> str:
-    url = _admin_url().set(database=database)
-    return url.render_as_string(hide_password=False)
+    return _admin_url().set(database=database).render_as_string(hide_password=False)
 
 
 def _new_database_name(scope: str = "mysql") -> str:
-    """Create a concurrency-safe database name within the governed prefix."""
     suffix = datetime.now(UTC).strftime("%Y%m%d%H%M%S") + secrets.token_hex(4)
     database = f"{DATABASE_PREFIX}{scope}_{suffix}"
     if len(database) > 64 or not database.startswith(DATABASE_PREFIX):
@@ -127,35 +131,51 @@ def _new_database_name(scope: str = "mysql") -> str:
 
 
 def _drop_isolated_database(database: str) -> None:
-    """Drop only a database created inside the governed authentication Gate namespace."""
     if not database.startswith(DATABASE_PREFIX):
-        raise RuntimeError(
-            "refusing to remove a database outside the authentication Gate namespace"
-        )
+        raise RuntimeError("refusing to remove a database outside the authentication Gate namespace")
     with _connection() as connection, connection.cursor() as cursor:
         cursor.execute(f"DROP DATABASE IF EXISTS `{database}`")
 
 
-def _emit_result(payload: dict[str, object]) -> None:
-    print(json.dumps(payload, ensure_ascii=False))
+def _write_result(payload: dict[str, Any], output: Path | None) -> None:
+    finalize_runtime_result(payload, root=ROOT)
+    raw = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+    if output:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(raw, encoding="utf-8")
+    print(raw)
 
 
 def main() -> int:
+    load_project_environment(root=ROOT)
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.parse_args()
+    parser.add_argument("--result-output", type=Path)
+    args = parser.parse_args()
     authority = _resolve_authority()
-    migrations = _migration_names(authority)
-    if not os.getenv(ADMIN_URL_ENV):
-        _emit_result(
-            {
-                GATE_STATUS_NAME: "BLOCKED",
-                "blocker": f"{ADMIN_URL_ENV} is required",
-                "admin_url": "NOT_SET",
-                "mysql_version": "UNKNOWN",
-                "migration_order": list(migrations),
-                "isolated_database_removed": False,
-            }
-        )
+    migrations = _migrations(authority)
+    migration_names = [item["name"] for item in migrations]
+    base = runtime_result_base(
+        ROOT,
+        gate_id=GATE_STATUS_NAME,
+        gate_source=Path(__file__),
+        gate_capabilities=["MYSQL_RUNTIME", "AUTHENTICATION_RUNTIME", "ISOLATED_DATABASE_CLEANUP"],
+    )
+    base.update({
+        "migration_identity": {"files": migration_names},
+        "runtime_versions": {"mysql": "UNKNOWN"},
+        "checks": {"migration_apply": "NOT_RUN", "authentication_tests": "NOT_RUN", "cleanup": "NOT_RUN"},
+        "cleanup_status": {"temporary_database_removed": False, "success": False},
+    })
+
+    if not get_env(ADMIN_URL_ENV, root=ROOT):
+        base.update({
+            "result": "BLOCKED",
+            "exit_code": 2,
+            "blocker": f"{ADMIN_URL_ENV} is required",
+            "checks": {"migration_apply": "NOT_RUN", "authentication_tests": "NOT_RUN", "cleanup": "NOT_APPLICABLE"},
+            "cleanup_status": {"temporary_database_removed": True, "success": True},
+        })
+        _write_result(base, args.result_output)
         return 2
 
     database = _new_database_name()
@@ -163,52 +183,40 @@ def main() -> int:
     test_exit: int | None = None
     created = False
     removed = False
-    status = "FAIL"
+    result = "FAIL"
     blocker: str | None = None
     error_type: str | None = None
     exit_code = 1
-    admin_host = "UNKNOWN"
-    admin_port = 3306
     try:
-        admin_url = _admin_url()
-        admin_host = str(admin_url.host)
-        admin_port = admin_url.port or 3306
         with _connection() as connection, connection.cursor() as cursor:
             cursor.execute("SELECT VERSION()")
             version = str(cursor.fetchone()[0])
-            if not version.startswith(SUPPORTED_MYSQL_PREFIX):
-                raise GateBlocked(f"MySQL 8.4 is required; detected {version}")
-            cursor.execute(
-                f"CREATE DATABASE `{database}` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci"
-            )
+            if not version.startswith(SUPPORTED_MYSQL_SERIES + ".") and version != SUPPORTED_MYSQL_SERIES:
+                raise GateBlocked(f"MySQL {SUPPORTED_MYSQL_SERIES}.x is required; detected {version}")
+            cursor.execute(f"CREATE DATABASE `{database}` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci")
             created = True
-        for migration in migrations:
-            if migration == "V7__p1_remaining_authentication_closure.sql":
-                _seed_v6_legacy_idempotency_record(database)
-            _execute_script(database, _migration_path(authority, migration))
-        environment = os.environ.copy()
+        legacy_boundary = migration_for_capability(migrations, authority, "LEGACY_UPGRADE_FIXTURE_BOUNDARY")
+        for item in migrations:
+            if item["name"] == legacy_boundary["name"]:
+                _seed_legacy_idempotency_record(database)
+            _execute_script(database, item["path"])
+        base["checks"]["migration_apply"] = "PASS"
+        environment = project_environment(root=ROOT)
         environment[DATABASE_URL_ENV] = _test_database_url(database)
         completed = subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "pytest",
-                "tests/integration/test_p1_auth_mysql.py",
-                "-q",
-            ],
-            cwd=ROOT,
-            env=environment,
-            check=False,
+            [sys.executable, "-m", "pytest", "tests/integration/test_p1_auth_mysql.py", "-q"],
+            cwd=ROOT, env=environment, check=False,
         )
         test_exit = completed.returncode
-        status = "PASS" if test_exit == 0 else "FAIL"
+        base["checks"]["authentication_tests"] = "PASS" if test_exit == 0 else "FAIL"
+        result = "PASS" if test_exit == 0 else "FAIL"
         exit_code = test_exit
     except GateBlocked as exc:
-        status = "BLOCKED"
+        result = "BLOCKED"
         blocker = str(exc)
         exit_code = 2
     except Exception as exc:
-        status = "FAIL"
+        result = "FAIL"
         error_type = type(exc).__name__
         exit_code = 1
     finally:
@@ -217,26 +225,30 @@ def main() -> int:
                 _drop_isolated_database(database)
                 removed = True
             except Exception:
-                status = "FAIL"
-                blocker = f"failed to remove isolated database {database}"
+                result = "FAIL"
+                blocker = "isolated database cleanup failed"
                 exit_code = 1
+        base["checks"]["cleanup"] = "PASS" if removed else ("NOT_APPLICABLE" if not created else "FAIL")
+        base["cleanup_status"] = {
+            "temporary_database_removed": removed,
+            "success": removed if created else True,
+        }
+        if created and not removed:
+            result = "FAIL"
 
-    result: dict[str, object] = {
-        GATE_STATUS_NAME: status,
-        "admin_url": "SET",
-        "admin_host": admin_host,
-        "admin_port": admin_port,
-        "mysql_version": version,
-        "database": database,
-        "migration_order": list(migrations),
+    base.update({
+        "result": result,
+        "runtime_versions": {"mysql": version},
+        "test_runner": "pytest",
+        "test_nodeids": ["tests/integration/test_p1_auth_mysql.py"],
         "pytest_exit_code": test_exit,
-        "isolated_database_removed": removed,
-    }
+        "exit_code": exit_code,
+    })
     if blocker is not None:
-        result["blocker"] = blocker
+        base["blocker"] = blocker
     if error_type is not None:
-        result["error_type"] = error_type
-    _emit_result(result)
+        base["error_type"] = error_type
+    _write_result(base, args.result_output)
     return exit_code
 
 

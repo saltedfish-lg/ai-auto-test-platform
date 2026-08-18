@@ -1,4 +1,4 @@
-"""Validated API settings loaded from environment or a local .env file."""
+"""Validated API settings loaded from the repository-root local environment."""
 
 from __future__ import annotations
 
@@ -6,13 +6,17 @@ from ipaddress import IPv4Address, IPv4Network, IPv6Network, ip_network
 from pathlib import Path
 from typing import Literal
 
+from platform_common.environment import load_project_environment
 from pydantic import AliasChoices, Field, IPvAnyAddress, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Local processes always resolve repo/.env from this module location; shell/process env wins.
+load_project_environment(anchor=Path(__file__))
 
 
 class ApiSettings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=None,
         env_prefix="PLATFORM_",
         extra="ignore",
         hide_input_in_errors=True,

@@ -1,0 +1,54 @@
+schema_version: 3
+owner_identity: services/api
+domains:
+  - BACKEND
+inherit: true
+tests:
+  - services/api/tests
+engineering_gates:
+  - backend_test
+routes:
+  - patterns:
+      - src/platform_api/auth*.py
+      - src/platform_api/security.py
+      - src/platform_api/session_service.py
+      - src/platform_api/rate_limit.py
+      - src/platform_api/bootstrap.py
+      - src/platform_api/user_admin*.py
+    domains:
+      - AUTHENTICATION
+      - ACCOUNT_SECURITY
+    authorities:
+      - docs/authority/编码权威事实/AUTHENTICATION_CONTRACT/authentication-contract.yaml
+      - docs/authority/编码权威事实/PERMISSION_CLOSURE/permission-closure.yaml
+      - docs/authority/编码权威事实/OPENAPI/openapi.yaml
+    formal_gate_conditions:
+      - AUTH_BACKEND_OR_DATABASE_CHANGED
+    reviewer_risks:
+      - SECURITY_SENSITIVE
+      - PRODUCT_SOVEREIGNTY_SENSITIVE
+  - patterns:
+      - src/platform_api/user_admin*.py
+    domains:
+      - AUTHORIZATION
+      - RBAC
+      - DEFAULT_ADMIN
+    sovereignty_categories:
+      - ROLE
+      - PERMISSION
+      - PRODUCT_SECURITY_RULE
+    reviewer_risks:
+      - PRODUCT_SOVEREIGNTY_SENSITIVE
+  - patterns:
+      - src/platform_api/auth_service.py
+      - src/platform_api/session_service.py
+      - src/platform_api/security.py
+      - src/platform_api/auth_hmac.py
+      - src/platform_api/config.py
+    domains:
+      - CREDENTIAL
+      - SESSION
+    sovereignty_categories:
+      - PRODUCT_SECURITY_RULE
+    reviewer_risks:
+      - PRODUCT_SOVEREIGNTY_SENSITIVE

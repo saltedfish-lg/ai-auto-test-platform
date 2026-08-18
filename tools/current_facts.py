@@ -111,23 +111,36 @@ def _current_contract_catalog(authority_root: Path) -> dict[str, str]:
     return catalog
 
 
-def expected_runtime_gate_status(gate: dict[str, Any], migration_head: int) -> str:
-    """Calculate the status a SYSTEM_DESIGN-owned gate must currently record.
-
-    This helper is validation logic only: current status remains stored exclusively in
-    SYSTEM_DESIGN.runtime_gate_contract and is never published as a second fact source.
-    """
-    mode = gate.get("evaluation_mode", "RECORDED_STATUS")
-    if mode == "MIGRATION_HEAD_FRESHNESS":
-        evidence = gate.get("last_execution_evidence") or {}
-        return (
-            "PASS"
-            if evidence.get("result") == "PASS"
-            and evidence.get("validated_migration_head") == migration_head
-            else "RERUN_REQUIRED"
-        )
-    return str(gate.get("status", "UNKNOWN"))
-
+def _declared_acceptance_scopes(acceptance: dict[str, Any], items: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Derive current acceptance-scope facts from canonical range metadata, never fixed numeric bounds."""
+    scopes: dict[str, dict[str, Any]] = {}
+    for scope_name, scope in acceptance.items():
+        if not isinstance(scope_name, str) or not scope_name.endswith("_governance") or not isinstance(scope, dict):
+            continue
+        declared_range = scope.get("range")
+        if not isinstance(declared_range, str):
+            continue
+        match = re.fullmatch(r"(.+?)(\d+)\.\.(\d+)", declared_range)
+        if not match:
+            continue
+        prefix, start_raw, end_raw = match.groups()
+        start, end = int(start_raw), int(end_raw)
+        if end < start:
+            continue
+        ids: list[str] = []
+        for item in items:
+            acceptance_id = item.get("acceptance_id")
+            if not isinstance(acceptance_id, str) or not acceptance_id.startswith(prefix):
+                continue
+            suffix = acceptance_id[len(prefix):]
+            if suffix.isdigit() and start <= int(suffix) <= end:
+                ids.append(acceptance_id)
+        scopes[scope_name] = {
+            "range": declared_range,
+            "count": len(ids),
+            "acceptance_ids": sorted(ids),
+        }
+    return scopes
 
 @lru_cache(maxsize=4)
 def derive_current_facts(repo_root: Path = REPO_ROOT) -> dict[str, Any]:
@@ -165,9 +178,6 @@ def derive_current_facts(repo_root: Path = REPO_ROOT) -> dict[str, Any]:
     }
     evidence_gap_count = sum(1 for item in acceptance_items if item.get("evidence_status") != "VERIFIED")
 
-    checkpoint_script = repo_root / ".agents/skills/ai-auto-test-platform-feature-orchestrator/scripts/task_checkpoint.py"
-    snapshot_script = repo_root / ".agents/skills/ai-auto-test-platform-context-efficiency/scripts/workspace_snapshot.py"
-
     return {
         "authority_model": "SINGLE_LIVING_AUTHORITY",
         "migration": {
@@ -198,6 +208,7 @@ def derive_current_facts(repo_root: Path = REPO_ROOT) -> dict[str, Any]:
         "events": {"event_count": len(events.get("events", []))},
         "acceptance": {
             "count": len(acceptance_items),
+            "declared_scopes": _declared_acceptance_scopes(acceptance, acceptance_items),
             "specified_count": acceptance_status["SPECIFIED"],
             "passed_count": acceptance_status["PASSED"],
             "failed_count": acceptance_status["FAILED"],
@@ -213,10 +224,6 @@ def derive_current_facts(repo_root: Path = REPO_ROOT) -> dict[str, Any]:
             "open_decision_count": len(product.get("open_decisions", [])),
         },
         "contracts": _current_contract_catalog(authority_root),
-        "protocols": {
-            "checkpoint_schema_version": _protocol_version(checkpoint_script, "SCHEMA_VERSION"),
-            "workspace_snapshot_version": _protocol_version(snapshot_script, "SNAPSHOT_VERSION"),
-        },
     }
 
 
@@ -248,16 +255,14 @@ def check_current_fact_governance(repo_root: Path = REPO_ROOT) -> list[str]:
     for key in ("dimension_count", "state_dimension_count", "authentication_state_owner_count"):
         if key in system_design.get("state_contract", {}):
             errors.append(f"SYSTEM_DESIGN state_contract duplicates derived fact: {key}")
-    full_gate = next((item for item in system_design.get("runtime_gate_contract", {}).get("gates", []) if isinstance(item, dict) and item.get("gate_id") == "FULL_SCHEMA_MYSQL84_RUNTIME_GATE"), {})
-    if full_gate.get("evaluation_mode") != "MIGRATION_HEAD_FRESHNESS":
-        errors.append("FULL_SCHEMA_MYSQL84_RUNTIME_GATE evaluation mode drift")
-    if "status_source" in full_gate:
-        errors.append("FULL_SCHEMA_MYSQL84_RUNTIME_GATE must not delegate current status to a second source")
-    expected_gate_status = expected_runtime_gate_status(full_gate, facts["migration"]["head"])
-    if full_gate.get("status") != expected_gate_status:
-        errors.append(
-            f"FULL_SCHEMA_MYSQL84_RUNTIME_GATE status is stale: stored={full_gate.get('status')} expected={expected_gate_status}"
-        )
+    gate_catalog = system_design.get("runtime_gate_catalog", {})
+    gate_ids = {item.get("gate_id") for item in gate_catalog.get("gates", []) if isinstance(item, dict)}
+    required_gate_ids = {"AUTH_MYSQL_RUNTIME_GATE", "AUTH_BROWSER_RUNTIME_GATE", "FULL_SCHEMA_MYSQL84_RUNTIME_GATE", "REAL_ACCEPTANCE_GATE"}
+    if not required_gate_ids.issubset(gate_ids):
+        errors.append(f"SYSTEM_DESIGN runtime gate catalog missing: {sorted(required_gate_ids - gate_ids)}")
+    for item in gate_catalog.get("gates", []):
+        if isinstance(item, dict) and any(key in item for key in ("status", "last_execution_evidence", "evidence_ref", "rerun_reason")):
+            errors.append(f"SYSTEM_DESIGN runtime gate definition persists temporary result state: {item.get('gate_id')}")
 
     permission = _load_yaml(authority_root / "编码权威事实/PERMISSION_CLOSURE/permission-closure.yaml")
     for key in ("permission_count", "role_count", "role_permission_mapping_count"):
@@ -277,6 +282,12 @@ def check_current_fact_governance(repo_root: Path = REPO_ROOT) -> list[str]:
     for key in ("acceptance_count", "specified_count", "passed_count", "evidence_gap_count", "current_contract_catalog"):
         if key in metadata:
             errors.append(f"acceptance metadata duplicates derived fact: {key}")
+    for scope_name, scope in acceptance.items():
+        if not isinstance(scope_name, str) or not scope_name.endswith("_governance") or not isinstance(scope, dict):
+            continue
+        for key in ("reused_items", "revised_items", "new_items", "acceptance_count", "scope_count"):
+            if key in scope:
+                errors.append(f"{scope_name} duplicates derived acceptance scope count: {key}")
     allowed_aliases = set(facts["contracts"])
     for item in acceptance.get("acceptance_closure", []):
         for ref in item.get("contract_ids", []):
@@ -287,32 +298,6 @@ def check_current_fact_governance(repo_root: Path = REPO_ROOT) -> list[str]:
                 if len(errors) > 100:
                     return errors
 
-    current_head_name = facts["migration"]["head_name"]
-    current_chain = facts["migration"]["chain"]
-    for rel in (
-        "AGENTS.md",
-        ".agents/skills/ai-auto-test-platform-database/SKILL.md",
-        ".agents/agent-roles/database-integrity-reviewer.md",
-    ):
-        text = (repo_root / rel).read_text(encoding="utf-8")
-        if current_head_name in text or current_chain in text:
-            errors.append(f"{rel} hard-codes current migration head/chain")
-        if "current_facts.py" not in text:
-            errors.append(f"{rel} must reference tools/current_facts.py")
-
-    context_policy = _load_yaml(repo_root / ".agents/skills/ai-auto-test-platform-context-efficiency/schemas/context-policy.yaml")
-    if "checkpoint_schema_version" in context_policy.get("task_resume_validation", {}):
-        errors.append("context-policy duplicates checkpoint schema version")
-    snapshot_policy = context_policy.get("context_pack", {}).get("task_start_workspace_snapshot", {})
-    if "snapshot_schema_version" in snapshot_policy:
-        errors.append("context-policy duplicates workspace snapshot schema version")
-    if snapshot_policy.get("snapshot_schema_source") != "ai-auto-test-platform-context-efficiency/scripts/workspace_snapshot.py::SNAPSHOT_VERSION":
-        errors.append("context-policy workspace snapshot schema source drift")
-    pack_text = (repo_root / ".agents/skills/ai-auto-test-platform-context-efficiency/references/task-context-pack.md").read_text(encoding="utf-8")
-    if re.search(r"checkpoint_schema_version:\s*\d+", pack_text):
-        errors.append("task-context-pack duplicates checkpoint schema version")
-    if re.search(r"snapshot_version:\s*\d+", pack_text):
-        errors.append("task-context-pack duplicates workspace snapshot version")
     core = _load_yaml(authority_root / "核心对象、业务规则与生命周期/核心对象、业务规则与生命周期.yaml")
     closure = core.get("r3_state_closure", {})
     if closure.get("validated_dimensions") != facts["domain"]["state_dimension_count"]:
@@ -324,8 +309,6 @@ def check_current_fact_governance(repo_root: Path = REPO_ROOT) -> list[str]:
     coding = core.get("coding_readiness_summary", {})
     if "database_runtime_gate" in coding:
         errors.append("core coding_readiness_summary must not duplicate Runtime Gate status")
-    if coding.get("implementation_status_source") != "编码权威事实/SYSTEM_DESIGN.yaml#runtime_gate_contract.implementation_status":
-        errors.append("core coding_readiness_summary implementation status source drift")
 
     tech = _load_yaml(authority_root / "系统技术架构技术选型与AGENTS/系统技术架构和技术栈、技术选型.yaml")
     scan_stats = tech.get("metadata", {}).get("source_scan_statistics", {})

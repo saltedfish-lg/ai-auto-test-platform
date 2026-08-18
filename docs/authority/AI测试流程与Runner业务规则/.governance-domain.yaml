@@ -1,0 +1,13 @@
+schema_version: 2
+owner_identity: docs/authority/AI测试流程与Runner业务规则
+domains:
+  - RUNNER
+inherit: true
+authority_files:
+  - docs/authority/AI测试流程与Runner业务规则/AI测试流程与Runner业务规则.yaml
+sovereignty_categories:
+  - BUSINESS_RULE
+reviewer_risks:
+  - ARCHITECTURE
+engineering_gates:
+  - authority_validators

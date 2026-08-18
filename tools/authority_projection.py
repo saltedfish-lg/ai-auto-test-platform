@@ -6,8 +6,15 @@ import argparse
 import csv
 import io
 import json
+import sys
 from pathlib import Path
 from typing import Any
+
+_BOOTSTRAP_ROOT = Path(__file__).resolve().parents[1]
+if str(_BOOTSTRAP_ROOT) not in sys.path:
+    sys.path.insert(0, str(_BOOTSTRAP_ROOT))
+from tools._bootstrap import ensure_repo_root_on_path
+ROOT = ensure_repo_root_on_path(__file__)
 
 import yaml
 
@@ -16,9 +23,8 @@ YAML_LOADER = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
 def _yaml_load(text: str):
     return yaml.load(text, Loader=YAML_LOADER)
 
-from current_facts import derive_current_facts
+from tools.current_facts import derive_current_facts
 
-ROOT = Path(__file__).resolve().parents[1]
 AUTHORITY = ROOT / "docs" / "authority"
 SYSTEM_SOURCE = AUTHORITY / "编码权威事实" / "SYSTEM_DESIGN.yaml"
 SYSTEM_PROJECTION = AUTHORITY / "编码权威事实" / "SYSTEM_DESIGN.md"
@@ -71,7 +77,7 @@ def render_system_design() -> str:
     data = _load(SYSTEM_SOURCE)
     facts = derive_current_facts(ROOT)
     db = data.get("database_contract", {})
-    runtime = data.get("runtime_gate_contract", {})
+    runtime = data.get("runtime_gate_catalog", {})
     auth = data.get("authentication_contract", {})
     stack = data.get("current_stack", {})
     migration = facts["migration"]["file_chain"]
@@ -92,20 +98,17 @@ def render_system_design() -> str:
         f"- 状态维度：{facts['domain']['state_dimension_count']}。",
         f"- 数据库：{facts['database']['table_count']} 张表；Migration：`{migration}`。",
         f"- RBAC：{facts['rbac']['permission_count']} 个权限点、{facts['rbac']['role_count']} 个角色模板、{facts['rbac']['mapping_count']} 条映射。",
-        f"- 认证实现状态：`{runtime.get('implementation_status', data.get('metadata', {}).get('implementation_release_readiness', ''))}`。",
-        f"- 平台发布状态：`{runtime.get('platform_release_status', '')}`。",
         f"- 权限解析：{auth.get('permission_resolution', '每个受保护请求实时读取关系型RBAC、项目职责和数据范围。')}",
         "",
         "## Runtime Gates",
         "",
-        "|Gate|Status|Evidence/Blocker|",
+        "|Gate|Scope|Command|",
         "|---|---|---|",
     ]
     for gate in gate_rows:
         if not isinstance(gate, dict):
             continue
-        evidence = gate.get("evidence") or gate.get("blocker") or gate.get("note") or ""
-        lines.append(f"|{gate.get('gate_id','')}|{gate.get('status','')}|{str(evidence).replace('|','\\|')}|")
+        lines.append(f"|{gate.get('gate_id','')}|{gate.get('scope','')}|{str(gate.get('command','')).replace('|','\\|')}|")
     lines.extend([
         "",
         "## Authority 规则",

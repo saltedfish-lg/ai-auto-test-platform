@@ -13,6 +13,7 @@ line-ending = "lf"
 [tool.pytest.ini_options]
 addopts = "-ra --strict-config --strict-markers -p no:cacheprovider"
 testpaths = [
+  "packages/platform-common/tests",
   "packages/domain-kernel/tests",
   "packages/contracts/tests",
   "packages/observability/tests",

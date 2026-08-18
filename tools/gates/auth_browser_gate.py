@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import hashlib
 import json
 import os
 import re
@@ -18,7 +19,21 @@ from contextlib import closing
 from pathlib import Path
 from typing import BinaryIO
 
-from auth_mysql_gate import (  # type: ignore[import-not-found]
+_BOOTSTRAP_ROOT = Path(__file__).resolve().parents[2]
+if str(_BOOTSTRAP_ROOT) not in sys.path:
+    sys.path.insert(0, str(_BOOTSTRAP_ROOT))
+from tools._bootstrap import ensure_repo_root_on_path  # noqa: E402
+ROOT = ensure_repo_root_on_path(__file__)
+API_SRC = ROOT / "services" / "api" / "src"
+OBSERVABILITY_SRC = ROOT / "packages" / "observability" / "src"
+COMMON_SRC = ROOT / "packages" / "platform-common" / "src"
+for import_root in (API_SRC, OBSERVABILITY_SRC, COMMON_SRC):
+    if str(import_root) not in sys.path:
+        sys.path.insert(0, str(import_root))
+from tools.environment import get_env, load_project_environment, project_environment  # noqa: E402
+from tools.governance.runtime_gate_result import finalize_runtime_result, runtime_result_base  # noqa: E402
+
+from tools.gates.auth_mysql_gate import (
     ADMIN_URL_ENV,
     DATABASE_URL_ENV,
     GateBlocked,
@@ -39,9 +54,12 @@ from platform_api.security import PasswordService, new_ulid, utc_now
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
-ROOT = Path(__file__).resolve().parents[2]
 RUNTIME_ROOT = ROOT / ".runtime"
 GATE_STATUS_NAME = "AUTH_BROWSER_RUNTIME_GATE"
+
+
+def _gate_source_sha256() -> str:
+    return hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
 
 
 def _password(label: str) -> str:
@@ -80,14 +98,10 @@ def _port_open(port: int) -> bool:
 
 
 def _available_loopback_port() -> int:
-    for port in range(5173, 5200):
-        try:
-            with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as probe:
-                probe.bind(("127.0.0.1", port))
-                return port
-        except OSError:
-            continue
-    raise GateBlocked("no loopback web port is available in the 5173-5199 Gate range")
+    """Ask the OS for an unused loopback port; no stage or current-port assumption is encoded."""
+    with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as probe:
+        probe.bind(("127.0.0.1", 0))
+        return int(probe.getsockname()[1])
 
 
 def _wait_for_port(port: int, process: subprocess.Popen[bytes], timeout: float = 30.0) -> None:
@@ -107,19 +121,8 @@ def _wait_for_vite(
     log_path: Path,
     timeout: float = 30.0,
 ) -> None:
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        if process.poll() is not None:
-            raise RuntimeError(f"Vite process for port {port} exited during startup")
-        if _port_open(port):
-            return
-        try:
-            if "ready in" in log_path.read_text(encoding="utf-8", errors="replace"):
-                return
-        except OSError:
-            pass
-        time.sleep(0.2)
-    raise RuntimeError(f"Vite did not become ready on port {port} within {timeout} seconds")
+    """Readiness is network based; logs are diagnostic only."""
+    _wait_for_port(port, process, timeout)
 
 
 def _create_user(
@@ -267,58 +270,76 @@ def _safe_startup_diagnostic(log_path: Path) -> str | None:
     return None
 
 
-def _browser_executable() -> Path | None:
-    local_app_data = os.getenv("LOCALAPPDATA")
-    if local_app_data:
-        cached = sorted(
-            Path(local_app_data).glob("ms-playwright/chromium-*/chrome-win64/chrome.exe"),
-            reverse=True,
+def _validate_playwright_browser(node: str, environment: dict[str, str]) -> str:
+    """Require the Chromium revision matched to this project's @playwright/test.
+
+    An explicit PLAYWRIGHT_CHROMIUM_EXECUTABLE remains an opt-in override. Otherwise the Gate
+    asks the current project dependency for chromium.executablePath() and only checks that exact
+    file exists; Playwright itself still launches the browser without an executable override.
+    This prevents a different Python/Node Playwright installation's cached revision from being
+    silently selected just because it sorts later under %LOCALAPPDATA%/ms-playwright.
+    """
+    override = environment.get("PLAYWRIGHT_CHROMIUM_EXECUTABLE")
+    if override:
+        candidate = Path(override).expanduser()
+        if not candidate.is_file():
+            raise GateBlocked("PLAYWRIGHT_CHROMIUM_EXECUTABLE does not exist")
+        return "EXPLICIT_OVERRIDE"
+
+    probe = subprocess.run(
+        [
+            node,
+            "-e",
+            "const { chromium } = require('@playwright/test'); process.stdout.write(chromium.executablePath());",
+        ],
+        cwd=ROOT,
+        env=environment,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if probe.returncode != 0:
+        raise GateBlocked("CURRENT_PLAYWRIGHT_BROWSER_RESOLUTION_FAILED")
+    value = probe.stdout.strip()
+    if not value or not Path(value).is_file():
+        raise GateBlocked(
+            "CURRENT_PLAYWRIGHT_BROWSER_NOT_INSTALLED; run `npx playwright install chromium` in this project"
         )
-        if cached:
-            return cached[0]
-    for candidate in (
-        Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe"),
-        Path(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"),
-    ):
-        if candidate.is_file():
-            return candidate
-    return None
+    return "PROJECT_PLAYWRIGHT_MATCHED"
 
 
 def main() -> int:
+    load_project_environment(root=ROOT)
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.parse_args()
+    parser.add_argument("--result-output", type=Path)
+    args = parser.parse_args()
     authority = _resolve_authority()
     migrations = _migration_names(authority)
-    if not os.getenv(ADMIN_URL_ENV):
-        print(
-            json.dumps(
-                {
-                    GATE_STATUS_NAME: "BLOCKED",
-                    "blocker": f"{ADMIN_URL_ENV} is required",
-                    "admin_url": "NOT_SET",
-                    "mysql_version": "UNKNOWN",
-                    "isolated_database_removed": False,
-                    "runtime_secrets_removed": True,
-                },
-                ensure_ascii=False,
-            )
-        )
-        return 2
-    if _port_open(8000):
-        print(
-            json.dumps(
-                {
-                    GATE_STATUS_NAME: "BLOCKED",
-                    "blocker": "port 8000 must be free",
-                    "admin_url": "SET",
-                    "mysql_version": "UNKNOWN",
-                    "isolated_database_removed": False,
-                    "runtime_secrets_removed": True,
-                },
-                ensure_ascii=False,
-            )
-        )
+    result_payload = runtime_result_base(
+        ROOT,
+        gate_id=GATE_STATUS_NAME,
+        gate_source=Path(__file__),
+        gate_capabilities=["BROWSER_RUNTIME", "AUTHENTICATION_RUNTIME", "PLAYWRIGHT_PROJECT_BROWSER", "ISOLATED_RUNTIME_CLEANUP"],
+    )
+
+    def emit() -> None:
+        finalize_runtime_result(result_payload, root=ROOT)
+        raw = json.dumps(result_payload, ensure_ascii=False, indent=2) + "\n"
+        if args.result_output:
+            args.result_output.parent.mkdir(parents=True, exist_ok=True)
+            args.result_output.write_text(raw, encoding="utf-8")
+        print(raw)
+
+    if not get_env(ADMIN_URL_ENV, root=ROOT):
+        result_payload.update({
+            "result": "BLOCKED",
+            "exit_code": 2,
+            "blocker": f"{ADMIN_URL_ENV} is required",
+            "runtime_versions": {"mysql": "UNKNOWN", "browser": "UNKNOWN"},
+            "checks": {"database": "NOT_RUN", "api_readiness": "NOT_RUN", "web_readiness": "NOT_RUN", "browser_test": "NOT_RUN", "cleanup": "NOT_RUN"},
+            "cleanup_status": {"success": True, "temporary_database_removed": True, "runtime_directory_removed": True, "processes_terminated": True},
+        })
+        emit()
         return 2
 
     database = _new_database_name("browser")
@@ -337,7 +358,9 @@ def main() -> int:
     error_stage: str | None = None
     error_code: str | None = None
     error_diagnostic: str | None = None
+    api_port: int | None = None
     web_port: int | None = None
+    browser_resolution = "NOT_EVALUATED"
     runtime_removed = False
     exit_code = 1
     stage = "mysql_connect"
@@ -383,14 +406,15 @@ def main() -> int:
         )
         engine.dispose()
 
-        api_environment = os.environ.copy()
+        api_port = _available_loopback_port()
+        api_environment = project_environment(root=ROOT)
         api_environment.pop(ADMIN_URL_ENV, None)
         api_environment.update(
             {
                 "PLATFORM_ENVIRONMENT": "test",
                 DATABASE_URL_ENV: database_url,
                 "API_HOST": "127.0.0.1",
-                "API_PORT": "8000",
+                "API_PORT": str(api_port),
                 "ATP_JWT_KEY_RING_FILE": str(key_ring.manifest_file),
                 "ATP_AUTH_HMAC_MASTER_KEY_FILE": str(hmac_key_ring_file),
             }
@@ -402,15 +426,19 @@ def main() -> int:
             runtime_directory / "api.log",
         )
         log_handles.append(api_log)
-        _wait_for_port(8000, api_process)
+        _wait_for_port(api_port, api_process)
 
         node = shutil.which("node")
         if node is None:
             raise GateBlocked("Node.js is required for the authentication browser Gate")
         stage = "web_startup"
         web_port = _available_loopback_port()
-        web_environment = os.environ.copy()
+        web_environment = project_environment(root=ROOT)
+        # The frontend process never needs database credentials. Keep project .env
+        # loading centralized without propagating DB secrets to an unrelated child.
         web_environment.pop(ADMIN_URL_ENV, None)
+        web_environment.pop(DATABASE_URL_ENV, None)
+        web_environment["ATP_VITE_PROXY_TARGET"] = f"http://127.0.0.1:{api_port}"
         web_log_path = runtime_directory / "web.log"
         web_process, web_log = _start_process(
             [
@@ -455,9 +483,7 @@ def main() -> int:
                 "PLAYWRIGHT_OUTPUT_DIR": str(runtime_directory / "playwright-output"),
             }
         )
-        browser_executable = _browser_executable()
-        if browser_executable is not None:
-            browser_environment["PLAYWRIGHT_CHROMIUM_EXECUTABLE"] = str(browser_executable)
+        browser_resolution = _validate_playwright_browser(node, browser_environment)
         playwright = (
             ROOT
             / "node_modules"
@@ -522,29 +548,45 @@ def main() -> int:
                 exit_code = 1
         runtime_removed = not resolved_runtime.exists()
 
-    result: dict[str, object] = {
-        GATE_STATUS_NAME: status,
-        "admin_url": "SET",
-        "mysql_version": version,
-        "database": database,
-        "browser": "chromium",
-        "web_port": web_port,
+    process_cleanup_ok = all(proc is None or proc.poll() is not None for proc in (api_process, web_process))
+    cleanup_success = (removed if created else True) and runtime_removed and process_cleanup_ok
+    if not cleanup_success:
+        status = "FAIL"
+        exit_code = 1
+    result_payload.update({
+        "result": status,
+        "runtime_versions": {"mysql": version, "browser": "chromium", "browser_resolution": browser_resolution},
+        "runtime_allocation": {"api_port": api_port, "web_port": web_port},
+        "test_runner": "playwright",
+        "test_cases": ["apps/web/playwright.config.ts"],
+        "checks": {
+            "database": "PASS" if created else "NOT_RUN",
+            "api_readiness": "PASS" if api_port is not None and error_stage not in {"api_startup"} else "FAIL",
+            "web_readiness": "PASS" if web_port is not None and error_stage not in {"web_startup"} else "FAIL",
+            "browser_test": "PASS" if browser_exit == 0 else ("NOT_RUN" if stage != "chromium_test" else "FAIL"),
+            "cleanup": "PASS" if cleanup_success else "FAIL",
+        },
+        "cleanup_status": {
+            "temporary_database_removed": removed if created else True,
+            "runtime_directory_removed": runtime_removed,
+            "processes_terminated": process_cleanup_ok,
+            "success": cleanup_success,
+            "transient_artifacts_persisted": not runtime_removed,
+        },
         "browser_exit_code": browser_exit,
-        "isolated_database_removed": removed,
-        "runtime_secrets_removed": runtime_removed,
-        "screenshot": "test-results/auth-workspace.png",
-    }
+        "exit_code": exit_code,
+    })
     if blocker is not None:
-        result["blocker"] = blocker
+        result_payload["blocker"] = blocker
     if error_type is not None:
-        result["error_type"] = error_type
+        result_payload["error_type"] = error_type
     if error_stage is not None:
-        result["error_stage"] = error_stage
+        result_payload["error_stage"] = error_stage
     if error_code is not None:
-        result["error_code"] = error_code
+        result_payload["error_code"] = error_code
     if error_diagnostic is not None:
-        result["error_diagnostic"] = error_diagnostic
-    print(json.dumps(result, ensure_ascii=False))
+        result_payload["error_diagnostic"] = error_diagnostic
+    emit()
     return exit_code
 
 

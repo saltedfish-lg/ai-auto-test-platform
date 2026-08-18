@@ -1,0 +1,72 @@
+schema_version: 1
+gates:
+  authority_validators:
+    command:
+    - python
+    - docs/authority/validation/run_all_validation.py
+  governance_lite_validator:
+    command:
+    - python
+    - tools/governance/governance_lite_validator.py
+    - --root
+    - .
+  governance_contract_test:
+    command:
+    - python
+    - tools/governance/governance_contract_test.py
+    - --root
+    - .
+  openapi_client_check:
+    command:
+    - python
+    - tools/openapi_client.py
+    - check
+  backend_test:
+    command:
+    - python
+    - -m
+    - pytest
+    - services/api/tests
+    - -q
+  frontend_test:
+    command:
+    - npm
+    - run
+    - test:web
+  playwright_test:
+    command:
+    - npm
+    - --workspace
+    - '@platform/web'
+    - run
+    - test:e2e
+  runner_test:
+    command:
+    - python
+    - -m
+    - pytest
+    - runner/agent/tests
+    - -q
+  worker_test:
+    command:
+    - python
+    - -m
+    - pytest
+    - workers/scheduler/tests
+    - workers/background/tests
+    - -q
+  code_quality_gate:
+    command:
+    - python
+    - tools/governance/code_quality_gate.py
+    - --root
+    - .
+    - --task-id
+    - '{task_id}'
+  database_environment_contract:
+    command:
+    - python
+    - -m
+    - pytest
+    - tests/contract/test_database_environment.py
+    - -q

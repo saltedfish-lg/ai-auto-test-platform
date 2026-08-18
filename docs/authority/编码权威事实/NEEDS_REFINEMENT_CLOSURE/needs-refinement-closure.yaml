@@ -14,15 +14,6 @@ execution_evidence_gaps:
   blocks_database_module_formal_merge: false
   blocks_production_release: true
   owner: IMPLEMENTATION_AND_ACCEPTANCE
-  status_source:
-    编码权威事实/SYSTEM_DESIGN.yaml#runtime_gate_contract.gates[REAL_ACCEPTANCE_EVIDENCE].status
-historical_execution_evidence:
-- evidence_id: GATE-MYSQL84-001-PRE-V7-REPAIR
-  historical_status: PASS
-  note: 旧 PASS 仅保留历史追溯；当前 Full-schema PASS 由 SYSTEM_DESIGN 唯一状态源和 V3→V8 结构化
-    Evidence 共同证明。
-  superseded_by_evidence_ref:
-    编码权威事实/RUNTIME_GATE_EVIDENCE/mysql84-full-schema-v3-v8-2026-08-13.json
 p1_authentication_contract_closure:
   status: CLOSED
   authentication_api: CURRENT_AUTHORITY_CONFIRMED
@@ -32,8 +23,4 @@ p1_authentication_contract_closure:
   password_policy_and_hash: CURRENT_AUTHORITY_CONFIRMED
   state_owner_mapping: CURRENT_AUTHORITY_CONFIRMED
   pending_user_decisions: 0
-resolved_execution_evidence:
-- gate_id: FULL_SCHEMA_MYSQL84_RUNTIME_GATE
-  evidence_ref:
-    编码权威事实/RUNTIME_GATE_EVIDENCE/mysql84-full-schema-v3-v8-2026-08-13.json
-  resolution: CURRENT_RUNTIME_EVIDENCE_AVAILABLE
+runtime_gate_rule: 运行 Gate 结果仅属于当前 Task；历史 PASS 不作为当前 Task 正式 PASS。

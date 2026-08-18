@@ -1,0 +1,11 @@
+schema_version: 2
+owner_identity: docs/authority/系统技术架构技术选型与AGENTS
+domains:
+  - ARCHITECTURE
+inherit: true
+authority_files:
+  - docs/authority/系统技术架构技术选型与AGENTS/系统技术架构和技术栈、技术选型.yaml
+reviewer_risks:
+  - ARCHITECTURE
+engineering_gates:
+  - authority_validators

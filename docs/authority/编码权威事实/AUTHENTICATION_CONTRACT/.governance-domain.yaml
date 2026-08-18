@@ -1,0 +1,15 @@
+schema_version: 2
+owner_identity: docs/authority/编码权威事实/AUTHENTICATION_CONTRACT
+domains:
+  - AUTHENTICATION
+inherit: true
+authority_files:
+  - docs/authority/编码权威事实/AUTHENTICATION_CONTRACT/authentication-contract.yaml
+sovereignty_categories:
+  - PRODUCT_SECURITY_RULE
+  - PUBLIC_PRODUCT_CONTRACT
+formal_gate_conditions:
+  - AUTH_BACKEND_OR_DATABASE_CHANGED
+  - AUTH_UI_OR_END_TO_END_CHANGED
+engineering_gates:
+  - authority_validators

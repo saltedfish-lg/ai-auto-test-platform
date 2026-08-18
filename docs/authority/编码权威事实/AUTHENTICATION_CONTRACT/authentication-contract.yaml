@@ -6,7 +6,6 @@ metadata:
   change_scope: P1_CREDENTIAL_SOURCE_LIMIT_AND_PASSWORD_REAUTHENTICATION
   pending_user_decisions: 0
   deferred_product_decisions: 0
-  implementation_status_source: SYSTEM_DESIGN.runtime_gate_contract.implementation_status
 product_decision_placeholders: []
 confirmed_product_decisions:
 - decision_id: GOV-P1-002
@@ -118,7 +117,9 @@ supporting_objects:
   table: atp_platform_user_credential
   primary_key: credential_id
   business_unique_key: user_id
-  lifecycle_values: [ACTIVE, REVOKED]
+  lifecycle_values:
+  - ACTIVE
+  - REVOKED
   delete_semantics: 不物理删除；用户归档或逻辑删除时撤销凭据并保留安全审计。
 - object_id: AUTH-OBJ-002
   canonical_name: auth_refresh_session
@@ -127,7 +128,12 @@ supporting_objects:
   table: atp_auth_refresh_session
   primary_key: session_id
   business_unique_key: token_hash
-  lifecycle_values: [ACTIVE, ROTATED, REVOKED, EXPIRED, COMPROMISED]
+  lifecycle_values:
+  - ACTIVE
+  - ROTATED
+  - REVOKED
+  - EXPIRED
+  - COMPROMISED
   delete_semantics: 到期或撤销后至少保留30天用于安全审计，再由受控清理任务删除。
 - object_id: AUTH-OBJ-003
   canonical_name: auth_security_audit
@@ -136,7 +142,8 @@ supporting_objects:
   table: atp_auth_security_audit
   primary_key: audit_id
   business_unique_key: audit_id
-  lifecycle_values: [APPEND_ONLY]
+  lifecycle_values:
+  - APPEND_ONLY
   delete_semantics: 禁止UPDATE和DELETE；MySQL trigger强制不可变，只允许INSERT。
 - object_id: AUTH-OBJ-004
   canonical_name: auth_source_rate_limit
@@ -145,7 +152,9 @@ supporting_objects:
   table: atp_auth_source_rate_limit
   primary_key: source_key_hash+operation_id+window_started_at
   business_unique_key: source_key_hash+operation_id+window_started_at
-  lifecycle_values: [ACTIVE_WINDOW, EXPIRED]
+  lifecycle_values:
+  - ACTIVE_WINDOW
+  - EXPIRED
   delete_semantics: expires_at到期后允许受控批量清理；不得保存原始来源IP。
 credential:
   credential_type: PASSWORD
@@ -197,8 +206,16 @@ login_failure_policy:
 auth_hmac_key_ring:
   configuration: ATP_AUTH_HMAC_MASTER_KEY_FILE
   format: STRICT_JSON_RING
-  root_fields: [ring_version, active_key_id, keys]
-  key_fields: [key_id, key_material, activated_at, retired_at_if_previous, accept_until_if_previous]
+  root_fields:
+  - ring_version
+  - active_key_id
+  - keys
+  key_fields:
+  - key_id
+  - key_material
+  - activated_at
+  - retired_at_if_previous
+  - accept_until_if_previous
   key_material: base64url解码后至少32字节；不得进入日志、审计、持久化业务数据或对象repr。
   lifecycle: 唯一active key用于新HMAC；previous仅在retired_at <= now < accept_until时参与兼容读取；允许尚未激活的staged key但不得提前使用。
   minimum_rotation_overlap_seconds: 86400
@@ -273,8 +290,10 @@ user_administration:
     disable: 将普通用户转为DISABLED并同事务撤销全部ACTIVE Refresh Session。
   role_binding:
     persistence: 复用atp_user_role_binding和atp_data_scope_grant；不得使用平行Role Binding模型承载认证授权事实。
-    project_scoped_realtime_authorization: project_id非空的实时请求必须同时满足有效UserRoleBinding、同project_id且ACTIVE的ProjectMember职责，并要求ProjectMember.role_id与该UserRoleBinding.role_id一致；仅有项目成员关系或仅有项目级binding均不得授权。所有project-scoped Role Binding写操作必须使用请求/目标Binding自己的project_id作为实时AuthorizationContext，禁止用其它项目或聚合/me权限授权目标项目写入。ROLE-SUPER-ADMIN按平台最高权限契约处理；ROLE-PLATFORM-ADMIN仍受目标项目显式DataScopeGrant约束但不要求项目职责绑定。
-    create: ROLE_BIND权限；project_id非空时ROLE_BIND与PROJECT_MEMBER_MANAGE都必须针对目标project_id实时授权；create_user中携带的初始project-scoped Role Binding适用同一规则；平台级binding附带DataScopeGrant时仍要求PROJECT_MEMBER_MANAGE；创建ACTIVE binding及指定DataScopeGrant并写ROLE_ASSIGNED审计。
+    project_scoped_realtime_authorization: project_id非空的实时请求必须同时满足有效UserRoleBinding、同project_id且ACTIVE的ProjectMember职责，并要求ProjectMember.role_id与该UserRoleBinding.role_id一致；仅有项目成员关系或仅有项目级binding均不得授权。所有project-scoped
+      Role Binding写操作必须使用请求/目标Binding自己的project_id作为实时AuthorizationContext，禁止用其它项目或聚合/me权限授权目标项目写入。ROLE-SUPER-ADMIN按平台最高权限契约处理；ROLE-PLATFORM-ADMIN仍受目标项目显式DataScopeGrant约束但不要求项目职责绑定。
+    create: ROLE_BIND权限；project_id非空时ROLE_BIND与PROJECT_MEMBER_MANAGE都必须针对目标project_id实时授权；create_user中携带的初始project-scoped Role Binding适用同一规则；平台级binding附带DataScopeGrant时仍要求PROJECT_MEMBER_MANAGE；创建ACTIVE
+      binding及指定DataScopeGrant并写ROLE_ASSIGNED审计。
     revoke: ROLE_BIND权限；项目级binding在实际写入前还必须针对被撤销Binding.project_id实时满足ROLE_BIND与PROJECT_MEMBER_MANAGE；设置valid_to并递增row_version，不物理删除，写ROLE_REVOKED审计。
   optimistic_lock: 更新、启停、重置和撤销命令必须提交expected_version并原子递增对应row_version。
   admin_protection:
@@ -442,23 +461,41 @@ audit_contract:
   - ROLE_ASSIGNED
   - ROLE_REVOKED
   - PERMISSION_DENIED
-  required_fields: [actor_id, target_user_id_if_known, session_id_if_known, result_code, correlation_id, occurred_at, source_context_hash]
-  forbidden_fields: [password, password_hash, access_token, refresh_token, cookie, secret, database_credential]
+  required_fields:
+  - actor_id
+  - target_user_id_if_known
+  - session_id_if_known
+  - result_code
+  - correlation_id
+  - occurred_at
+  - source_context_hash
+  forbidden_fields:
+  - password
+  - password_hash
+  - access_token
+  - refresh_token
+  - cookie
+  - secret
+  - database_credential
 event_contract:
   decision: AUTHENTICATION_SECURITY_ACTIONS_ARE_AUDIT_ONLY_IN_P1
   reason: P1没有冻结跨边界认证事件消费者；登录、失败、登出、改密和撤销通过不可变审计表达，不新增领域事件。用户、admin和角色绑定的既有状态事件继续复用。
 rbac_boundary:
-  permissions: 50
-  roles: 12
-  mappings: 600
+  permission_catalog_source: ../PERMISSION_CLOSURE/permission-closure.yaml#permission_catalog
+  role_templates_source: ../PERMISSION_CLOSURE/permission-closure.yaml#role_templates
+  role_permission_mappings_source: ../PERMISSION_CLOSURE/permission-closure.yaml#role_permission_mappings
+  current_count_projection_source: tools/current_facts.py#rbac
+  current_count_semantics: DERIVED_ONLY_NOT_AUTHORITY_DUPLICATE
   super_admin_role: ROLE-SUPER-ADMIN
   super_admin_authorization: 仅通过正式Role-Permission Mapping获得权限；禁止username特判。
   authentication_vs_authorization: 认证确定主体，RBAC与数据范围确定操作许可；401与403严格区分。
 acceptance_contract:
   reused_range: ACC-R3-1602..1688
   test_range: CT-R3-1602..1688
-  status: PASSED
-  evidence_status: VERIFIED
+  contract_status: DEFINED
+  acceptance_status_source: ../ACCEPTANCE_CLOSURE/acceptance-closure.json#acceptance_closure.status
+  acceptance_facts_source: tools/current_facts.py#acceptance
+  evidence_integrity_validator: docs/authority/validation/validate_acceptance_evidence.py
   required_coverage:
   - admin首次且仅一次初始化、保护与超级管理员绑定
   - RBAC Seed 幂等且行数必须与当前 permission/role/mapping 明细定义完全一致

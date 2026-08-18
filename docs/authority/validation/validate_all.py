@@ -13,13 +13,15 @@ def _yaml_load(text: str):
 from jsonschema import Draft202012Validator
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-if str(REPO_ROOT / "tools") not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT / "tools"))
-from current_facts import derive_current_facts, discover_migrations  # noqa: E402
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+from tools._bootstrap import ensure_repo_root_on_path  # noqa: E402
+REPO_ROOT = ensure_repo_root_on_path(__file__)
+from tools.current_facts import derive_current_facts, discover_migrations  # noqa: E402
+from tools.governance.migration_registry import migration_for_capability  # noqa: E402
 
 AUTHORITY_MODEL = "SINGLE_LIVING_AUTHORITY"
 AUTHORITY_ROOT_NAME = "authority"
-EXPECTED_CODE_READINESS = "READY_FOR_P1_IMPLEMENTATION"
 
 class Validation:
     def __init__(self, root: Path):
@@ -129,10 +131,13 @@ def main():
       "数据安全、制品生命周期与验收基线/数据安全、制品生命周期与验收基线.yaml",
     ]
     meta_errors=[]
+    canonical_readiness=v.yaml(formal[0]).get("metadata",{}).get("code_readiness")
+    if not isinstance(canonical_readiness,str) or not canonical_readiness:
+        meta_errors.append("canonical product code_readiness missing")
     for rel in formal:
         m=v.yaml(rel).get("metadata",{})
         for k in ["coding_readiness","platform_code_readiness","code_readiness"]:
-            if k in m and m[k]!=EXPECTED_CODE_READINESS: meta_errors.append(f"{rel} {k}={m[k]}")
+            if k in m and m[k]!=canonical_readiness: meta_errors.append(f"{rel} {k}={m[k]}")
     arch_rel="系统技术架构技术选型与AGENTS/系统技术架构和技术栈、技术选型.yaml"
     arch_text=(args.root/arch_rel).read_text(encoding="utf-8")
     stale=["CANDIDATE_SELECTED_PENDING_BASELINE","PENDING_CURRENT_SYSTEM_DESIGN","VALID_ARCHITECTURE_COMPLETION_PENDING_CURRENT_SYSTEM_DESIGN"]
@@ -201,15 +206,15 @@ def main():
     for dropped in re.findall(r"DROP TABLE(?:\s+IF EXISTS)?\s+`?([A-Za-z0-9_]+)`?", sql, re.I):
         tables.pop(dropped, None)
     fks=[fk for fk in fks if fk["child_table"] in tables and fk["parent_table"] in tables]
-    # V7 intentionally evolves the shared V3 idempotency table instead of creating a
-    # parallel authentication table. Reflect only the explicitly parsed additive columns.
-    v7_idempotency_columns = {
+    # The authentication closure evolves the shared idempotency table instead of creating a parallel table.
+    # Reflect only the explicitly parsed additive columns, independent of which migration version carries them.
+    idempotency_additive_columns = {
         "contract_version": {"type": "SMALLINT", "nullable": False, "default": "2"},
         "principal_id": {"type": "VARCHAR(26)", "nullable": True, "default": None},
         "completed_at": {"type": "DATETIME(6)", "nullable": True, "default": None},
     }
     idempotency_columns = tables.get("atp_idempotency_record", {}).get("columns", {})
-    for column, expected_column in v7_idempotency_columns.items():
+    for column, expected_column in idempotency_additive_columns.items():
         if not re.search(rf"ADD COLUMN\s+{column}\s+", sql, re.I):
             continue
         idempotency_columns[column] = expected_column
@@ -281,7 +286,7 @@ def main():
     for required in ["request_count", "expires_at", "row_version"]:
         if required not in asr.get("columns", {}): ddl_errors.append(f"auth source rate limit missing {required}")
     if "ALTER COLUMN contract_version SET DEFAULT 2" not in sql:
-        ddl_errors.append("V7 idempotency contract_version final default is not 2")
+        ddl_errors.append("idempotency contract_version final default is not 2")
     if len(fks) != current_facts["database"]["foreign_key_count"]: ddl_errors.append(f"foreign keys={len(fks)}; derived={current_facts["database"]["foreign_key_count"]}")
     # schema cross-check
     sch=v.yaml("编码权威事实/DATABASE_DDL/database-schema.yaml")
@@ -322,7 +327,8 @@ def main():
     with (args.root/"编码权威事实/PERMISSION_CLOSURE/role-permission-matrix.csv").open(encoding="utf-8-sig",newline="") as f:
         csv_maps=list(csv.DictReader(f))
     if len(csv_maps)!=len(maps):rbac_errors.append(f"role matrix CSV={len(csv_maps)} expected={len(maps)}")
-    seed=(args.root/"编码权威事实/DATABASE_DDL/V4__rbac_seed_data.sql").read_text(encoding="utf-8")
+    seed_migration = migration_for_capability(migrations, args.root, "RBAC_SEED_REPLAY")
+    seed = seed_migration["path"].read_text(encoding="utf-8")
     p_ins=len(re.findall(r"INSERT INTO atp_permission_code\s*\(",seed,re.I))
     r_ins=len(re.findall(r"INSERT INTO atp_role\s*\(",seed,re.I))
     m_ins=len(re.findall(r"INSERT INTO atp_role_permission\s*\(",seed,re.I))
@@ -407,7 +413,7 @@ def main():
     if not required_auth_schemas.issubset(set(components)):
         api_errors.append(f"missing auth schemas {sorted(required_auth_schemas-set(components))}")
     contract_rules=api.get("x-contract-rules",{})
-    if contract_rules.get("code_readiness")!=EXPECTED_CODE_READINESS:
+    if contract_rules.get("code_readiness")!=canonical_readiness:
         api_errors.append(f"x-contract-rules code_readiness={contract_rules.get('code_readiness')}")
     # targeted identity
     crs=components.get("CredentialRevisionResource",{})
@@ -504,26 +510,22 @@ def main():
     # 11 Gate separation and Agent/Skill consistency
     gate_errors=[]
     sd=v.yaml("编码权威事实/SYSTEM_DESIGN.yaml")
-    if sd["release_gate"]["authority_readiness"]["status"]!=EXPECTED_CODE_READINESS:gate_errors.append("SYSTEM_DESIGN code gate")
-    if "REAL_ACCEPTANCE_EVIDENCE" not in sd["release_gate"]["authority_readiness"].get("does_not_require",[]):gate_errors.append("real acceptance still code blocker")
-    if sd.get("runtime_gate_contract", {}).get("implementation_status") not in {
-        "IMPLEMENTATION_PENDING_FOR_GOV_P1_002_003_005",
-        "IMPLEMENTED_PENDING_RUNTIME_VALIDATION",
-        "IMPLEMENTED_RUNTIME_VALIDATED",
-    }:
-        gate_errors.append("implementation gate")
-    if sd.get("release_gate", {}).get("implementation_release_readiness", {}).get("status_source") != "SYSTEM_DESIGN.runtime_gate_contract.implementation_status":
-        gate_errors.append("implementation status must be referenced from runtime_gate_contract")
+    if not canonical_readiness or sd["release_gate"]["authority_readiness"]["status"]!=canonical_readiness:gate_errors.append("SYSTEM_DESIGN code gate")
+    gate_catalog = sd.get("runtime_gate_catalog", {})
+    gate_ids = {item.get("gate_id") for item in gate_catalog.get("gates", []) if isinstance(item, dict)}
+    if "FULL_SCHEMA_MYSQL84_RUNTIME_GATE" not in gate_ids:
+        gate_errors.append("runtime gate catalog missing FULL_SCHEMA_MYSQL84_RUNTIME_GATE")
+    for item in gate_catalog.get("gates", []):
+        if isinstance(item, dict) and any(k in item for k in ("status", "last_execution_evidence", "evidence_ref")):
+            gate_errors.append(f"runtime gate catalog stores temporary result state: {item.get('gate_id')}")
     database_configuration=sd["database_contract"].get("connection_configuration",{})
     if database_configuration.get("application_database_url_env")!="ATP_DATABASE_URL":gate_errors.append("application database URL governance")
     if database_configuration.get("mysql_admin_url_env")!="ATP_MYSQL_ADMIN_URL":gate_errors.append("MySQL admin URL governance")
-    auth_runtime_evidence=sd["database_contract"].get("authentication_runtime_evidence",{})
-    if auth_runtime_evidence.get("mysql",{}).get("status_name")!="AUTH_MYSQL_RUNTIME_GATE":gate_errors.append("auth MySQL runtime Gate naming")
-    if auth_runtime_evidence.get("browser",{}).get("status_name")!="AUTH_BROWSER_RUNTIME_GATE":gate_errors.append("auth browser runtime Gate naming")
     repo_root=args.root.parents[1]
+    readiness_source="docs/authority/产品总体需求与系统边界/产品总体需求与系统边界.yaml#metadata.code_readiness"
     runtime_docs=[
-      (repo_root/"AGENTS.md", [AUTHORITY_MODEL, "docs/authority", "MUST_NOT_INVOKE_GIT", EXPECTED_CODE_READINESS]),
-      (repo_root/".agents/skills/ai-auto-test-platform-core/SKILL.md", [AUTHORITY_MODEL, "docs/authority", EXPECTED_CODE_READINESS]),
+      (repo_root/"AGENTS.md", [AUTHORITY_MODEL, "docs/authority", "USER_OWNS_GIT"]),
+      (repo_root/".agents/skills/feature-orchestrator/SKILL.md", ["Full Impact Scan", "Required Gates"]),
     ]
     for path,tokens in runtime_docs:
         if not path.exists():

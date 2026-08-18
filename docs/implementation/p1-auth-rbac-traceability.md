@@ -7,7 +7,7 @@
 - Git 主权：由用户在 IDEA 中人工查看、提交、推送；Codex 不执行 Git 读写操作。
 - 实现阶段：P1 身份认证 + 默认 admin + RBAC。
 - 当前 Authority 编码准入：`READY_FOR_P1_IMPLEMENTATION`。
-- P1 Auth 当前实现状态：`IMPLEMENTED_RUNTIME_VALIDATED`；静态/契约实现、MySQL 8.4 与真实 Chromium Browser/E2E 运行证据均已闭环。
+- P1 Auth 实现与 Authority 对齐情况由当前代码、确定性 Validator 和本 Task Runtime Gate 共同检查；历史 Gate PASS 不作为当前 Task PASS。
 - GOV-P1-001：**已确认并已纳入当前 Authority**——独立结构化、append-only 认证安全审计。
 - GOV-P1-004：**已确认并已纳入当前 Authority**——JWT Key Ring 与安全轮换。
 - GOV-P1-002：**已确认并已实现到本地验证边界**——`SYSTEM_GENERATED_ONE_TIME_TEMP_CREDENTIAL`，创建/重置凭据只在首次已提交响应交付临时密码，重放不得恢复秘密。
@@ -19,7 +19,7 @@
 
 ## 当前准入结论
 
-GOV-P1-001..005 已统一进入 Living Authority，并已实现JWT Key Ring、认证安全审计、默认admin Bootstrap、Refresh Session、实时RBAC、用户治理、共享来源限流、改密幂等与Vue重新认证行为。当前仍须通过真实MySQL 8.4与Chromium Gate后才能更新依赖这些环境的Acceptance证据。
+GOV-P1-001..005 已统一进入 Living Authority，并已实现 JWT Key Ring、认证安全审计、默认 admin Bootstrap、Refresh Session、实时 RBAC、用户治理、共享来源限流、改密幂等与 Vue 重新认证行为。当前 Task 如影响相关实现，必须重新执行 `SYSTEM_DESIGN.runtime_gate_catalog` 中适用 Gate；Acceptance 状态统一以 `tools/current_facts.py#acceptance` 与 `ACCEPTANCE_CLOSURE` 为准。
 
 当前关键技术事实：
 
@@ -34,9 +34,9 @@ P1 实现至少必须读取并追踪：
 - `docs/authority/编码权威事实/AUTHENTICATION_CONTRACT/authentication-contract.yaml`
 - `docs/authority/编码权威事实/OPENAPI/openapi.yaml`
 - `docs/authority/编码权威事实/DATABASE_DDL/database-schema.yaml`
-- `docs/authority/编码权威事实/DATABASE_DDL/V5__platform_authentication_contract.sql`
-- `docs/authority/编码权威事实/DATABASE_DDL/V6__p1_auth_governance_closure.sql`
-- `docs/authority/编码权威事实/DATABASE_DDL/V7__p1_remaining_authentication_closure.sql`
+- `docs/authority/编码权威事实/DATABASE_DDL/database-schema.yaml`
+- `docs/authority/编码权威事实/DATABASE_DDL/migration-capabilities.yaml`
+- 当前 Migration 集/Head 由 `tools/current_facts.py#discover_migrations` 动态解析，本文不复制具体版本列表
 - `docs/authority/编码权威事实/STATE_OWNER_REGISTRY/state-owner-registry.yaml`
 - `docs/authority/编码权威事实/PERMISSION_CLOSURE/**`
 - `docs/authority/编码权威事实/ACCEPTANCE_CLOSURE/**`
@@ -52,7 +52,7 @@ P1 实现至少必须读取并追踪：
 |---|---|---|
 | 用户对象 | `OBJ-001`，username 为正式业务身份 | 复用 `atp_user`，不得建立平行用户体系 |
 | 默认 admin | 固定用户名 `admin`；不可删除/禁用/归档/改名/解绑超级管理员 | 显式 Bootstrap，禁止用户名后门 |
-| RBAC | 50 Permission / 12 Role / 600 Mapping | 权限实时从数据库关系计算，不进入 Access JWT |
+| RBAC | Permission / Role / Mapping 当前数量统一读取 `tools/current_facts.py#rbac` | 权限实时从数据库关系计算，不进入 Access JWT |
 | 平台凭据 | `AUTH-OBJ-001 / atp_platform_user_credential` | Argon2id、credential_version、force_password_change、失败锁均由正式字段承载 |
 | Refresh Session | `AUTH-OBJ-002 / atp_auth_refresh_session` | 服务端持久化，仅存 Refresh Token SHA-256 Hash，支持 rotation/revoke/replay |
 | 认证安全审计 | `AUTH-OBJ-003 / atp_auth_security_audit` | 只允许 INSERT；UPDATE/DELETE 由 MySQL trigger 拒绝；敏感状态变更与审计同事务 |
@@ -66,9 +66,9 @@ P1 实现至少必须读取并追踪：
 | admin Bootstrap | `SYSTEM_BOOTSTRAP_ADMIN_V1` | 密码只允许 TTY 或 `ATP_BOOTSTRAP_ADMIN_PASSWORD_FILE`；失败整体回滚 |
 | 用户治理 | Create/Reset/Enable/Disable/Role Binding | 服务端权限与admin保护；临时密码一次性交付；幂等、row_version、审计同事务 |
 | Change Password | 204且无Token；相同幂等请求重放204 | 先claim幂等V2，再锁User/Credential/Session；只变更一次并撤销全部Session |
-| Migration | `V3 -> V4 -> V5 -> V6 -> V7` | V6保持不变；V7新增来源限流、幂等V2兼容字段、索引和审计action约束 |
+| Migration | 当前链由 `tools/current_facts.py#discover_migrations` 机械解析 | 认证所需语义边界通过 `migration-capabilities.yaml` 定位，不按具体 Migration 编号分支 |
 | State Owner | 8个认证语义 | `AUTH-STATE-007`不可变审计；`AUTH-STATE-008`来源限流窗口 |
-| P1验收 | 87项 SPECIFIED | 只有真实执行后才允许更新证据，不能把静态验证冒充平台验收 |
+| P1验收 | 状态由 `tools/current_facts.py#acceptance` 机械派生 | 只有逐项 Direct Evidence Mapping + 实际 PASS 证据通过 `validate_acceptance_evidence.py` 后，才允许写入 PASSED/VERIFIED |
 
 ## 当前实现边界
 
@@ -96,12 +96,14 @@ P1 不得自动进入：项目/环境/业务终端、Runner、测试资产、AI 
 AUTHORITY_MODEL = SINGLE_LIVING_AUTHORITY
 GOV_P1_001 = AUTHORITY_SYNCED_IMPLEMENTED_LOCAL_REVIEW_PASS
 GOV_P1_004 = AUTHORITY_SYNCED_IMPLEMENTED_LOCAL_REVIEW_PASS
-GOV_P1_002_003_005 = IMPLEMENTED_RUNTIME_VALIDATED
-P1_AUTH_IMPLEMENTATION_STATUS = IMPLEMENTED_RUNTIME_VALIDATED
-P1_AUTH_RBAC_ACCEPTANCE = NOT_YET_COMPLETED
-REAL_PLATFORM_ACCEPTANCE = NOT_COMPLETED
+GOV_P1_002_003_005_CODE_STATUS = IMPLEMENTED
+P1_AUTH_IMPLEMENTATION_CODE_STATUS = IMPLEMENTED
+P1_AUTH_RUNTIME_VALIDATION_STATUS = SEE_SYSTEM_DESIGN
+P1_AUTH_EVIDENCE_FRESHNESS_STATUS = SEE_SYSTEM_DESIGN
+P1_AUTH_RBAC_ACCEPTANCE = SEE_CURRENT_FACTS_AND_ACCEPTANCE_CLOSURE
+REAL_PLATFORM_ACCEPTANCE = NOT_EVALUATED_FULL_PLATFORM_NOT_IMPLEMENTED
 ```
 
-静态 Contract / Authority / OpenAPI / Governance PASS 只证明当前契约与实现可继续推进；真实 MySQL 8.4、真实 API/Vue Chromium 闭环和对应 Acceptance 证据仍需在具备环境条件时执行。
+静态 Contract / Authority / OpenAPI / Governance PASS 只证明当前契约与实现可继续推进；MySQL 8.4 与 API/Vue Chromium 均存在历史真实 PASS，但当前 Gate/Evidence Contract 已硬化，当前必须重跑并生成与新 gate source / verification subject 匹配的 machine evidence。Acceptance 是否完成必须由逐项 Direct Evidence Mapping 独立证明，禁止由 Domain 级测试集合或 Runtime Gate PASS 批量推导。
 
 当前认证运行门禁使用长期能力域入口：`tools/gates/auth_mysql_gate.py` 与 `tools/gates/auth_browser_gate.py`；状态名分别为 `AUTH_MYSQL_RUNTIME_GATE` 与 `AUTH_BROWSER_RUNTIME_GATE`。管理员连接由 `ATP_MYSQL_ADMIN_URL` 注入，应用/隔离测试数据库连接统一由 `ATP_DATABASE_URL` 注入；破坏性验证仅允许命中 `ai_auto_test_platform_gate_auth_<unique>` 临时库。

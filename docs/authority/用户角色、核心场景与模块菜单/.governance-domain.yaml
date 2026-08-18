@@ -1,0 +1,12 @@
+schema_version: 2
+owner_identity: docs/authority/用户角色、核心场景与模块菜单
+domains:
+  - PRODUCT_UI
+inherit: true
+authority_files:
+  - docs/authority/用户角色、核心场景与模块菜单/用户角色、核心场景与模块菜单.yaml
+sovereignty_categories:
+  - ROLE
+  - FORMAL_CAPABILITY_REMOVAL
+engineering_gates:
+  - authority_validators

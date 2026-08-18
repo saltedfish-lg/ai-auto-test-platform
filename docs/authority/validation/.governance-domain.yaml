@@ -1,0 +1,10 @@
+schema_version: 2
+owner_identity: docs/authority/validation
+domains:
+  - GOVERNANCE
+  - DATABASE_SCHEMA
+  - AUTHENTICATION
+  - BROWSER_UI
+inherit: true
+engineering_gates:
+  - authority_validators

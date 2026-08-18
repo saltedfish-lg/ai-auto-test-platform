@@ -1,0 +1,296 @@
+schema_version: 1
+domains:
+  GOVERNANCE:
+    owner_identity: tools/governance
+    paths:
+    - AGENTS.md
+    - .agents/**
+    - .codex/**
+    - tools/governance/**
+    - agent-governance-lite/**
+    - .governance/**
+    - '**/.governance-domain.yaml'
+    - '**/*.governance-domain.yaml'
+    tests:
+    - tests/contract/test_governance_*.py
+    gates:
+    - governance_lite_validator
+    - governance_contract_test
+    reviewer_risks:
+    - HIGH_REGRESSION_RISK
+    kind: infrastructure
+  FRONTEND:
+    owner_identity: apps/web
+    domains:
+    - BROWSER_UI
+    paths:
+    - apps/web/**
+    tests:
+    - apps/web/src/tests
+    gates:
+    - frontend_test
+    depends_on:
+    - services/api
+    routes:
+    - patterns:
+      - apps/web/src/views/LoginView.vue
+      - apps/web/src/views/ChangePasswordView.vue
+      - apps/web/src/stores/session.ts
+      - apps/web/src/components/PermissionGate.vue
+      - apps/web/src/api/*.ts
+      - apps/web/e2e/auth.spec.ts
+      domains:
+      - AUTHENTICATION
+      - ACCOUNT_SECURITY
+      authorities:
+      - docs/authority/编码权威事实/AUTHENTICATION_CONTRACT/authentication-contract.yaml
+      - docs/authority/编码权威事实/PERMISSION_CLOSURE/permission-closure.yaml
+      - docs/authority/编码权威事实/OPENAPI/openapi.yaml
+      formal_gate_conditions:
+      - AUTH_UI_OR_END_TO_END_CHANGED
+      reviewer_risks:
+      - SECURITY_SENSITIVE
+      - PRODUCT_SOVEREIGNTY_SENSITIVE
+    - patterns:
+      - apps/web/e2e/*.spec.ts
+      tests:
+      - apps/web/e2e
+      gates:
+      - playwright_test
+    kind: implementation
+  BACKEND:
+    owner_identity: services/api
+    paths:
+    - services/api/**
+    tests:
+    - services/api/tests
+    gates:
+    - backend_test
+    routes:
+    - patterns:
+      - services/api/src/platform_api/auth*.py
+      - services/api/src/platform_api/security.py
+      - services/api/src/platform_api/session_service.py
+      - services/api/src/platform_api/rate_limit.py
+      - services/api/src/platform_api/bootstrap.py
+      - services/api/src/platform_api/user_admin*.py
+      domains:
+      - AUTHENTICATION
+      - ACCOUNT_SECURITY
+      authorities:
+      - docs/authority/编码权威事实/AUTHENTICATION_CONTRACT/authentication-contract.yaml
+      - docs/authority/编码权威事实/PERMISSION_CLOSURE/permission-closure.yaml
+      - docs/authority/编码权威事实/OPENAPI/openapi.yaml
+      formal_gate_conditions:
+      - AUTH_BACKEND_OR_DATABASE_CHANGED
+      reviewer_risks:
+      - SECURITY_SENSITIVE
+      - PRODUCT_SOVEREIGNTY_SENSITIVE
+    - patterns:
+      - services/api/src/platform_api/user_admin*.py
+      domains:
+      - AUTHORIZATION
+      - RBAC
+      - DEFAULT_ADMIN
+      sovereignty_categories:
+      - ROLE
+      - PERMISSION
+      - PRODUCT_SECURITY_RULE
+      reviewer_risks:
+      - PRODUCT_SOVEREIGNTY_SENSITIVE
+    - patterns:
+      - services/api/src/platform_api/auth_service.py
+      - services/api/src/platform_api/session_service.py
+      - services/api/src/platform_api/security.py
+      - services/api/src/platform_api/auth_hmac.py
+      - services/api/src/platform_api/config.py
+      domains:
+      - CREDENTIAL
+      - SESSION
+      sovereignty_categories:
+      - PRODUCT_SECURITY_RULE
+      reviewer_risks:
+      - PRODUCT_SOVEREIGNTY_SENSITIVE
+    kind: implementation
+  API_CONTRACT:
+    owner_identity: packages/contracts
+    domains:
+    - SHARED_LIBRARY
+    paths:
+    - packages/contracts/**
+    tests:
+    - packages/contracts/tests
+    gates:
+    - openapi_client_check
+    reviewer_risks:
+    - HIGH_REGRESSION_RISK
+    kind: implementation
+  WORKERS:
+    owner_identity: workers
+    paths:
+    - workers/**
+    tests:
+    - workers/scheduler/tests
+    - workers/background/tests
+    gates:
+    - worker_test
+    kind: implementation
+  RUNNER:
+    owner_identity: runner
+    paths:
+    - runner/**
+    tests:
+    - runner/agent/tests
+    gates:
+    - runner_test
+    reviewer_risks:
+    - HIGH_REGRESSION_RISK
+    kind: implementation
+  TESTING:
+    owner_identity: tests
+    domains:
+    - ACCEPTANCE
+    paths:
+    - tests/**
+    gates:
+    - backend_test
+    routes:
+    - patterns:
+      - tests/e2e/**
+      domains:
+      - BROWSER_UI
+      gates:
+      - playwright_test
+    kind: testing
+  DATABASE_SCHEMA:
+    owner_identity: docs/authority/编码权威事实/DATABASE_DDL
+    paths:
+    - docs/authority/编码权威事实/DATABASE_DDL/**
+    - '**/migrations/**'
+    - '**/*.sql'
+    authority_files:
+    - docs/authority/编码权威事实/DATABASE_DDL/database-schema.yaml
+    - docs/authority/编码权威事实/DATABASE_DDL/migration-capabilities.yaml
+    gates:
+    - authority_validators
+    formal_gate_conditions:
+    - MIGRATION_OR_DATABASE_SCHEMA_CHANGED
+    kind: implementation
+  AUTHENTICATION:
+    owner_identity: docs/authority/编码权威事实/AUTHENTICATION_CONTRACT
+    paths:
+    - docs/authority/编码权威事实/AUTHENTICATION_CONTRACT/**
+    authority_files:
+    - docs/authority/编码权威事实/AUTHENTICATION_CONTRACT/authentication-contract.yaml
+    sovereignty_categories:
+    - PRODUCT_SECURITY_RULE
+    - PUBLIC_PRODUCT_CONTRACT
+    gates:
+    - authority_validators
+    formal_gate_conditions:
+    - AUTH_BACKEND_OR_DATABASE_CHANGED
+    - AUTH_UI_OR_END_TO_END_CHANGED
+    kind: authority
+  AUTHORIZATION:
+    owner_identity: docs/authority/编码权威事实/PERMISSION_CLOSURE
+    paths:
+    - docs/authority/编码权威事实/PERMISSION_CLOSURE/**
+    - docs/authority/权限、并发与资源冲突规则/**
+    authority_files:
+    - docs/authority/编码权威事实/PERMISSION_CLOSURE/permission-closure.yaml
+    - docs/authority/编码权威事实/PERMISSION_CLOSURE/role-permission-matrix.csv
+    - docs/authority/权限、并发与资源冲突规则/权限、并发与资源冲突规则.yaml
+    sovereignty_categories:
+    - ROLE
+    - PERMISSION
+    - RESOURCE_CONFLICT
+    gates:
+    - authority_validators
+    kind: authority
+  PRODUCT_MODEL:
+    owner_identity: docs/authority/核心对象、业务规则与生命周期
+    paths:
+    - docs/authority/核心对象、业务规则与生命周期/**
+    authority_files:
+    - docs/authority/核心对象、业务规则与生命周期/核心对象、业务规则与生命周期.yaml
+    sovereignty_categories:
+    - STATE
+    - STATE_MACHINE
+    - BUSINESS_RULE
+    - LIFECYCLE
+    gates:
+    - authority_validators
+    kind: authority
+  ARCHITECTURE:
+    owner_identity: docs/authority/系统技术架构技术选型与AGENTS
+    paths:
+    - docs/authority/系统技术架构技术选型与AGENTS/**
+    - docs/authority/编码权威事实/SYSTEM_DESIGN.yaml
+    authority_files:
+    - docs/authority/系统技术架构技术选型与AGENTS/系统技术架构和技术栈、技术选型.yaml
+    - docs/authority/编码权威事实/SYSTEM_DESIGN.yaml
+    gates:
+    - authority_validators
+    reviewer_risks:
+    - ARCHITECTURE
+    kind: architecture
+  DATA_GOVERNANCE:
+    owner_identity: docs/authority/数据安全、制品生命周期与验收基线
+    paths:
+    - docs/authority/数据安全、制品生命周期与验收基线/**
+    authority_files:
+    - docs/authority/数据安全、制品生命周期与验收基线/数据安全、制品生命周期与验收基线.yaml
+    sovereignty_categories:
+    - DATA_RETENTION
+    - PRODUCT_SECURITY_RULE
+    gates:
+    - authority_validators
+    kind: authority
+  PRODUCT_BOUNDARY:
+    owner_identity: docs/authority/产品总体需求与系统边界
+    paths:
+    - docs/authority/产品总体需求与系统边界/**
+    authority_files:
+    - docs/authority/产品总体需求与系统边界/产品总体需求与系统边界.yaml
+    sovereignty_categories:
+    - PUBLIC_PRODUCT_CONTRACT
+    - FORMAL_CAPABILITY_REMOVAL
+    reviewer_risks:
+    - ARCHITECTURE
+    gates:
+    - authority_validators
+    kind: authority
+  PRODUCT_UI:
+    owner_identity: docs/authority/用户角色、核心场景与模块菜单
+    paths:
+    - docs/authority/用户角色、核心场景与模块菜单/**
+    authority_files:
+    - docs/authority/用户角色、核心场景与模块菜单/用户角色、核心场景与模块菜单.yaml
+    sovereignty_categories:
+    - ROLE
+    - FORMAL_CAPABILITY_REMOVAL
+    gates:
+    - authority_validators
+    kind: authority
+  LOCAL_DATABASE_ENVIRONMENT:
+    owner_identity: packages/platform-common
+    paths:
+    - packages/platform-common/**
+    - tools/environment.py
+    - tools/database/**
+    - services/api/src/platform_api/config.py
+    - workers/background/src/platform_worker/config.py
+    - workers/scheduler/src/platform_scheduler/config.py
+    - tools/gates/auth_mysql_gate.py
+    - tools/gates/auth_browser_gate.py
+    - tools/mysql84_gate.py
+    - docs/authority/validation/run_mysql84_gate.py
+    - .env.example
+    tests:
+    - tests/contract/test_database_environment.py
+    - packages/platform-common/tests
+    gates:
+    - database_environment_contract
+    reviewer_risks:
+    - HIGH_REGRESSION_RISK
+    kind: infrastructure

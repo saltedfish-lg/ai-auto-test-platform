@@ -1,0 +1,12 @@
+schema_version: 2
+owner_identity: docs/authority/编码权威事实/SYSTEM_DESIGN.yaml
+domains:
+  - ARCHITECTURE
+  - GOVERNANCE
+inherit: false
+authority_files:
+  - docs/authority/编码权威事实/SYSTEM_DESIGN.yaml
+reviewer_risks:
+  - ARCHITECTURE
+engineering_gates:
+  - authority_validators

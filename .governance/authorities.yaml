@@ -1,0 +1,31 @@
+schema_version: 1
+authorities:
+  product_model:
+    domains: [PRODUCT_MODEL, STATE_MACHINE, LIFECYCLE]
+    paths: [docs/authority/核心对象、业务规则与生命周期/核心对象、业务规则与生命周期.yaml]
+  authentication:
+    domains: [AUTHENTICATION, ACCOUNT_SECURITY, CREDENTIAL, SESSION]
+    paths: [docs/authority/编码权威事实/AUTHENTICATION_CONTRACT/authentication-contract.yaml]
+  permission:
+    domains: [AUTHORIZATION, RBAC, DEFAULT_ADMIN]
+    paths:
+      - docs/authority/编码权威事实/PERMISSION_CLOSURE/permission-closure.yaml
+      - docs/authority/编码权威事实/PERMISSION_CLOSURE/role-permission-matrix.csv
+  api_contract:
+    domains: [API_CONTRACT, PUBLIC_API]
+    paths:
+      - docs/authority/编码权威事实/OPENAPI/openapi.yaml
+      - docs/authority/编码权威事实/OPENAPI/operation-permission-mapping.csv
+  database:
+    domains: [DATABASE_SCHEMA]
+    paths:
+      - docs/authority/编码权威事实/DATABASE_DDL/database-schema.yaml
+      - docs/authority/编码权威事实/DATABASE_DDL/migration-capabilities.yaml
+  architecture:
+    domains: [ARCHITECTURE]
+    paths:
+      - docs/authority/系统技术架构技术选型与AGENTS/系统技术架构和技术栈、技术选型.yaml
+      - docs/authority/编码权威事实/SYSTEM_DESIGN.yaml
+  acceptance:
+    domains: [ACCEPTANCE]
+    paths: [docs/authority/编码权威事实/ACCEPTANCE_CLOSURE/acceptance-closure.csv]

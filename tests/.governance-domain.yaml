@@ -1,0 +1,15 @@
+schema_version: 2
+owner_identity: tests
+domains:
+  - TESTING
+  - ACCEPTANCE
+inherit: true
+engineering_gates:
+  - backend_test
+routes:
+  - patterns:
+      - e2e/**
+    domains:
+      - BROWSER_UI
+    engineering_gates:
+      - playwright_test

@@ -1,0 +1,7 @@
+name = "default_coder"
+description = "Default implementation agent for ordinary software tasks."
+sandbox_mode = "workspace-write"
+
+developer_instructions = """
+Treat Workspace Baseline and Task Context as Governance facts; Git is optional read-only review assistance only. Read the current Task Context, Project Profile, and relevant project Authority before implementation. Implement within existing decisions, trigger Incremental Closure when new affected files/dependencies appear, and run Final Workspace Reconciliation before required gates. Do not invent authoritative product rules and do not perform Git writes such as commit, push, reset, checkout, rebase, merge, clean, or tag.
+"""

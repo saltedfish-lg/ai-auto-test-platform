@@ -85,38 +85,22 @@ def test_p1_migration_and_state_owner_alignment() -> None:
     assert len(auth_owners) == 8
     assert any(item["semantic"] == "AUTH_SECURITY_AUDIT_IMMUTABILITY" for item in auth_owners)
     assert any(item["semantic"] == "SOURCE_RATE_LIMIT_WINDOW" for item in auth_owners)
-    assert '"V7__p1_remaining_authentication_closure.sql"' in gate
+    assert "discover_migrations" in gate
+    assert "migration_for_capability" in gate
+    assert "V7__p1_remaining_authentication_closure.sql" not in gate
     assert "docs/baseline" not in gate
 
 
 def test_auth_implementation_status_matches_existing_implementation() -> None:
-    contract = yaml.safe_load(
-        (AUTHORITY / "编码权威事实/AUTHENTICATION_CONTRACT/authentication-contract.yaml").read_text(
-            encoding="utf-8"
-        )
-    )
-    design = yaml.safe_load(
-        (AUTHORITY / "编码权威事实/SYSTEM_DESIGN.yaml").read_text(encoding="utf-8")
-    )
-    assert contract["metadata"]["implementation_status_source"] == (
-        "SYSTEM_DESIGN.runtime_gate_contract.implementation_status"
-    )
-    assert design["runtime_gate_contract"]["implementation_status"] == (
-        "IMPLEMENTED_RUNTIME_VALIDATED"
-    )
-    assert contract["metadata"]["deferred_product_decisions"] == 0
+    contract = yaml.safe_load((AUTHORITY / "编码权威事实/AUTHENTICATION_CONTRACT/authentication-contract.yaml").read_text(encoding="utf-8"))
+    design = yaml.safe_load((AUTHORITY / "编码权威事实/SYSTEM_DESIGN.yaml").read_text(encoding="utf-8"))
+    assert "implementation_code_status_source" not in contract["metadata"]
+    assert "runtime_gate_contract" not in design
+    assert "runtime_gate_catalog" in design
     for relative in (
-        "services/api/src/platform_api/auth_service.py",
-        "services/api/src/platform_api/auth_router.py",
-        "services/api/src/platform_api/auth_hmac.py",
-        "services/api/src/platform_api/rate_limit.py",
-        "services/api/src/platform_api/user_admin_service.py",
-        "services/api/src/platform_api/security.py",
-        "services/api/src/platform_api/models.py",
-        "apps/web/src/views/LoginView.vue",
-        "apps/web/src/views/ChangePasswordView.vue",
-        "apps/web/src/stores/session.ts",
-    ):
+        "services/api/src/platform_api/auth_service.py", "services/api/src/platform_api/auth_router.py", "services/api/src/platform_api/auth_hmac.py",
+        "services/api/src/platform_api/rate_limit.py", "services/api/src/platform_api/user_admin_service.py", "services/api/src/platform_api/security.py",
+        "services/api/src/platform_api/models.py", "apps/web/src/views/LoginView.vue", "apps/web/src/views/ChangePasswordView.vue", "apps/web/src/stores/session.ts"):
         assert (ROOT / relative).is_file(), relative
 
 
@@ -144,7 +128,6 @@ def test_confirmed_p1_governance_items_have_no_placeholders_and_are_implemented(
     for decision_id, selected_option in expected.items():
         assert decision_id in traceability
         assert selected_option in traceability
-    assert "GOV_P1_002_003_005 = IMPLEMENTED_RUNTIME_VALIDATED" in traceability
 
     hmac_ring = contract["auth_hmac_key_ring"]
     assert hmac_ring["configuration"] == "ATP_AUTH_HMAC_MASTER_KEY_FILE"

@@ -1,0 +1,26 @@
+schema_version: 1
+technology:
+  languages:
+    python:
+      paths: ['**/*.py']
+      adapter: python
+    typescript:
+      paths: ['**/*.ts', '**/*.tsx']
+      adapter: typescript
+    javascript:
+      paths: ['**/*.js', '**/*.jsx']
+      adapter: javascript
+    vue:
+      paths: ['**/*.vue']
+      adapter: vue
+  adapters:
+    python:
+      checks: [no_unresolved_todo, python_syntax]
+    typescript:
+      checks: [no_unresolved_todo]
+    javascript:
+      checks: [no_unresolved_todo]
+    vue:
+      checks: [no_unresolved_todo]
+    generic:
+      checks: [no_unresolved_todo]

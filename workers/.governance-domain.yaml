@@ -1,0 +1,10 @@
+schema_version: 2
+owner_identity: workers
+domains:
+  - WORKERS
+inherit: true
+tests:
+  - workers/scheduler/tests
+  - workers/background/tests
+engineering_gates:
+  - worker_test

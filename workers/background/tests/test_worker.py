@@ -18,3 +18,14 @@ def test_background_worker_starts_and_stops_without_consuming_tasks() -> None:
         assert application.started is False
 
     asyncio.run(scenario())
+
+
+def test_background_worker_uses_atp_database_url_before_legacy_alias(monkeypatch) -> None:
+    governed = "mysql+pymysql://worker:local@127.0.0.1/worker_governed"
+    monkeypatch.setenv("PLATFORM_ENVIRONMENT", "test")
+    monkeypatch.setenv("ATP_DATABASE_URL", governed)
+    monkeypatch.setenv(
+        "PLATFORM_DATABASE_URL",
+        "mysql+pymysql://legacy:local@127.0.0.1/worker_legacy",
+    )
+    assert WorkerSettings(_env_file=None).database_url == governed

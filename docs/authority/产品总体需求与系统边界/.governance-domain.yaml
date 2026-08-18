@@ -1,0 +1,14 @@
+schema_version: 2
+owner_identity: docs/authority/产品总体需求与系统边界
+domains:
+  - PRODUCT_BOUNDARY
+inherit: true
+authority_files:
+  - docs/authority/产品总体需求与系统边界/产品总体需求与系统边界.yaml
+sovereignty_categories:
+  - PUBLIC_PRODUCT_CONTRACT
+  - FORMAL_CAPABILITY_REMOVAL
+reviewer_risks:
+  - ARCHITECTURE
+engineering_gates:
+  - authority_validators

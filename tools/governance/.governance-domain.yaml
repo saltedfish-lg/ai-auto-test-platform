@@ -1,0 +1,12 @@
+schema_version: 3
+owner_identity: tools/governance
+domains:
+- GOVERNANCE
+inherit: true
+tests:
+- tests/contract/test_governance_*.py
+engineering_gates:
+- governance_lite_validator
+- governance_contract_test
+reviewer_risks:
+- HIGH_REGRESSION_RISK

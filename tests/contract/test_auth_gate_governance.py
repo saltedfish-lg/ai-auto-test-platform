@@ -44,7 +44,9 @@ class _FakeConnection:
 
 
 def _result(output: str) -> dict[str, object]:
-    return json.loads(output.strip().splitlines()[-1])
+    # Gate stdout is a complete machine-readable JSON document; formatting
+    # (compact vs. indented) is not part of the governance contract.
+    return json.loads(output.strip())
 
 
 def _configure_fake_runtime(
@@ -68,7 +70,7 @@ def _configure_fake_runtime(
             else (lambda _database, _path: None)
         ),
     )
-    monkeypatch.setattr(auth_mysql_gate, "_seed_v6_legacy_idempotency_record", lambda _db: None)
+    monkeypatch.setattr(auth_mysql_gate, "_seed_legacy_idempotency_record", lambda _db: None)
     monkeypatch.setattr(
         auth_mysql_gate.subprocess,
         "run",
@@ -100,7 +102,9 @@ def test_missing_admin_environment_is_blocked_without_a_secret(
 
     assert auth_mysql_gate.main() == 2
     output = capsys.readouterr().out
-    assert _result(output)[auth_mysql_gate.GATE_STATUS_NAME] == "BLOCKED"
+    payload = _result(output)
+    assert payload["gate_id"] == auth_mysql_gate.GATE_STATUS_NAME
+    assert payload["result"] == "BLOCKED"
     assert "mysql+pymysql://" not in output
 
 
@@ -113,9 +117,11 @@ def test_successful_gate_uses_and_cleans_the_isolated_database(
     assert auth_mysql_gate.main() == 0
     output = capsys.readouterr().out
     payload = _result(output)
-    assert payload[auth_mysql_gate.GATE_STATUS_NAME] == "PASS"
-    assert payload["isolated_database_removed"] is True
-    assert removed == [payload["database"]]
+    assert payload["gate_id"] == auth_mysql_gate.GATE_STATUS_NAME
+    assert payload["result"] == "PASS"
+    assert payload["cleanup_status"]["temporary_database_removed"] is True
+    assert payload["cleanup_status"]["success"] is True
+    assert len(removed) == 1 and removed[0].startswith(auth_mysql_gate.DATABASE_PREFIX)
     assert "synthetic-secret" not in output
     assert "mysql+pymysql://" not in output
 
@@ -129,10 +135,12 @@ def test_failure_still_cleans_the_database_and_sanitizes_the_error(
     assert auth_mysql_gate.main() == 1
     output = capsys.readouterr().out
     payload = _result(output)
-    assert payload[auth_mysql_gate.GATE_STATUS_NAME] == "FAIL"
-    assert payload["isolated_database_removed"] is True
+    assert payload["gate_id"] == auth_mysql_gate.GATE_STATUS_NAME
+    assert payload["result"] == "FAIL"
+    assert payload["cleanup_status"]["temporary_database_removed"] is True
+    assert payload["cleanup_status"]["success"] is True
     assert payload["error_type"] == "RuntimeError"
-    assert removed == [payload["database"]]
+    assert len(removed) == 1 and removed[0].startswith(auth_mysql_gate.DATABASE_PREFIX)
     assert "synthetic-secret" not in output
     assert "synthetic failure" not in output
 
@@ -185,3 +193,7 @@ def test_gate_sources_use_capability_paths_and_status_names() -> None:
     assert 'GATE_STATUS_NAME = "AUTH_MYSQL_RUNTIME_GATE"' in mysql_source
     assert 'GATE_STATUS_NAME = "AUTH_BROWSER_RUNTIME_GATE"' in browser_source
     assert '"ATP_AUTH_HMAC_MASTER_KEY_FILE": str(hmac_key_ring_file)' in browser_source
+    assert "chromium.executablePath()" in browser_source
+    assert "CURRENT_PLAYWRIGHT_BROWSER_NOT_INSTALLED" in browser_source
+    assert 'glob("ms-playwright/chromium-*' not in browser_source
+    assert "--no-sandbox" not in browser_source

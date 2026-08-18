@@ -1,0 +1,10 @@
+schema_version: 3
+owner_identity: AGENTS.md
+domains:
+- GOVERNANCE
+inherit: false
+tests:
+- tests/contract/test_governance_*.py
+engineering_gates:
+- governance_lite_validator
+- governance_contract_test

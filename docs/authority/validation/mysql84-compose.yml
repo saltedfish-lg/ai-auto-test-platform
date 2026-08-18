@@ -46,15 +46,17 @@ services:
           b=$$(basename "$$f"); v=$${b#V}; v=$${v%%__*}
           mysql -hmysql -uroot -proot atp_authority_empty < "$$f"
         done
-        for f in /ddl/V4__*.sql; do [ -f "$$f" ] && seed_file="$$f" && break; done
-        [ -n "$$seed_file" ] || { echo 'V4 seed migration not found' >&2; exit 1; }
+        seed_file="/ddl/$${ATP_SEED_MIGRATION_NAME:?ATP_SEED_MIGRATION_NAME is required}"
+        [ -f "$$seed_file" ] || { echo 'seed capability migration not found' >&2; exit 1; }
         mysql -hmysql -uroot -proot atp_authority_empty < "$$seed_file"
         mysql -hmysql -uroot -proot atp_authority_empty < /validation/mysql84_assertions.sql
 
         fixture_inserted=0
+        boundary_name="$${ATP_LEGACY_BOUNDARY_MIGRATION_NAME:?ATP_LEGACY_BOUNDARY_MIGRATION_NAME is required}"
+        boundary_version=$${boundary_name#V}; boundary_version=$${boundary_version%%__*}
         migration_files | while IFS= read -r f; do
           b=$$(basename "$$f"); v=$${b#V}; v=$${v%%__*}
-          if [ "$$fixture_inserted" -eq 0 ] && [ "$$v" -ge 7 ]; then
+          if [ "$$fixture_inserted" -eq 0 ] && [ "$$v" -ge "$$boundary_version" ]; then
             mysql -hmysql -uroot -proot atp_authority_upgrade < /validation/mysql84_upgrade_legacy_fixture.sql
             fixture_inserted=1
           fi

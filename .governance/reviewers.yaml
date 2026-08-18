@@ -1,0 +1,12 @@
+schema_version: 1
+reviewers:
+  architecture_reviewer:
+    trigger:
+      risk: [ARCHITECTURE]
+  product_sovereignty_reviewer:
+    trigger:
+      risk: [PRODUCT_SOVEREIGNTY_SENSITIVE]
+      sovereignty_any: true
+  code_quality_reviewer:
+    trigger:
+      risk: [CODE_QUALITY_HIGH_RISK, SECURITY_SENSITIVE, HIGH_REGRESSION_RISK, BUSINESS_UI_REVIEW]

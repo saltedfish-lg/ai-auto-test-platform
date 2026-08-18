@@ -1,3 +1,4 @@
+-e packages/platform-common
 -e packages/domain-kernel
 -e packages/contracts
 -e packages/observability
@@ -16,6 +17,7 @@ mypy==1.17.1
 playwright==1.62.0
 pydantic==2.11.7
 pydantic-settings==2.10.1
+python-dotenv==1.1.1
 PyMySQL==1.1.1
 PyJWT==2.10.1
 pytest==8.4.1

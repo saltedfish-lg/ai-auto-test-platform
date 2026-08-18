@@ -10,9 +10,12 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from authority_validation import validator_commands
+_BOOTSTRAP_ROOT = Path(__file__).resolve().parents[1]
+if str(_BOOTSTRAP_ROOT) not in sys.path:
+    sys.path.insert(0, str(_BOOTSTRAP_ROOT))
+from tools._bootstrap import ensure_repo_root_on_path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = ensure_repo_root_on_path(__file__)
 PYTHON = sys.executable
 AUTHORITY_ROOT = ROOT / "docs" / "authority"
 AUTHORITY_VALIDATION = AUTHORITY_ROOT / "validation"
@@ -20,6 +23,7 @@ AUTHORITY_RELATIVE = AUTHORITY_ROOT.relative_to(ROOT).as_posix()
 AUTH_MYSQL_GATE = "tools/gates/auth_mysql_gate.py"
 AUTH_BROWSER_GATE = "tools/gates/auth_browser_gate.py"
 PYTHON_SOURCE_PATHS = (
+    "packages/platform-common/src",
     "packages/domain-kernel/src",
     "packages/contracts/src",
     "packages/observability/src",
@@ -30,6 +34,7 @@ PYTHON_SOURCE_PATHS = (
     "tools",
 )
 UNIT_TEST_PATHS = (
+    "packages/platform-common/tests",
     "packages/domain-kernel/tests",
     "packages/contracts/tests",
     "packages/observability/tests",
@@ -39,6 +44,7 @@ UNIT_TEST_PATHS = (
     "runner/agent/tests",
 )
 BUILD_PROJECTS = (
+    "packages/platform-common",
     "packages/domain-kernel",
     "packages/contracts",
     "packages/observability",
@@ -62,8 +68,8 @@ def npm(*arguments: str) -> None:
 
 
 def authority() -> None:
-    for _name, argv in validator_commands().items():
-        run((PYTHON, *argv))
+    # Reuse the canonical aggregator so Registry, timeout, and failure semantics cannot drift.
+    run((PYTHON, str(AUTHORITY_VALIDATION / "run_all_validation.py")))
 
 
 def bootstrap() -> None:
@@ -170,6 +176,7 @@ COMMANDS = {
     "test-contract": test_contract,
     "test-integration": test_integration,
     "verify-migrations": verify_migrations,
+    "database-preflight": lambda: run((PYTHON, "tools/database/check_connection.py")),
     "auth-mysql-gate": auth_mysql_gate,
     "auth-browser-gate": auth_browser_gate,
     "generate-openapi": lambda: run((PYTHON, "tools/openapi_client.py", "generate")),

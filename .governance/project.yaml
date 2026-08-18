@@ -1,0 +1,27 @@
+schema_version: 1
+project:
+  name: ai-auto-test-platform
+  type: monorepo
+runtime:
+  use_legacy_domain_metadata: true
+  generic_defaults: true
+  task_acceptance_command:
+  - npm
+  - --workspace
+  - '@platform/web'
+  - run
+  - test:e2e
+  python_source_paths:
+  - packages/platform-common/src
+  - services/api/src
+  - packages/domain-kernel/src
+  - packages/contracts/src
+  - packages/observability/src
+  - workers/scheduler/src
+  - workers/background/src
+  - runner/agent/src
+  allow_no_gates: false
+formal_gate_catalog:
+  path: docs/authority/编码权威事实/SYSTEM_DESIGN.yaml
+  catalog_key: runtime_gate_catalog
+  gates_key: gates

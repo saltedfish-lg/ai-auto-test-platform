@@ -1,0 +1,14 @@
+schema_version: 2
+owner_identity: docs/authority/核心对象、业务规则与生命周期
+domains:
+  - PRODUCT_MODEL
+inherit: true
+authority_files:
+  - docs/authority/核心对象、业务规则与生命周期/核心对象、业务规则与生命周期.yaml
+sovereignty_categories:
+  - STATE
+  - STATE_MACHINE
+  - BUSINESS_RULE
+  - LIFECYCLE
+engineering_gates:
+  - authority_validators

@@ -1,0 +1,17 @@
+schema_version: 2
+owner_identity: docs/authority/编码权威事实/DATABASE_DDL
+domains:
+  - DATABASE_SCHEMA
+inherit: true
+authority_files:
+  - docs/authority/编码权威事实/DATABASE_DDL/database-schema.yaml
+  - docs/authority/编码权威事实/DATABASE_DDL/migration-capabilities.yaml
+formal_gate_conditions:
+  - MIGRATION_OR_DATABASE_SCHEMA_CHANGED
+engineering_gates:
+  - authority_validators
+routes:
+  - patterns:
+      - V*.sql
+    formal_gate_conditions:
+      - MIGRATION_OR_DATABASE_SCHEMA_CHANGED

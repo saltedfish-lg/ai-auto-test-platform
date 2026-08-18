@@ -1,0 +1,12 @@
+schema_version: 2
+owner_identity: packages/contracts
+domains:
+  - API_CONTRACT
+  - SHARED_LIBRARY
+inherit: true
+tests:
+  - packages/contracts/tests
+engineering_gates:
+  - openapi_client_check
+reviewer_risks:
+  - HIGH_REGRESSION_RISK

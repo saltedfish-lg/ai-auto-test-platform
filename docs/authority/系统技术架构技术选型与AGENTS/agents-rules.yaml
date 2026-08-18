@@ -1,8 +1,8 @@
 metadata:
   authority_model: SINGLE_LIVING_AUTHORITY
   version: 1.4.2-auth-contract-completion
-  status: P1_AUTHENTICATION_CONTRACT_COMPLETED
-  code_readiness: READY_FOR_P1_IMPLEMENTATION
+  status: AUTHENTICATION_CONTRACT_DEFINED
+  code_readiness: IMPLEMENTATION_INPUT_READY
   last_modified_at: '2026-08-07T00:00:00+08:00'
 rules:
   technical_status: CURRENT_AUTHORITY
@@ -27,21 +27,10 @@ rules:
   - PRD-NFR-001
   - PRD-NFR-002
   - PRD-NFR-003
-  implementation_contract_status: P1_AUTHENTICATION_CONTRACT_COMPLETED
-  code_readiness: READY_FOR_P1_IMPLEMENTATION
-  implementation_status_source: 编码权威事实/SYSTEM_DESIGN.yaml#runtime_gate_contract.implementation_status
-  mysql84_gate: 当前状态只读取SYSTEM_DESIGN.runtime_gate_contract；认证专项历史 Migration 证据不得冒充由 `tools/current_facts.py` 当前 Head freshness 判定的 Full-schema PASS。
+  implementation_contract_status: AUTHENTICATION_CONTRACT_DEFINED
+  code_readiness: IMPLEMENTATION_INPUT_READY
   p1_authentication_contract: 必须按AUTHENTICATION_CONTRACT、正式OpenAPI和V8 Migration实现；禁止自创或旁路
-  acceptance_evidence_gate: 仅平台发布门禁使用，不阻断从已验证CURRENT_AUTHORITY_CONTRACT开始编码
-blocking_gates:
-- gate_id: FULL_SCHEMA_MYSQL84_RUNTIME_GATE
-  status_source: 编码权威事实/SYSTEM_DESIGN.yaml#runtime_gate_contract.gates[FULL_SCHEMA_MYSQL84_RUNTIME_GATE].status
-  blocking_scope: DATABASE_MODULE_FORMAL_MERGE
-  blocks_code_initialization: false
-- gate_id: REAL_ACCEPTANCE_EVIDENCE
-  status_source: 编码权威事实/SYSTEM_DESIGN.yaml#runtime_gate_contract.gates[REAL_ACCEPTANCE_EVIDENCE].status
-  blocking_scope: IMPLEMENTATION_RELEASE_READINESS
-  blocks_code_initialization: false
+  runtime_gate_rule: Gate定义来自SYSTEM_DESIGN.runtime_gate_catalog；当前Task真实运行结果只保存在临时Task状态/命令输出，不写入Authority。
 authority_model:
   model_id: AUTHORITY-MODEL-LIVING-001
   responsibilities:
@@ -61,4 +50,4 @@ authority_model:
     product_fact_vs_engineering_contract: 停止实现并以六份核心YAML为业务语义，修复工程契约后继续。
     adr_vs_old_yaml: ADR必须先同步核心YAML和工程契约；未同步时不得仅凭ADR覆盖。
     authority_integrity_vs_business_fact: Authority完整性检查只验证当前事实源可达性与一致性，不得覆盖业务事实。
-runtime_gate_contract_ref: 编码权威事实/SYSTEM_DESIGN.yaml#runtime_gate_contract
+required_gate_catalog_ref: 编码权威事实/SYSTEM_DESIGN.yaml#runtime_gate_catalog

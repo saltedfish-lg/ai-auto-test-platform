@@ -1,0 +1,75 @@
+policy_id: WORKSPACE_PATH_POLICY
+version: 1
+categories:
+  SOURCE:
+    exact_names:
+    - .env.example
+  AUTHORITY:
+    path_prefixes:
+    - docs/authority
+  GENERATED_REQUIRED:
+    path_prefixes:
+    - packages/contracts/src/generated
+  TRANSIENT:
+    path_prefixes:
+    - .tmp
+    directory_names:
+    - .mypy_cache
+    - .ruff_cache
+    - .git
+    - .venv
+  CACHE:
+    directory_names:
+    - __pycache__
+    - .pytest_cache
+    - node_modules
+    suffixes:
+    - .pyc
+    - .pyo
+  BUILD_OUTPUT:
+    directory_names:
+    - dist
+    - build
+    - coverage
+    - htmlcov
+  RUNTIME_OUTPUT:
+    directory_names:
+    - test-results
+    - outputs
+    - .runtime
+    - playwright-report
+  SECRET:
+    exact_names:
+    - .env
+    name_patterns:
+    - .env.*
+    - '*.pem'
+    - '*.key'
+consumers:
+  delivery_package:
+    include_categories:
+    - SOURCE
+    - AUTHORITY
+    - GENERATED_REQUIRED
+  cleanup_validation:
+    forbidden_persisted_categories:
+    - TRANSIENT
+    - CACHE
+    - BUILD_OUTPUT
+    - RUNTIME_OUTPUT
+    - SECRET
+  workspace_tracking:
+    include_categories:
+    - SOURCE
+    - AUTHORITY
+    - GENERATED_REQUIRED
+  impact_scan:
+    include_categories:
+    - SOURCE
+    - AUTHORITY
+    - GENERATED_REQUIRED
+  gate_workspace_digest:
+    include_categories:
+    - SOURCE
+    - AUTHORITY
+    - GENERATED_REQUIRED

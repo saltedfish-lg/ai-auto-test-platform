@@ -1,0 +1,14 @@
+schema_version: 2
+owner_identity: docs/authority/编码权威事实/OPENAPI
+domains:
+  - API_CONTRACT
+  - AUTHENTICATION
+inherit: true
+authority_files:
+  - docs/authority/编码权威事实/OPENAPI/openapi.yaml
+  - docs/authority/编码权威事实/OPENAPI/operation-permission-mapping.csv
+sovereignty_categories:
+  - PUBLIC_PRODUCT_CONTRACT
+engineering_gates:
+  - openapi_client_check
+  - authority_validators

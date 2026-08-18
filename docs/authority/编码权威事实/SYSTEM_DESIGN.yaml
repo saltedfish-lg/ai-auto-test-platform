@@ -2,12 +2,11 @@ metadata:
   authority_model: SINGLE_LIVING_AUTHORITY
   artifact_id: SYSTEM-DESIGN-1.4.3
   version: 1.4.3-p1-auth-governance-closure
-  status: P1_AUTHENTICATION_CONTRACT_COMPLETED_CURRENT_FACTS_DERIVED
-  code_readiness: READY_FOR_P1_IMPLEMENTATION
+  status: CURRENT_AUTHORITY_CONTRACT
+  code_readiness: IMPLEMENTATION_INPUT_READY
   generated_at: '2026-08-06T14:46:00+08:00'
   last_modified_at: '2026-08-11T00:00:00+08:00'
   pending_user_decisions: 0
-  implementation_status_source: SYSTEM_DESIGN.runtime_gate_contract.implementation_status
 architecture_style: 模块化单体控制面 + 独立Runner Agent + 异步Worker + Outbox事件
 repository_topology:
   apps:
@@ -43,8 +42,7 @@ slo:
       - service_health_timeseries
       - maintenance_window_registry
   PRD-NFR-002:
-    statement:
-      在标准V1容量和正常网络条件下，普通查询P95≤500ms、P99≤1000ms；普通写入P95≤800ms、P99≤1500ms；异步命令受理P95≤300ms、P99≤800ms。文件上传下载、AI模型调用和浏览器执行不适用普通API指标，必须使用各自专用超时与性能验收规则。
+    statement: 在标准V1容量和正常网络条件下，普通查询P95≤500ms、P99≤1000ms；普通写入P95≤800ms、P99≤1500ms；异步命令受理P95≤300ms、P99≤800ms。文件上传下载、AI模型调用和浏览器执行不适用普通API指标，必须使用各自专用超时与性能验收规则。
     acceptance_direction: 在标准V1容量、正常网络、稳定预热后分别对普通查询、普通写入和异步命令受理采集不少于10000个有效样本；按服务端端到端时延计算P95/P99；专用长任务不得混入普通API统计。
     slo_contract:
       conditions:
@@ -85,8 +83,8 @@ state_contract:
   current_facts_source: tools/current_facts.py#domain
 database_contract:
   engine: MySQL 8.4 LTS
-  patch_version_policy: ANY_8_4_X_WITH_CURRENT_FULL_SCHEMA_GATE_PASS
-  patch_version_evidence_rule: Patch版本不作为长期Authority固定值；每次真实Gate记录实际SELECT VERSION()结果，迁移头变化或环境Patch变化后重新执行相应Gate。
+  patch_version_policy: ANY_8_4_X_VALIDATED_BY_CURRENT_TASK_GATE
+  patch_version_evidence_rule: Patch版本不作为长期Authority固定值；需要数据库验证的Task应真实执行当前Full Schema Gate并报告当次实际版本。
   id_type: CHAR(26) ULID
   json_rule: extension_json仅保存非契约扩展；状态、关系、权限和唯一键必须物理化
   connection_configuration:
@@ -96,7 +94,12 @@ database_contract:
     local_development_database: ai_auto_test_platform_dev
     mysql_admin_url_env: ATP_MYSQL_ADMIN_URL
     mysql_admin_role: MySQL实例级管理连接；Full Schema Gate与认证MySQL Gate统一通过ATP_MYSQL_ADMIN_URL使用，仅供隔离Gate数据库创建、删除、Migration与约束验证
-    secret_handling: 环境注入；仓库、Authority、日志、异常和测试制品不得包含密码或完整DSN
+    formal_database_url_envs: [ATP_DATABASE_URL, ATP_MYSQL_ADMIN_URL]
+    local_secret_source: repo/.env
+    local_environment_loader: packages/platform-common/src/platform_common/environment.py
+    environment_precedence: PROCESS_ENVIRONMENT_OVER_REPOSITORY_DOTENV
+    legacy_database_url_alias: PLATFORM_DATABASE_URL仅作为Worker/Scheduler低优先级兼容项，不属于正式连接事实源
+    secret_handling: 根.env仅保存本机真实Secret；仓库、Authority、.governance、README、日志、异常、Task Context、Gate Result与正式ZIP不得包含密码或完整DSN
   credential_revision_identity: credential_revision_id; UNIQUE(test_account_id, revision_no)
   technical_alert_endpoint_identity: technical_alert_endpoint_id; UNIQUE(endpoint_code)
   run_task_initial_final_result: UNKNOWN
@@ -106,44 +109,24 @@ database_contract:
     owned by CredentialService
   auth_refresh_session: atp_auth_refresh_session; UNIQUE(token_hash); opaque token SHA-256 only; SessionService owns rotation/revoke
     lifecycle
-  auth_security_audit: atp_auth_security_audit; append-only; AuthenticationAuditService owns insert; UPDATE/DELETE rejected by MySQL trigger
-  auth_source_rate_limit: atp_auth_source_rate_limit; HMAC-SHA256 source key only; fixed UTC 300-second window; MySQL unique key and row
-    lock provide multi-instance consistency; expires_at index supports bounded cleanup
-  auth_hmac_key_ring: ATP_AUTH_HMAC_MASTER_KEY_FILE; strict JSON; minimum 32-byte master keys; HKDF-SHA256 domain separation; active write
-    plus retired_at<=now<accept_until compatible read; rotation overlap at least 86400 seconds; invalid config fails startup
-  jwt_key_ring: ATP_JWT_KEY_RING_FILE; one active signing key plus previous verification keys; minimum overlap 960 seconds; unknown/expired
-    kid fail-closed
+  auth_security_audit: atp_auth_security_audit; append-only; AuthenticationAuditService owns insert; UPDATE/DELETE rejected
+    by MySQL trigger
+  auth_source_rate_limit: atp_auth_source_rate_limit; HMAC-SHA256 source key only; fixed UTC 300-second window; MySQL unique
+    key and row lock provide multi-instance consistency; expires_at index supports bounded cleanup
+  auth_hmac_key_ring: ATP_AUTH_HMAC_MASTER_KEY_FILE; strict JSON; minimum 32-byte master keys; HKDF-SHA256 domain separation;
+    active write plus retired_at<=now<accept_until compatible read; rotation overlap at least 86400 seconds; invalid config
+    fails startup
+  jwt_key_ring: ATP_JWT_KEY_RING_FILE; one active signing key plus previous verification keys; minimum overlap 960 seconds;
+    unknown/expired kid fail-closed
   migration_execution:
     selected_tool: Flyway
     authority_source: docs/authority/编码权威事实/DATABASE_DDL
     current_executable_gate: docs/authority/validation/run_mysql84_gate.py
     current_executor: DIRECT_MYSQL_CLIENT_OR_CONTAINER_MYSQL_CLIENT
     flyway_runtime_integration_status: SELECTED_BUT_NOT_YET_WIRED_IN_REPOSITORY
-    truth_rule: 当前仓库未接入 Flyway runtime；在接线完成前，Full-schema Gate 必须执行由 tools/current_facts.py 机械发现的完整正式 Migration 链；历史专项证据不得冒充当前 Full-schema
-      PASS。
-    full_schema_gate_status_source: 编码权威事实/SYSTEM_DESIGN.yaml#runtime_gate_contract.gates[FULL_SCHEMA_MYSQL84_RUNTIME_GATE].status
+    truth_rule: Full Schema Gate 每个受影响Task按当前正式Migration链真实执行；历史运行结果不得直接作为新Task的PASS。
     migration_discovery_source: tools/current_facts.py#migration
     admin_connection_env: ATP_MYSQL_ADMIN_URL
-  authentication_runtime_evidence:
-    mysql:
-      command: python tools/gates/auth_mysql_gate.py
-      status_name: AUTH_MYSQL_RUNTIME_GATE
-      historical_evidence_status: PASS_HISTORICAL_V3_TO_V7
-      verified_server_version: 8.4.11
-      verified_migration_order: V3_TO_V7
-      isolated_database_prefix: ai_auto_test_platform_gate_auth_
-      destructive_target_policy: 只允许唯一隔离临时数据库；不得默认操作ai_auto_test_platform_dev
-      cleanup_policy: 成功或失败均尽最大努力删除；失败只报告数据库名，不报告完整DSN
-      current_status_source: SYSTEM_DESIGN.runtime_gate_contract.gates[AUTH_MYSQL_RUNTIME_GATE].status
-    browser:
-      command: python tools/gates/auth_browser_gate.py
-      status_name: AUTH_BROWSER_RUNTIME_GATE
-      historical_or_blocker_evidence: RESOLVED_BY_AUTH_BROWSER_RUNTIME_GATE_PASS_2026_08_14
-      browser: REAL_CHROMIUM
-      database_policy: 使用同一管理员连接创建独立认证Gate临时数据库，不得使用开发库
-      current_status_source: SYSTEM_DESIGN.runtime_gate_contract.gates[AUTH_BROWSER_RUNTIME_GATE].status
-  mysql84_runtime_gate_status_source: 编码权威事实/SYSTEM_DESIGN.yaml#runtime_gate_contract.gates[FULL_SCHEMA_MYSQL84_RUNTIME_GATE].status
-  browser_runtime_gate_status_source: SYSTEM_DESIGN.runtime_gate_contract.gates[AUTH_BROWSER_RUNTIME_GATE].status
   current_facts_source: tools/current_facts.py#database
 api_contract:
   version: OpenAPI 3.1.2
@@ -181,16 +164,18 @@ authentication_contract:
   browser_refresh_storage: HTTP_ONLY_SECURE_SAME_SITE_STRICT_COOKIE
   password_hash: Argon2id v19; m=65536KiB; t=3; p=1; salt=16 bytes; hash=32 bytes
   password_policy: 12..128; LETTER+DIGIT; no periodic expiry in V1; common-password and username checks required
-  admin_bootstrap: explicit no-echo TTY or ATP_BOOTSTRAP_ADMIN_PASSWORD_FILE; force_password_change=true; repeated execution never
-    overwrites credentials
+  admin_bootstrap: explicit no-echo TTY or ATP_BOOTSTRAP_ADMIN_PASSWORD_FILE; force_password_change=true; repeated execution
+    never overwrites credentials
   identity_state_check: user ACTIVE + credential ACTIVE/unlocked + credential_version match + Session ACTIVE
   authorization: permissions are not in JWT; resolve current relational RBAC and data scope for every protected request
-  audit: login success/failure, logout, password change/reset, Session revoke and permission denial; authentication secrets forbidden
-  temporary_credential: server-generated and returned once only by successful create/reset responses; Argon2id hash only at rest
-  source_rate_limit: Login 60/5m and Refresh 300/5m; direct peer IP unless peer is in ATP_TRUSTED_PROXY_CIDRS; untrusted forwarding headers
-    ignored; 429 Retry-After
-  change_password: 204 No Content; revoke all Refresh Sessions; issue no tokens; identical idempotent replay returns 204 without a second
-    mutation
+  audit: login success/failure, logout, password change/reset, Session revoke and permission denial; authentication secrets
+    forbidden
+  temporary_credential: server-generated and returned once only by successful create/reset responses; Argon2id hash only at
+    rest
+  source_rate_limit: Login 60/5m and Refresh 300/5m; direct peer IP unless peer is in ATP_TRUSTED_PROXY_CIDRS; untrusted forwarding
+    headers ignored; 429 Retry-After
+  change_password: 204 No Content; revoke all Refresh Sessions; issue no tokens; identical idempotent replay returns 204 without
+    a second mutation
   admin_protection: admin and its ROLE-SUPER-ADMIN binding are immutable on every User/Credential/UserRoleBinding write path
 event_contract:
   delivery: AT_LEAST_ONCE_OUTBOX
@@ -220,67 +205,12 @@ validation_commands:
 pending_decisions: []
 release_gate:
   authority_readiness:
-    status: READY_FOR_P1_IMPLEMENTATION
+    status: IMPLEMENTATION_INPUT_READY
     blocking_pending: []
-    does_not_require:
-    - REAL_ACCEPTANCE_EVIDENCE
   implementation_release_readiness:
-    blocking_when_implemented:
-    - REAL_ACCEPTANCE_EVIDENCE
-    - SECURITY_PERFORMANCE_RECOVERY_DEPLOYMENT_VALIDATION
-    status_source: SYSTEM_DESIGN.runtime_gate_contract.implementation_status
-  release_status_source: SYSTEM_DESIGN.runtime_gate_contract.platform_release_status
+    gate_selection_rule: 根据当前 Task affected scope 从 runtime_gate_catalog 选择并真实执行 required gates；发布任务另执行相关非功能验收。
+    cross_task_pass_reuse: false
   current_authority_model: SINGLE_LIVING_AUTHORITY
-runtime_gate_contract:
-  authority_owner: 编码权威事实/SYSTEM_DESIGN.yaml#runtime_gate_contract
-  implementation_scope: P1_AUTH_RBAC_CURRENT_IMPLEMENTATION
-  implementation_status: IMPLEMENTED_RUNTIME_VALIDATED
-  platform_release_status: FULL_PLATFORM_IMPLEMENTATION_NOT_YET_EVALUATED
-  truth_rule: 所有当前 Runtime Gate 状态只在本结构维护；其它 Authority/Agent/Skill 只能引用 gate_id/status_source，不得复制当前状态值。
-  gates:
-  - gate_id: AUTH_MYSQL_RUNTIME_GATE
-    scope: P1_AUTH_RBAC
-    evidence: MySQL 8.4.11 authentication-specific V3→V7 runtime evidence; not current full-schema evidence.
-    status: PASS_HISTORICAL_V3_TO_V7
-  - gate_id: AUTH_BROWSER_RUNTIME_GATE
-    scope: P1_AUTH_RBAC
-    command: python tools/gates/auth_browser_gate.py
-    status: PASS
-    last_execution_evidence:
-      result: PASS
-      task_id: P1-CLOSURE-EVIDENCE-FINALIZATION-20260814-01
-      mysql_version: 8.4.11
-      browser: chromium
-      browser_exit_code: 0
-      authentication_browser_closure: 1 passed
-      isolated_database_removed: true
-      runtime_secrets_removed: true
-  - gate_id: FULL_SCHEMA_MYSQL84_RUNTIME_GATE
-    scope: CURRENT_SCHEMA
-    command: python tools/mysql84_gate.py --execute --evidence-output outputs/runtime-gates/mysql84-full-schema.json
-    evaluation_mode: MIGRATION_HEAD_FRESHNESS
-    status: PASS
-    last_execution_evidence:
-      result: PASS
-      evidence_ref: 编码权威事实/RUNTIME_GATE_EVIDENCE/mysql84-full-schema-v3-v8-2026-08-13.json
-      evidence_schema_version: 1
-      mysql_version: 8.4.11
-      validated_migration_head: 8
-      validated_migration_chain_source: 编码权威事实/RUNTIME_GATE_EVIDENCE/mysql84-full-schema-v3-v8-2026-08-13.json#validated_migration_chain
-      empty_db_migration: PASS
-      v4_seed_idempotency: PASS
-      legacy_upgrade: PASS
-      schema_assertions: PASS
-      temporary_db_cleanup: PASS
-      secrets_in_evidence: false
-    evidence_output_contract:
-      schema_version: 1
-      stdout: STRUCTURED_JSON
-      optional_file_argument: --evidence-output <path>
-      secret_policy: NO_PASSWORD_OR_FULL_DSN
-  - gate_id: REAL_ACCEPTANCE_EVIDENCE
-    scope: IMPLEMENTATION_RELEASE_READINESS
-    status: NOT_EVALUATED_FULL_PLATFORM_NOT_IMPLEMENTED
 current_stack:
   frontend: Vue 3 + TypeScript
   api: Python 3.12 + FastAPI
@@ -289,3 +219,27 @@ current_stack:
   object_storage: S3兼容；内网默认MinIO
   observability: OpenTelemetry + Prometheus/Loki/Tempo/Grafana
   model_gateway: LiteLLM Proxy（AI能力启用时）
+runtime_gate_catalog:
+  authority_owner: 编码权威事实/SYSTEM_DESIGN.yaml#runtime_gate_catalog
+  truth_rule: Authority只定义Gate用途、触发条件和命令；当次PASS/FAIL/BLOCKED仅属于当前Task运行结果，不写回Authority。
+  gates:
+  - gate_id: AUTH_MYSQL_RUNTIME_GATE
+    scope: AUTH_RBAC
+    command: python tools/gates/auth_mysql_gate.py
+    required_when:
+    - AUTH_BACKEND_OR_DATABASE_CHANGED
+  - gate_id: AUTH_BROWSER_RUNTIME_GATE
+    scope: AUTH_RBAC
+    command: python tools/gates/auth_browser_gate.py
+    required_when:
+    - AUTH_UI_OR_END_TO_END_CHANGED
+  - gate_id: FULL_SCHEMA_MYSQL84_RUNTIME_GATE
+    scope: DATABASE_SCHEMA
+    command: python tools/mysql84_gate.py --execute
+    required_when:
+    - MIGRATION_OR_DATABASE_SCHEMA_CHANGED
+  - gate_id: REAL_ACCEPTANCE_GATE
+    scope: ACCEPTANCE
+    command: task-specific acceptance tests
+    required_when:
+    - ACCEPTANCE_OR_USER_VISIBLE_BEHAVIOR_CHANGED

@@ -5,7 +5,7 @@ metadata:
   document_status: ACTIVE_CONTROLLED_MUTABLE_AUTHORITY
   generation_date: '2026-08-05'
   independence_status: INDEPENDENT_SELF_CONTAINED
-  coding_readiness: READY_FOR_P1_IMPLEMENTATION
+  coding_readiness: IMPLEMENTATION_INPUT_READY
   scope: 人工角色、系统和外部主体、核心场景、模块、菜单、操作、权限和映射。
   responsibility_boundary: 作为产品原型、信息架构、权限、页面功能和Codex编码的当前上游事实源；不定义数据库物理结构、OpenAPI完整字段或像素级UI。
   formats:
@@ -15,7 +15,7 @@ metadata:
   - XLSX
   - Mermaid
   - SVG
-  platform_code_readiness: READY_FOR_P1_IMPLEMENTATION
+  platform_code_readiness: IMPLEMENTATION_INPUT_READY
   canonical_format: YAML
   projection_formats:
   - Markdown
@@ -27,7 +27,7 @@ metadata:
   runtime_dependency_on_historical_sources: false
   version: 1.4.2-auth-contract-completion
   status: CURRENT_AUTHORITY_CONTRACT
-  code_readiness: READY_FOR_P1_IMPLEMENTATION
+  code_readiness: IMPLEMENTATION_INPUT_READY
   last_modified_at: '2026-08-06T17:13:00+08:00'
   pending_user_decisions: 0
 independence_declaration:
@@ -906,7 +906,7 @@ external_actors:
 - actor_id: EXT-CODEX
   name: Codex编码环境
   actor_type: EXTERNAL_DEVELOPMENT_ENVIRONMENT
-  relationship: 仅在当前Living Authority通过正式validators且code_readiness=READY_FOR_P1_IMPLEMENTATION时生成实现；历史BSL-CONSISTENCY-REPAIR-1.0.0仅作为建立阶段provenance，不构成当前运行依赖。
+  relationship: 仅在当前Living Authority通过正式validators且code_readiness=IMPLEMENTATION_INPUT_READY时生成实现；历史BSL-CONSISTENCY-REPAIR-1.0.0仅作为建立阶段provenance，不构成当前运行依赖。
   platform_input: 当前 Living Authority，或当前包的受治理文档准备输入
   platform_output: 文档分析结果；仅在FULL准入时输出代码、迁移、接口和测试实现
   external_responsibility: 当前包不得直接编码；FULL准入时严格按当前 Living Authority 实现，不自行补充业务规则。
@@ -30107,7 +30107,7 @@ independence_validation:
     passed: true
     detail: ''
 coding_readiness:
-  status: READY_FOR_P1_IMPLEMENTATION
+  status: IMPLEMENTATION_INPUT_READY
   direct_code_input: true
   pending_user_decisions: 0
   reason: 相关 PDBR-2026.08.06-R4.1 仅作为历史来源追溯；当前正式代码输入以 docs/authority Living Authority 现行内容为准。
@@ -30231,7 +30231,6 @@ p1_authentication_scenario_contract:
 current_governance_state:
   current_authority_model: SINGLE_LIVING_AUTHORITY
   current_authority: CURRENT_LIVING_AUTHORITY
-  governance_status: P1_AUTHENTICATION_CONTRACT_COMPLETED
-  code_readiness: READY_FOR_P1_IMPLEMENTATION
-  implementation_status_source: 编码权威事实/SYSTEM_DESIGN.yaml#runtime_gate_contract.implementation_status
+  governance_status: AUTHENTICATION_CONTRACT_DEFINED
+  code_readiness: IMPLEMENTATION_INPUT_READY
   pending_user_decisions: 0

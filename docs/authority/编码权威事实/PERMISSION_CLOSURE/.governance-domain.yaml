@@ -1,0 +1,14 @@
+schema_version: 2
+owner_identity: docs/authority/编码权威事实/PERMISSION_CLOSURE
+domains:
+  - AUTHORIZATION
+  - AUTHENTICATION
+inherit: true
+authority_files:
+  - docs/authority/编码权威事实/PERMISSION_CLOSURE/permission-closure.yaml
+  - docs/authority/编码权威事实/PERMISSION_CLOSURE/role-permission-matrix.csv
+sovereignty_categories:
+  - ROLE
+  - PERMISSION
+engineering_gates:
+  - authority_validators

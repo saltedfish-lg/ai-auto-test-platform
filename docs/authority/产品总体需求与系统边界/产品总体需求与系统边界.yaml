@@ -6,7 +6,7 @@ metadata:
   generation_date: '2026-08-05'
   analysis_scope: 当前 Living Authority 有效范围
   independence_status: SELF_CONTAINED
-  coding_readiness: READY_FOR_P1_IMPLEMENTATION
+  coding_readiness: IMPLEMENTATION_INPUT_READY
   formats:
   - Markdown
   - DOCX
@@ -15,7 +15,7 @@ metadata:
   - Mermaid
   - SVG
   responsibility_boundary: 定义产品级定位、目标、范围、主体、能力、系统和责任边界、固定约束、非功能需求、运行依赖与成功标准；不冻结数据库物理结构、完整接口协议或代码实现。
-  platform_code_readiness: READY_FOR_P1_IMPLEMENTATION
+  platform_code_readiness: IMPLEMENTATION_INPUT_READY
   canonical_format: YAML
   projection_formats:
   - Markdown
@@ -27,7 +27,7 @@ metadata:
   runtime_dependency_on_historical_sources: false
   version: 1.4.2-auth-contract-completion
   status: CURRENT_AUTHORITY_CONTRACT
-  code_readiness: READY_FOR_P1_IMPLEMENTATION
+  code_readiness: IMPLEMENTATION_INPUT_READY
   last_modified_at: '2026-08-06T17:13:00+08:00'
   pending_user_decisions: 0
 independence_declaration:
@@ -6523,7 +6523,7 @@ statistics:
     CAPDOM-08: 17
     CAPDOM-11: 4
 coding_readiness:
-  status: READY_FOR_P1_IMPLEMENTATION
+  status: IMPLEMENTATION_INPUT_READY
   product_positioning_unique: true
   current_scope_unique: true
   capability_map_complete: true
@@ -6587,7 +6587,7 @@ format_governance:
   projection_scope: 人工版完整承载责任范围内的规范语义；机器版承载全量原子记录。机器版中的明细ID可以不逐条复制到人工表格，但不得缺失定义、聚合规则、例外、阻断语义和可追溯索引。
   id_coverage_validation: python tools/verify_authority.py
 authority_readiness:
-  current_status: READY_FOR_P1_IMPLEMENTATION
+  current_status: IMPLEMENTATION_INPUT_READY
   current_authority_kind: SINGLE_LIVING_AUTHORITY
   direct_implementation_input: true
   current_living_authority_available: true
@@ -6595,15 +6595,15 @@ authority_readiness:
   allowed_now:
   - 初始化Monorepo及前端、API、Worker、Runner、测试和CI工程
   - 依据当前正式契约分阶段实现各模块
-  - 数据库模块正式合并按SYSTEM_DESIGN中的Full Schema Gate单源状态判定
+  - 数据库模块正式合并必须执行 SYSTEM_DESIGN.runtime_gate_catalog 中要求的 Full Schema Gate，并以本次 Task 实际结果判定
   database_runtime_gate:
-    status_source: 编码权威事实/SYSTEM_DESIGN.yaml#runtime_gate_contract.gates[FULL_SCHEMA_MYSQL84_RUNTIME_GATE].status
     blocks_code_initialization: false
     blocks_non_database_module_development: false
     blocks_database_module_formal_merge_when_status_not_pass: true
     blocks_production_release_when_status_not_pass: true
   implementation_release_gate:
-    status_source: 编码权威事实/SYSTEM_DESIGN.yaml#runtime_gate_contract.implementation_status
+    gate_catalog_ref: 编码权威事实/SYSTEM_DESIGN.yaml#runtime_gate_catalog
+    selection_rule: 根据当前 Task affected scope 选择 required gates；运行结果只属于当前 Task，不写回 Authority。
     blocks_code_initialization: false
     blocks_production_release: true
 canonical_decisions:
@@ -6719,9 +6719,8 @@ p1_authentication_product_contract:
 current_governance_state:
   current_authority_model: SINGLE_LIVING_AUTHORITY
   current_authority: CURRENT_LIVING_AUTHORITY
-  governance_status: P1_AUTHENTICATION_CONTRACT_COMPLETED
-  code_readiness: READY_FOR_P1_IMPLEMENTATION
-  implementation_status_source: 编码权威事实/SYSTEM_DESIGN.yaml#runtime_gate_contract.implementation_status
+  governance_status: AUTHENTICATION_CONTRACT_DEFINED
+  code_readiness: IMPLEMENTATION_INPUT_READY
   pending_user_decisions: 0
 living_authority_governance_contract:
   authority_model: SINGLE_LIVING_AUTHORITY

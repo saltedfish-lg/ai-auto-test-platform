@@ -4,7 +4,7 @@ metadata:
   status: CURRENT
   source_baseline_sha256: a8781e822a17e3ad9080b8e58f67caa6b6d6d51364f28abc4b6250d1fc861ddb
   parent_package_sha256: a8781e822a17e3ad9080b8e58f67caa6b6d6d51364f28abc4b6250d1fc861ddb
-  code_readiness: READY_FOR_P1_IMPLEMENTATION
+  code_readiness: IMPLEMENTATION_INPUT_READY
   last_modified_at: '2026-08-07T00:00:00+08:00'
   artifact_id: ADR-REGISTER-1.4.2
 adrs:

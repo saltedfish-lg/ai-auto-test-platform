@@ -1,0 +1,142 @@
+schema_version: 1
+policies:
+  request_domain_signals:
+    FRONTEND:
+    - frontend
+    - 前端
+    - 页面
+    - component
+    - ui
+    BACKEND:
+    - backend
+    - 后端
+    - service
+    - 接口
+    - endpoint
+    AUTHENTICATION:
+    - authentication
+    - 认证
+    - 登录
+    - login
+    - session
+    - refresh token
+    DATABASE_SCHEMA:
+    - migration
+    - 数据库
+    - ddl
+    - schema
+    API_CONTRACT:
+    - openapi
+    - api contract
+    - 接口契约
+    DOCUMENTATION:
+    - readme
+    - 文档
+    - markdown
+    GOVERNANCE:
+    - agent
+    - skill
+    - governance
+    - agents.md
+    RUNNER:
+    - runner
+    - 执行机
+    - 录制
+  behavior_request_signals:
+  - 路由跳转
+  - API 调用
+  - 表单提交
+  - 数据写入
+  - 数据读取
+  - 登录成功
+  behavior_path_patterns:
+  - '**/router/**'
+  - '**/stores/**'
+  - '**/api/**'
+  - '**/service/**'
+  - '**/services/**'
+  - '**/models/**'
+  - '**/migrations/**'
+  user_visible_path_patterns:
+  - apps/web/src/views/**
+  - apps/web/src/components/**
+  - apps/web/src/router/**
+  - apps/web/src/stores/**
+  - apps/web/src/api/**
+  - apps/web/**/*.vue
+  database_schema_path_patterns:
+  - docs/authority/编码权威事实/DATABASE_DDL/**
+  business_ui_review_signals:
+  - 新增页面
+  - 页面改造
+  - 菜单
+  - 信息架构
+  - 复杂表单
+  - 复杂表格
+  - 确认弹窗
+  - 跨页面
+  - 业务流程
+  - 关键操作
+  - 批量操作
+  architecture_request_signals:
+  - Runner 架构
+  sensitive_domain_categories:
+    AUTHENTICATION:
+    - PRODUCT_SECURITY_RULE
+    AUTHORIZATION:
+    - PERMISSION
+    RBAC:
+    - ROLE
+    - PERMISSION
+    PUBLIC_API:
+    - PUBLIC_PRODUCT_CONTRACT
+    API_CONTRACT:
+    - PUBLIC_PRODUCT_CONTRACT
+    PRODUCT_MODEL:
+    - BUSINESS_RULE
+    STATE_MACHINE:
+    - STATE_MACHINE
+    LIFECYCLE:
+    - LIFECYCLE
+    RESOURCE_CONFLICT:
+    - RESOURCE_CONFLICT
+    CONCURRENCY:
+    - RESOURCE_CONFLICT
+    DATA_RETENTION:
+    - DATA_RETENTION
+    CREDENTIAL:
+    - PRODUCT_SECURITY_RULE
+    SESSION:
+    - PRODUCT_SECURITY_RULE
+    ACCOUNT_SECURITY:
+    - PRODUCT_SECURITY_RULE
+    DEFAULT_ADMIN:
+    - PRODUCT_SECURITY_RULE
+  nonruntime_path_patterns:
+  - tests/**
+  - '**/tests/**'
+  - '**/e2e/**'
+  - '**/*.md'
+  - '**/*.txt'
+  substantive_extensions:
+  - .py
+  - .ts
+  - .tsx
+  - .js
+  - .jsx
+  - .vue
+  - .sql
+  - .yaml
+  - .yml
+  - .json
+  semantic_domains:
+    database_schema: DATABASE_SCHEMA
+    acceptance: ACCEPTANCE
+  formal_conditions:
+    database_schema_changed: MIGRATION_OR_DATABASE_SCHEMA_CHANGED
+    user_visible_behavior_changed: ACCEPTANCE_OR_USER_VISIBLE_BEHAVIOR_CHANGED
+  user_visible_domains:
+  - FRONTEND
+  - BROWSER_UI
+  - PRODUCT_UI
+  - UI

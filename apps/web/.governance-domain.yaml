@@ -1,0 +1,38 @@
+schema_version: 3
+owner_identity: apps/web
+domains:
+  - FRONTEND
+  - BROWSER_UI
+inherit: true
+tests:
+  - apps/web/src/tests
+engineering_gates:
+  - frontend_test
+depends_on:
+  - services/api
+routes:
+  - patterns:
+      - src/views/LoginView.vue
+      - src/views/ChangePasswordView.vue
+      - src/stores/session.ts
+      - src/components/PermissionGate.vue
+      - src/api/*.ts
+      - e2e/auth.spec.ts
+    domains:
+      - AUTHENTICATION
+      - ACCOUNT_SECURITY
+    authorities:
+      - docs/authority/编码权威事实/AUTHENTICATION_CONTRACT/authentication-contract.yaml
+      - docs/authority/编码权威事实/PERMISSION_CLOSURE/permission-closure.yaml
+      - docs/authority/编码权威事实/OPENAPI/openapi.yaml
+    formal_gate_conditions:
+      - AUTH_UI_OR_END_TO_END_CHANGED
+    reviewer_risks:
+      - SECURITY_SENSITIVE
+      - PRODUCT_SOVEREIGNTY_SENSITIVE
+  - patterns:
+      - e2e/*.spec.ts
+    tests:
+      - apps/web/e2e
+    engineering_gates:
+      - playwright_test

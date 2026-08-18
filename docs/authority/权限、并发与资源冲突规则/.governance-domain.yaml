@@ -1,0 +1,14 @@
+schema_version: 2
+owner_identity: docs/authority/权限、并发与资源冲突规则
+domains:
+  - AUTHORIZATION
+  - CONCURRENCY
+inherit: true
+authority_files:
+  - docs/authority/权限、并发与资源冲突规则/权限、并发与资源冲突规则.yaml
+sovereignty_categories:
+  - ROLE
+  - PERMISSION
+  - RESOURCE_CONFLICT
+engineering_gates:
+  - authority_validators

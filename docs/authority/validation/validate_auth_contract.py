@@ -17,17 +17,14 @@ def _yaml_load(text: str):
     return yaml.load(text, Loader=YAML_LOADER)
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-if str(REPO_ROOT / "tools") not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT / "tools"))
-from current_facts import derive_current_facts, discover_migrations  # noqa: E402
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+from tools._bootstrap import ensure_repo_root_on_path  # noqa: E402
+REPO_ROOT = ensure_repo_root_on_path(__file__)
+from tools.current_facts import derive_current_facts, discover_migrations  # noqa: E402
 
 
 AUTHORITY_MODEL = "SINGLE_LIVING_AUTHORITY"
-AUTH_IMPLEMENTATION_STATUSES = {
-    "AUTHORITY_UPDATED_IMPLEMENTATION_PENDING",
-    "IMPLEMENTED_PENDING_RUNTIME_VALIDATION",
-    "IMPLEMENTED_RUNTIME_VALIDATED",
-}
 CONFIRMED_PRODUCT_DECISIONS = {
     "GOV-P1-002": "SYSTEM_GENERATED_ONE_TIME_TEMP_CREDENTIAL",
     "GOV-P1-003": "SOURCE_RATE_LIMIT_ENABLED_MYSQL84",
@@ -85,19 +82,16 @@ def main() -> int:
     auth_path = root / "编码权威事实/AUTHENTICATION_CONTRACT/authentication-contract.yaml"
     auth = _yaml_load(auth_path.read_text(encoding="utf-8"))
     system_design = _yaml_load((root / "编码权威事实/SYSTEM_DESIGN.yaml").read_text(encoding="utf-8"))
-    implementation_status = system_design.get("runtime_gate_contract", {}).get("implementation_status")
-    implementation_status_source = auth.get("metadata", {}).get("implementation_status_source")
     add(
         "AUTH-CONTRACT-METADATA",
         auth["metadata"]["status"] == "ACTIVE_CONTROLLED_MUTABLE_AUTHORITY"
         and auth["metadata"]["pending_user_decisions"] == 0
         and auth["metadata"].get("deferred_product_decisions") == 0
-        and implementation_status_source == "SYSTEM_DESIGN.runtime_gate_contract.implementation_status"
-        and implementation_status in AUTH_IMPLEMENTATION_STATUSES,
+        and "implementation_code_status_source" not in auth.get("metadata", {}),
         (
             f"status={auth['metadata']['status']}; pending={auth['metadata']['pending_user_decisions']}; "
             f"deferred={auth['metadata'].get('deferred_product_decisions')}; "
-            f"implementation={implementation_status}; source={implementation_status_source}"
+            "temporary implementation/runtime status is not duplicated in Authentication Contract"
         ),
     )
 
@@ -141,10 +135,8 @@ def main() -> int:
     ]
     add(
         "AUTH-IMPLEMENTATION-STATUS-ALIGNMENT",
-        implementation_status in AUTH_IMPLEMENTATION_STATUSES
-        and implementation_status_source == "SYSTEM_DESIGN.runtime_gate_contract.implementation_status"
-        and not missing_implementation_files,
-        f"implementation_status={implementation_status}; source={implementation_status_source}; missing={missing_implementation_files}",
+        not missing_implementation_files,
+        f"required implementation files present; missing={missing_implementation_files}",
     )
     add(
         "AUTH-ARCHITECTURE-DECISION",
@@ -376,7 +368,7 @@ def main() -> int:
     persistence_fields = [field for owner in owners for field in owner["persistence_fields"]]
     add(
         "AUTH-STATE-OWNER-UNIQUENESS",
-        len(owners) == 8 and len(semantic_ids) == len(set(semantic_ids)) and len(persistence_fields) == len(set(persistence_fields)),
+        bool(owners) and len(semantic_ids) == len(set(semantic_ids)) and len(persistence_fields) == len(set(persistence_fields)),
         f"owners={len(owners)}; fields={len(persistence_fields)}",
     )
 
@@ -396,13 +388,11 @@ def main() -> int:
     )
 
     acceptance = json.loads((root / "编码权威事实/ACCEPTANCE_CLOSURE/acceptance-closure.json").read_text(encoding="utf-8"))
-    p1_items = [
-        item
-        for item in acceptance["acceptance_closure"]
-        if 1602 <= int(item["acceptance_id"].rsplit("-", 1)[1]) <= 1688
-    ]
     governance = acceptance.get("p1_authentication_governance", {})
-    declared_p1_items = governance.get("reused_items")
+    scope_fact = facts["acceptance"].get("declared_scopes", {}).get("p1_authentication_governance", {})
+    scoped_ids = set(scope_fact.get("acceptance_ids") or [])
+    p1_items = [item for item in acceptance["acceptance_closure"] if item.get("acceptance_id") in scoped_ids]
+    declared_p1_items = scope_fact.get("count")
     allowed_statuses = {"SPECIFIED", "PASSED", "FAILED", "BLOCKED_BY_ENVIRONMENT"}
     allowed_evidence = {"EXPECTED_NOT_EXECUTED", "NOT_STARTED", "VERIFIED", "FAILED", "BLOCKED_BY_ENVIRONMENT"}
     evidence_coherent = all(
@@ -416,16 +406,19 @@ def main() -> int:
         and all(item["status"] in allowed_statuses for item in p1_items)
         and all(item["evidence_status"] in allowed_evidence for item in p1_items)
         and evidence_coherent
-        and governance.get("revised_items") == declared_p1_items
-        and governance.get("new_items") == 0,
-        f"p1_items={len(p1_items)}; passed={sum(item['status'] == 'PASSED' for item in p1_items)}; revised={governance.get('revised_items')}",
+        and governance.get("scope_count_source") == "tools/current_facts.py#acceptance.declared_scopes.p1_authentication_governance.count",
+        f"p1_items={len(p1_items)}; passed={sum(item['status'] == 'PASSED' for item in p1_items)}; range={scope_fact.get('range')}",
     )
 
+    product = _yaml_load((root / "产品总体需求与系统边界/产品总体需求与系统边界.yaml").read_text(encoding="utf-8"))
+    canonical_readiness = product.get("metadata", {}).get("code_readiness")
     add(
         "AUTH-CURRENT-AUTHORITY-READY",
-        system_design.get("release_gate", {}).get("authority_readiness", {}).get("status") == "READY_FOR_P1_IMPLEMENTATION"
+        isinstance(canonical_readiness, str)
+        and bool(canonical_readiness)
+        and system_design.get("release_gate", {}).get("authority_readiness", {}).get("status") == canonical_readiness
         and auth["metadata"]["pending_user_decisions"] == 0,
-        "current living authority is ready for P1 implementation",
+        "current living authority readiness matches the canonical product Authority",
     )
 
     forbidden_literal_hits = []

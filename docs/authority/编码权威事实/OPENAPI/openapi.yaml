@@ -35847,4 +35847,4 @@ x-contract-rules:
   permission_mapping: operation-permission-mapping.csv
   pending_decisions: []
   authority_model: SINGLE_LIVING_AUTHORITY
-  code_readiness: READY_FOR_P1_IMPLEMENTATION
+  code_readiness: IMPLEMENTATION_INPUT_READY

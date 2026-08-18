@@ -35,10 +35,10 @@ metadata:
     active_semantic_conflict_count: 0
     resolved_business_rule_conflict_count: 14
     scope_note: 建立阶段文件/格式扫描仅作历史provenance；当前对象数和开放决策数必须从tools/current_facts.py机械读取。
-  platform_code_readiness: READY_FOR_P1_IMPLEMENTATION
+  platform_code_readiness: IMPLEMENTATION_INPUT_READY
   historical_sources: null
   runtime_dependency_on_historical_sources: false
-  coding_readiness: READY_FOR_P1_IMPLEMENTATION
+  coding_readiness: IMPLEMENTATION_INPUT_READY
   historical_build_statistics:
     physical_files_scanned: 40
     logical_documents_scanned: 11
@@ -49,14 +49,14 @@ metadata:
   - CURRENT_AUTHORITY_ONLY
   version: 1.4.2-auth-contract-completion
   status: CURRENT_AUTHORITY_CONTRACT
-  code_readiness: READY_FOR_P1_IMPLEMENTATION
+  code_readiness: IMPLEMENTATION_INPUT_READY
   last_modified_at: '2026-08-06T17:13:00+08:00'
   pending_user_decisions: 0
 independence_declaration:
   self_contained: true
   input_path_dependency: false
   external_document_required: false
-  coding_readiness: FULL_CODE_READY
+  coding_readiness: IMPLEMENTATION_INPUT_READY
 architecture_drivers:
 - driver_id: DRV-001
   name: 自然语言创建测试
@@ -2714,10 +2714,10 @@ independence_validation:
   passed: true
   answers_without_input: 16
 coding_readiness:
-  status: READY_FOR_P1_IMPLEMENTATION
+  status: IMPLEMENTATION_INPUT_READY
   core_scaffold_blocked: false
   pending_user_decisions: 0
-  database_module_formal_merge_gate_status_source: 编码权威事实/SYSTEM_DESIGN.yaml#runtime_gate_contract.gates[FULL_SCHEMA_MYSQL84_RUNTIME_GATE].status
+  database_module_formal_merge_gate_status_source: 编码权威事实/SYSTEM_DESIGN.yaml#runtime_gate_catalog.gates[FULL_SCHEMA_MYSQL84_RUNTIME_GATE].status
   database_module_formal_merge_blocking_condition: STATUS_NOT_PASS
   implementation_release_evaluation_pending: true
   allowed_scaffolds:
@@ -2972,7 +2972,6 @@ p1_authentication_architecture:
 current_governance_state:
   current_authority_model: SINGLE_LIVING_AUTHORITY
   current_authority: CURRENT_LIVING_AUTHORITY
-  governance_status: P1_AUTHENTICATION_CONTRACT_COMPLETED
-  code_readiness: READY_FOR_P1_IMPLEMENTATION
-  implementation_status_source: 编码权威事实/SYSTEM_DESIGN.yaml#runtime_gate_contract.implementation_status
+  governance_status: AUTHENTICATION_CONTRACT_DEFINED
+  code_readiness: IMPLEMENTATION_INPUT_READY
   pending_user_decisions: 0

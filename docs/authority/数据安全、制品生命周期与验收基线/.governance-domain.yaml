@@ -1,0 +1,12 @@
+schema_version: 2
+owner_identity: docs/authority/数据安全、制品生命周期与验收基线
+domains:
+  - DATA_GOVERNANCE
+inherit: true
+authority_files:
+  - docs/authority/数据安全、制品生命周期与验收基线/数据安全、制品生命周期与验收基线.yaml
+sovereignty_categories:
+  - DATA_RETENTION
+  - PRODUCT_SECURITY_RULE
+engineering_gates:
+  - authority_validators
