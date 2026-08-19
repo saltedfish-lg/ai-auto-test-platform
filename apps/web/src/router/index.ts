@@ -4,6 +4,9 @@ import PlatformShell from "../components/PlatformShell.vue";
 import { useSessionStore } from "../stores/session";
 import ChangePasswordView from "../views/ChangePasswordView.vue";
 import LoginView from "../views/LoginView.vue";
+import ProjectDetailView from "../views/ProjectDetailView.vue";
+import ProjectsListView from "../views/ProjectsListView.vue";
+import WorkspaceHomeView from "../views/WorkspaceHomeView.vue";
 
 export function createPlatformRouter(history: RouterHistory = createWebHistory()): Router {
   const platformRouter = createRouter({
@@ -22,9 +25,25 @@ export function createPlatformRouter(history: RouterHistory = createWebHistory()
       },
       {
         path: "/",
-        name: "platform-home",
         component: PlatformShell,
         meta: { requiresAuth: true },
+        children: [
+          {
+            path: "",
+            name: "platform-home",
+            component: WorkspaceHomeView,
+          },
+          {
+            path: "projects",
+            name: "projects.list",
+            component: ProjectsListView,
+          },
+          {
+            path: "projects/:id",
+            name: "projects.detail",
+            component: ProjectDetailView,
+          },
+        ],
       },
       { path: "/:pathMatch(.*)*", redirect: "/" },
     ],

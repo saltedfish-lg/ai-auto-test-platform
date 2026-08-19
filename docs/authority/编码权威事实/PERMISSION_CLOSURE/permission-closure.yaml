@@ -1551,10 +1551,10 @@ role_templates:
 - role_id: ROLE-PROJECT-OWNER-DUTY
   role_name: 项目负责人
   role_type: PROJECT_DUTY
-  purpose: 确保项目始终存在合格负责人，并在项目范围内完成成员、职责和七个数据子范围治理。
+  purpose: 确保项目始终存在合格负责人，并在当前项目边界内完成成员、职责和动态Owner数据范围治理。
   scope: OWNED_PROJECTS
   allowed_operations:
-  - 在负责项目内授予符合授权上限的动态全部范围
+  - 在负责项目内按ACTIVE成员关系和Owner职责动态取得当前project_id边界内全部Owner可访问项目级资源
   - 管理项目成员
   - 变更项目负责人
   - 维护项目配置
@@ -1562,7 +1562,7 @@ role_templates:
   - 不得操作非负责项目
   - SERVICE_ACCOUNT不得成为项目负责人
   - 不得在新负责人资格和范围未原子完成前移除最后一名旧负责人
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   authorization_capability: 可在负责项目内授予符合项目授权上限的职责与范围
   cross_project_capability: OWNED_PROJECTS_ONLY
   sensitive_data_access: 仍需相应系统权限和敏感数据权限
@@ -1571,8 +1571,8 @@ role_templates:
   - 项目负责人变更
   - 授予项目内ALL范围
   assignment_rule: 项目创建时仅USER可成为首个负责人；必须具备PROJECT_OWNER_ELIGIBLE及相关权限
-  revocation_rule: 正常变更必须先原子指定合格新负责人；无候选且最后一名负责人将失效时，由SUPER_ADMIN受控指定合格USER并写入应急审计，不创建虚拟负责人。
-  lifecycle: 依附项目成员关系；负责人失效或退出前完成交接，紧急无人接任时执行SUPER_ADMIN应急托管流程。
+  revocation_rule: 正常变更必须先原子指定合格新负责人；无候选且最后一名负责人将失效时，由SUPER_ADMIN受控指定合格USER并写入应急审计，不创建虚拟负责人；Owner职责撤销后动态范围立即失效。
+  lifecycle: 依附ACTIVE项目成员关系和ROLE-PROJECT-OWNER-DUTY；成员失效、负责人职责撤销或角色绑定移除后动态范围立即失效；负责人失效或退出前完成交接，紧急无人接任时执行SUPER_ADMIN应急托管流程。
   current_version: IN_SCOPE_MANDATORY
   completion_status: DIRECTLY_SUPPORTED
   template_approval_status: APPROVED_BASELINE_TEMPLATE
@@ -6533,7 +6533,7 @@ role_permission_mappings:
   permission_id: TERM-PER-001
   permission_code: PROJECT_VIEW
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -6542,7 +6542,7 @@ role_permission_mappings:
   permission_id: TERM-PER-002
   permission_code: PROJECT_CREATE
   decision: DENIED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -6551,7 +6551,7 @@ role_permission_mappings:
   permission_id: TERM-PER-003
   permission_code: PROJECT_EDIT
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -6560,7 +6560,7 @@ role_permission_mappings:
   permission_id: TERM-PER-004
   permission_code: PROJECT_ARCHIVE
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -6569,7 +6569,7 @@ role_permission_mappings:
   permission_id: TERM-PER-005
   permission_code: BUSINESS_MODULE_VIEW
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -6578,7 +6578,7 @@ role_permission_mappings:
   permission_id: TERM-PER-006
   permission_code: BUSINESS_MODULE_CREATE
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -6587,7 +6587,7 @@ role_permission_mappings:
   permission_id: TERM-PER-007
   permission_code: BUSINESS_MODULE_EDIT
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -6596,7 +6596,7 @@ role_permission_mappings:
   permission_id: TERM-PER-008
   permission_code: BUSINESS_MODULE_ARCHIVE
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -6605,7 +6605,7 @@ role_permission_mappings:
   permission_id: TERM-PER-009
   permission_code: BUSINESS_TERMINAL_VIEW
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -6614,7 +6614,7 @@ role_permission_mappings:
   permission_id: TERM-PER-010
   permission_code: BUSINESS_TERMINAL_CREATE
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -6623,7 +6623,7 @@ role_permission_mappings:
   permission_id: TERM-PER-011
   permission_code: BUSINESS_TERMINAL_EDIT
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -6632,7 +6632,7 @@ role_permission_mappings:
   permission_id: TERM-PER-012
   permission_code: BUSINESS_TERMINAL_ARCHIVE
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -6641,7 +6641,7 @@ role_permission_mappings:
   permission_id: TERM-PER-013
   permission_code: CASE_SUITE_VIEW
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -6650,7 +6650,7 @@ role_permission_mappings:
   permission_id: TERM-PER-014
   permission_code: CASE_SUITE_CREATE
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -6659,7 +6659,7 @@ role_permission_mappings:
   permission_id: TERM-PER-015
   permission_code: CASE_SUITE_EDIT
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -6668,7 +6668,7 @@ role_permission_mappings:
   permission_id: TERM-PER-016
   permission_code: RUN_TASK_CREATE
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -6677,7 +6677,7 @@ role_permission_mappings:
   permission_id: TERM-PER-017
   permission_code: RUN_TASK_CANCEL
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -6686,7 +6686,7 @@ role_permission_mappings:
   permission_id: TERM-PER-018
   permission_code: REPORT_VIEW
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -6695,7 +6695,7 @@ role_permission_mappings:
   permission_id: TERM-PER-019
   permission_code: ARTIFACT_DOWNLOAD
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -6704,7 +6704,7 @@ role_permission_mappings:
   permission_id: TERM-PER-020
   permission_code: AUDIT_VIEW
   decision: DENIED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -6713,7 +6713,7 @@ role_permission_mappings:
   permission_id: TERM-PER-021
   permission_code: USER_CREATE
   decision: DENIED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -6722,7 +6722,7 @@ role_permission_mappings:
   permission_id: TERM-PER-022
   permission_code: ROLE_BIND
   decision: DENIED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -6731,7 +6731,7 @@ role_permission_mappings:
   permission_id: TERM-PER-023
   permission_code: PROJECT_MEMBER_MANAGE
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -6740,7 +6740,7 @@ role_permission_mappings:
   permission_id: TERM-PER-024
   permission_code: AI_TASK_CREATE
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -6749,7 +6749,7 @@ role_permission_mappings:
   permission_id: TERM-PER-025
   permission_code: MANUAL_RECORDING_CREATE
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -6758,7 +6758,7 @@ role_permission_mappings:
   permission_id: TERM-PER-026
   permission_code: CONTROL_SELF
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -6767,7 +6767,7 @@ role_permission_mappings:
   permission_id: TERM-PER-027
   permission_code: PROJECT_OWNER_ELIGIBLE
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -6776,7 +6776,7 @@ role_permission_mappings:
   permission_id: TERM-PER-028
   permission_code: NATURAL_CASE_CREATE
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -6785,7 +6785,7 @@ role_permission_mappings:
   permission_id: TERM-PER-029
   permission_code: MANUAL_RECORDING_VIEW
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -6794,7 +6794,7 @@ role_permission_mappings:
   permission_id: TERM-PER-030
   permission_code: RUNNER_REGISTER
   decision: DENIED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -6803,7 +6803,7 @@ role_permission_mappings:
   permission_id: TERM-PER-031
   permission_code: RUNNER_BIND
   decision: DENIED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -6812,7 +6812,7 @@ role_permission_mappings:
   permission_id: TERM-PER-032
   permission_code: MODEL_CONFIGURATION_MANAGE
   decision: DENIED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -6821,7 +6821,7 @@ role_permission_mappings:
   permission_id: TERM-PER-033
   permission_code: MODEL_VERSION_REVIEW
   decision: DENIED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -6830,7 +6830,7 @@ role_permission_mappings:
   permission_id: TERM-PER-034
   permission_code: CROSS_PROJECT_AUTHORIZATION_MANAGE
   decision: DENIED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -6839,7 +6839,7 @@ role_permission_mappings:
   permission_id: TERM-PER-035
   permission_code: CROSS_PROJECT_AUTHORIZATION_GRANT_ALL
   decision: DENIED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -6848,7 +6848,7 @@ role_permission_mappings:
   permission_id: TERM-PER-036
   permission_code: TOOL_INTEGRATION_INCIDENT_MANAGE
   decision: DENIED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -6857,7 +6857,7 @@ role_permission_mappings:
   permission_id: TERM-PER-037
   permission_code: TECHNICAL_ALERT_ENDPOINT_MANAGE
   decision: DENIED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -6866,7 +6866,7 @@ role_permission_mappings:
   permission_id: TERM-PER-038
   permission_code: VERSION_REVIEW_VIEW
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 提交人不得批准本人提交；高风险操作必须审计
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -6875,7 +6875,7 @@ role_permission_mappings:
   permission_id: TERM-PER-039
   permission_code: TEST_REPORT_VIEW
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -6884,7 +6884,7 @@ role_permission_mappings:
   permission_id: TERM-PER-040
   permission_code: TEST_ARTIFACT_VIEW
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -6893,7 +6893,7 @@ role_permission_mappings:
   permission_id: TERM-PER-041
   permission_code: REPORT_SHARE_VIEW
   decision: DENIED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -6902,7 +6902,7 @@ role_permission_mappings:
   permission_id: TERM-PER-042
   permission_code: MANUAL_RECORDING_TASK_VIEW
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -6911,7 +6911,7 @@ role_permission_mappings:
   permission_id: PDBR-PER-001
   permission_code: REPORT_EXPORT
   decision: DENIED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -6920,7 +6920,7 @@ role_permission_mappings:
   permission_id: PDBR-PER-002
   permission_code: REPORT_SHARE
   decision: DENIED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -6929,7 +6929,7 @@ role_permission_mappings:
   permission_id: PDBR-PER-003
   permission_code: SENSITIVE_ARTIFACT_VIEW
   decision: DENIED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -6938,7 +6938,7 @@ role_permission_mappings:
   permission_id: PDBR-PER-004
   permission_code: VERSION_REVIEW_SUBMIT
   decision: DENIED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 提交人不得批准本人提交；高风险操作必须审计
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -6947,7 +6947,7 @@ role_permission_mappings:
   permission_id: PDBR-PER-005
   permission_code: VERSION_REVIEW_APPROVE
   decision: DENIED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 提交人不得批准本人提交；高风险操作必须审计
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -6956,7 +6956,7 @@ role_permission_mappings:
   permission_id: PDBR-PER-006
   permission_code: VERSION_REVIEW_REJECT
   decision: DENIED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 提交人不得批准本人提交；高风险操作必须审计
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -6965,7 +6965,7 @@ role_permission_mappings:
   permission_id: PDBR-PER-007
   permission_code: VERSION_PUBLISH
   decision: DENIED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 提交人不得批准本人提交；高风险操作必须审计
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -6974,7 +6974,7 @@ role_permission_mappings:
   permission_id: PDBR-PER-008
   permission_code: VERSION_REVIEW_WITHDRAW
   decision: DENIED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 提交人不得批准本人提交；高风险操作必须审计
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
@@ -7044,6 +7044,11 @@ data_scope_rules:
   definition: 凭证、Token、Cookie、SSO身份及敏感上下文
   calculation_rule: 独立敏感权限、最小展示、脱敏、短期访问令牌和审计
   completion_status: SUPPORTED_BY_MULTIPLE_SOURCES
+- data_scope_rule_id: DSR-014
+  scope_code: OWNED_PROJECT_ALL_DERIVED
+  definition: 当前负责人所属project_id边界内全部Owner可访问的项目级资源，不代表全平台ALL
+  calculation_rule: 仅当ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态派生；任一条件失效后立即失效，不创建Owner专属DataScopeGrant；非Owner显式授权继续遵循既有规则
+  completion_status: USER_RESOLVED_PRODUCT_DECISION
 - data_scope_rule_id: DSR-014
   scope_code: ARCHIVED_OBJECT_HISTORY
   definition: 归档对象

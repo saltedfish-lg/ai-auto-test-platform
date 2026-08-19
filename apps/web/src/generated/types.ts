@@ -127,8 +127,15 @@ export type ProjectResource = {
   row_version: number;
   created_at: string;
   updated_at: string;
-  project_code?: string | null;
+  project_code: string;
   lifecycle_status: "CREATED" | "CONFIGURING" | "VALIDATING" | "ACTIVE" | "DISABLED" | "RECOVERING" | "ARCHIVED" | "CLEANUP_PENDING" | "LOGICALLY_DELETED";
+  owners: Array<ProjectOwnerResource>;
+};
+
+export type ProjectOwnerResource = {
+  user_id: string;
+  display_name?: string | null;
+  membership_status: "ACTIVE";
 };
 
 export type ProjectMemberResource = {
@@ -1097,7 +1104,8 @@ export type CreateProjectRequest = {
   reason?: string | null;
   project_id?: string;
   display_name?: string | null;
-  project_code?: string | null;
+  project_code: string;
+  owner_user_id?: string | null;
 };
 
 export type CreateProjectResponse = {
@@ -1114,7 +1122,11 @@ export type UpdateProjectRequest = {
   expected_version: number;
   reason?: string | null;
   display_name?: string | null;
-  project_code?: string | null;
+};
+
+export type ProjectLifecycleRequest = {
+  expected_version: number;
+  reason: string;
 };
 
 export type UpdateProjectResponse = {

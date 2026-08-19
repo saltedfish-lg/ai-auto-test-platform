@@ -415,10 +415,11 @@ class AuthenticationService:
         permission_codes: tuple[str, ...],
         project_id: str,
         audit_context: AuditContext,
-    ) -> None:
+    ) -> str:
         """项目写授权重算Binding、Grant与项目职责交集, 避免跨项目权限被聚合复用。"""
         now = utc_now()
         context = AuthorizationContext(project_id, "AUTHORIZED_PROJECT_ACTIVE", project_id, True)
+        scope_decisions: list[str] = []
         for permission_code in permission_codes:
             mappings = list(
                 db.execute(
@@ -458,31 +459,268 @@ class AuthenticationService:
                 if role_code != "ROLE-SUPER-ADMIN":
                     if binding_project_id is not None and binding_project_id != project_id:
                         continue
-                    if db.scalar(
-                        select(DataScopeGrant.grant_id).where(
-                            DataScopeGrant.binding_id == binding_id,
-                            DataScopeGrant.scope_type == "AUTHORIZED_PROJECT_ACTIVE",
-                            DataScopeGrant.scope_id == project_id,
-                            or_(
-                                DataScopeGrant.permission_code.is_(None),
-                                DataScopeGrant.permission_code == permission_code,
-                            ),
+                    if role_code == "ROLE-PLATFORM-ADMIN":
+                        # PLATFORM_TECHNICAL never grants project business access. A
+                        # Platform Admin needs an explicit target-project grant, but
+                        # that platform duty does not require a same-role ProjectMember.
+                        grant = db.scalar(
+                            select(DataScopeGrant.grant_id).where(
+                                DataScopeGrant.binding_id == binding_id,
+                                DataScopeGrant.scope_type.in_(
+                                    ("AUTHORIZED_PROJECT_ACTIVE", "SPECIFIED_PROJECT_IDS")
+                                ),
+                                DataScopeGrant.scope_id == project_id,
+                                or_(
+                                    DataScopeGrant.permission_code.is_(None),
+                                    DataScopeGrant.permission_code == permission_code,
+                                ),
+                            )
                         )
-                    ) is None:
+                    else:
+                        grant = db.scalar(
+                            select(DataScopeGrant.grant_id).where(
+                                DataScopeGrant.binding_id == binding_id,
+                                DataScopeGrant.scope_type.in_(
+                                    ("AUTHORIZED_PROJECT_ACTIVE", "SPECIFIED_PROJECT_IDS")
+                                ),
+                                DataScopeGrant.scope_id == project_id,
+                                or_(
+                                    DataScopeGrant.permission_code.is_(None),
+                                    DataScopeGrant.permission_code == permission_code,
+                                ),
+                            )
+                        )
+                    if grant is None:
                         continue
                     if role_code != "ROLE-PLATFORM-ADMIN" and not self._has_matching_project_duty(
                         db, identity.user.user_id, project_id, role_id
                     ):
                         continue
                 applicable.append((decision, conditions, role_code))
+
+            binding_applicable = list(applicable)
+            # Product Owner scope is deliberately not persisted as seven duplicate
+            # DataScopeGrant rows. The ACTIVE membership duty itself is the live
+            # project boundary and disappears immediately when membership/role ends.
+            owner_mappings = list(
+                db.execute(
+                    select(
+                        RolePermission.decision,
+                        RolePermission.conditions,
+                        Role.role_code,
+                    )
+                    .select_from(ProjectMember)
+                    .join(Role, Role.role_id == ProjectMember.role_id)
+                    .join(RolePermission, RolePermission.role_id == Role.role_id)
+                    .join(
+                        PermissionCode,
+                        PermissionCode.permission_code_id == RolePermission.permission_id,
+                    )
+                    .where(
+                        ProjectMember.user_id == identity.user.user_id,
+                        ProjectMember.project_id == project_id,
+                        ProjectMember.lifecycle_status == ACTIVE,
+                        Role.lifecycle_status == ACTIVE,
+                        Role.role_code == "ROLE-PROJECT-OWNER-DUTY",
+                        PermissionCode.lifecycle_status == ACTIVE,
+                        PermissionCode.permission_code == permission_code,
+                    )
+                )
+            )
+            applicable.extend(
+                (decision, conditions, role_code or "")
+                for decision, conditions, role_code in owner_mappings
+            )
             if any(decision in {"DENIED", "FORBIDDEN"} for decision, _, _ in applicable):
                 self._raise_permission_denied(identity, operation_id, audit_context, db=db)
-            if not any(
+            binding_allowed = any(
                 decision == "ALLOWED"
                 and self._condition_satisfied(conditions, identity.user.user_id, context)
-                for decision, conditions, _ in applicable
-            ):
+                for decision, conditions, _ in binding_applicable
+            )
+            owner_allowed = any(
+                decision == "ALLOWED"
+                and self._condition_satisfied(conditions, identity.user.user_id, context)
+                for decision, conditions, _ in owner_mappings
+            )
+            if not binding_allowed and not owner_allowed:
                 self._raise_permission_denied(identity, operation_id, audit_context, db=db)
+            scope_decisions.append(
+                "DYNAMIC_PROJECT_OWNER_ALL" if owner_allowed and not binding_allowed else "ALLOWED"
+            )
+        return (
+            "DYNAMIC_PROJECT_OWNER_ALL"
+            if scope_decisions
+            and all(item == "DYNAMIC_PROJECT_OWNER_ALL" for item in scope_decisions)
+            else "ALLOWED"
+        )
+
+    def user_has_permission_qualification_in_transaction(
+        self,
+        db: Session,
+        user_id: str,
+        permission_code: str,
+    ) -> bool:
+        """Evaluate a subject qualification without deriving a resource data scope."""
+        now = utc_now()
+        rows = list(
+            db.execute(
+                select(RolePermission.decision, RolePermission.conditions)
+                .select_from(UserRoleBinding)
+                .join(Role, Role.role_id == UserRoleBinding.role_id)
+                .join(RolePermission, RolePermission.role_id == Role.role_id)
+                .join(
+                    PermissionCode,
+                    PermissionCode.permission_code_id == RolePermission.permission_id,
+                )
+                .where(
+                    UserRoleBinding.user_id == user_id,
+                    UserRoleBinding.valid_from <= now,
+                    or_(UserRoleBinding.valid_to.is_(None), UserRoleBinding.valid_to > now),
+                    Role.lifecycle_status == ACTIVE,
+                    PermissionCode.lifecycle_status == ACTIVE,
+                    PermissionCode.permission_code == permission_code,
+                )
+            )
+        )
+        rows.extend(
+            db.execute(
+                select(RolePermission.decision, RolePermission.conditions)
+                .select_from(ProjectMember)
+                .join(Role, Role.role_id == ProjectMember.role_id)
+                .join(RolePermission, RolePermission.role_id == Role.role_id)
+                .join(
+                    PermissionCode,
+                    PermissionCode.permission_code_id == RolePermission.permission_id,
+                )
+                .where(
+                    ProjectMember.user_id == user_id,
+                    ProjectMember.lifecycle_status == ACTIVE,
+                    Role.lifecycle_status == ACTIVE,
+                    PermissionCode.lifecycle_status == ACTIVE,
+                    PermissionCode.permission_code == permission_code,
+                )
+            )
+        )
+        context = AuthorizationContext(None, "QUALIFICATION", None, True)
+        applicable = [
+            decision
+            for decision, conditions in rows
+            if self._condition_satisfied(conditions, user_id, context)
+        ]
+        if any(decision in {"DENIED", "FORBIDDEN"} for decision in applicable):
+            return False
+        return any(decision == "ALLOWED" for decision in applicable)
+
+    def authorized_project_ids_in_transaction(
+        self,
+        db: Session,
+        identity: AuthenticatedIdentity,
+        permission_code: str,
+    ) -> set[str] | None:
+        """Return visible project ids, or ``None`` for explicit platform-wide access."""
+        now = utc_now()
+        context = AuthorizationContext(None, "PLATFORM_TECHNICAL", None, True)
+        bindings = list(
+            db.execute(
+                select(
+                    UserRoleBinding.binding_id,
+                    UserRoleBinding.project_id,
+                    UserRoleBinding.role_id,
+                    Role.role_code,
+                    RolePermission.decision,
+                    RolePermission.conditions,
+                )
+                .join(Role, Role.role_id == UserRoleBinding.role_id)
+                .join(RolePermission, RolePermission.role_id == Role.role_id)
+                .join(
+                    PermissionCode,
+                    PermissionCode.permission_code_id == RolePermission.permission_id,
+                )
+                .where(
+                    UserRoleBinding.user_id == identity.user.user_id,
+                    UserRoleBinding.valid_from <= now,
+                    or_(UserRoleBinding.valid_to.is_(None), UserRoleBinding.valid_to > now),
+                    Role.lifecycle_status == ACTIVE,
+                    PermissionCode.lifecycle_status == ACTIVE,
+                    PermissionCode.permission_code == permission_code,
+                )
+            )
+        )
+        global_decisions: list[str] = []
+        allowed: set[str] = set()
+        denied: set[str] = set()
+        for binding_id, binding_project_id, role_id, role_code, decision, conditions in bindings:
+            if not self._condition_satisfied(conditions, identity.user.user_id, context):
+                continue
+            if role_code == "ROLE-SUPER-ADMIN":
+                global_decisions.append(decision)
+                continue
+            scope_ids = set(
+                db.scalars(
+                    select(DataScopeGrant.scope_id).where(
+                        DataScopeGrant.binding_id == binding_id,
+                        DataScopeGrant.scope_type.in_(
+                            ("AUTHORIZED_PROJECT_ACTIVE", "SPECIFIED_PROJECT_IDS")
+                        ),
+                        DataScopeGrant.scope_id.is_not(None),
+                        or_(
+                            DataScopeGrant.permission_code.is_(None),
+                            DataScopeGrant.permission_code == permission_code,
+                        ),
+                    )
+                )
+            )
+            if binding_project_id is not None:
+                scope_ids &= {binding_project_id}
+            for project_id in scope_ids:
+                if project_id is None:
+                    continue
+                if role_code != "ROLE-PLATFORM-ADMIN" and not self._has_matching_project_duty(
+                    db, identity.user.user_id, project_id, role_id
+                ):
+                    continue
+                (allowed if decision == "ALLOWED" else denied).add(project_id)
+
+        if any(decision in {"DENIED", "FORBIDDEN"} for decision in global_decisions):
+            return set()
+        if any(decision == "ALLOWED" for decision in global_decisions):
+            return None
+
+        owner_rows = list(
+            db.execute(
+                select(
+                    ProjectMember.project_id,
+                    RolePermission.decision,
+                    RolePermission.conditions,
+                )
+                .select_from(ProjectMember)
+                .join(Role, Role.role_id == ProjectMember.role_id)
+                .join(RolePermission, RolePermission.role_id == Role.role_id)
+                .join(
+                    PermissionCode,
+                    PermissionCode.permission_code_id == RolePermission.permission_id,
+                )
+                .where(
+                    ProjectMember.user_id == identity.user.user_id,
+                    ProjectMember.lifecycle_status == ACTIVE,
+                    Role.lifecycle_status == ACTIVE,
+                    Role.role_code == "ROLE-PROJECT-OWNER-DUTY",
+                    PermissionCode.lifecycle_status == ACTIVE,
+                    PermissionCode.permission_code == permission_code,
+                )
+            )
+        )
+        for project_id, decision, conditions in owner_rows:
+            owner_context = AuthorizationContext(
+                project_id, "AUTHORIZED_PROJECT_ACTIVE", project_id, True
+            )
+            if not self._condition_satisfied(
+                conditions, identity.user.user_id, owner_context
+            ):
+                continue
+            (allowed if decision == "ALLOWED" else denied).add(project_id)
+        return allowed - denied
 
     def require_project_permissions(
         self,

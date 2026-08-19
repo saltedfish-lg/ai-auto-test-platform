@@ -479,6 +479,7 @@ def main() -> int:
                 "ATP_AUTH_E2E_NORMAL_PASSWORD": normal_password,
                 "ATP_AUTH_E2E_DISABLED_USERNAME": disabled_username,
                 "ATP_AUTH_E2E_DISABLED_PASSWORD": disabled_password,
+                "PLAYWRIGHT_TEST_FILE": "auth.spec.ts",
                 "PLAYWRIGHT_NO_COPY_PROMPT": "1",
                 "PLAYWRIGHT_OUTPUT_DIR": str(runtime_directory / "playwright-output"),
             }

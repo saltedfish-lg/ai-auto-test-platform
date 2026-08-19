@@ -3,9 +3,11 @@ import { defineConfig, devices } from "@playwright/test";
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:5173";
 const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE;
 const outputDir = process.env.PLAYWRIGHT_OUTPUT_DIR;
+const testFile = process.env.PLAYWRIGHT_TEST_FILE;
 
 export default defineConfig({
   testDir: "./e2e",
+  testMatch: testFile ? [testFile] : undefined,
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,

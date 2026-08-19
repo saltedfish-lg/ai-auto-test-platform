@@ -18,9 +18,12 @@ create_role,POST,/api/v1/role,ROLE_BIND,CURRENT_LIVING_AUTHORITY
 get_role,GET,/api/v1/role/{id},PROJECT_VIEW,CURRENT_LIVING_AUTHORITY
 update_role,PATCH,/api/v1/role/{id},ROLE_BIND,CURRENT_LIVING_AUTHORITY
 list_project,GET,/api/v1/project,PROJECT_VIEW,CURRENT_LIVING_AUTHORITY
-create_project,POST,/api/v1/project,PROJECT_VIEW,CURRENT_LIVING_AUTHORITY
+create_project,POST,/api/v1/project,PROJECT_CREATE,CURRENT_LIVING_AUTHORITY
 get_project,GET,/api/v1/project/{id},PROJECT_VIEW,CURRENT_LIVING_AUTHORITY
-update_project,PATCH,/api/v1/project/{id},PROJECT_VIEW,CURRENT_LIVING_AUTHORITY
+update_project,PATCH,/api/v1/project/{id},PROJECT_EDIT,CURRENT_LIVING_AUTHORITY
+disable_project,POST,/api/v1/project/{id}/disable,PROJECT_EDIT,CURRENT_LIVING_AUTHORITY
+recover_project,POST,/api/v1/project/{id}/recover,PROJECT_EDIT,CURRENT_LIVING_AUTHORITY
+archive_project,POST,/api/v1/project/{id}/archive,PROJECT_ARCHIVE,CURRENT_LIVING_AUTHORITY
 list_environment,GET,/api/v1/environment,PROJECT_VIEW,CURRENT_LIVING_AUTHORITY
 create_environment,POST,/api/v1/environment,PROJECT_EDIT,CURRENT_LIVING_AUTHORITY
 get_environment,GET,/api/v1/environment/{id},PROJECT_VIEW,CURRENT_LIVING_AUTHORITY

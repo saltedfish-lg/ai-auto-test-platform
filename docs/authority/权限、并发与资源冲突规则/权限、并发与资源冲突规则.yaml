@@ -870,7 +870,7 @@ roles:
   - 不得操作非负责项目
   - SERVICE_ACCOUNT不得成为项目负责人
   - 不得在新负责人资格和范围未原子完成前移除最后一名旧负责人
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   authorization_capability: 可在负责项目内授予符合项目授权上限的职责与范围
   cross_project_capability: OWNED_PROJECTS_ONLY
   sensitive_data_access: 仍需相应系统权限和敏感数据权限
@@ -6536,7 +6536,7 @@ role_permission_mappings:
   permission_id: TERM-PER-001
   permission_code: PROJECT_VIEW
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
 - mapping_id: RPM-0552
@@ -6544,7 +6544,7 @@ role_permission_mappings:
   permission_id: TERM-PER-002
   permission_code: PROJECT_CREATE
   decision: DENIED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
 - mapping_id: RPM-0553
@@ -6552,7 +6552,7 @@ role_permission_mappings:
   permission_id: TERM-PER-003
   permission_code: PROJECT_EDIT
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
 - mapping_id: RPM-0554
@@ -6560,7 +6560,7 @@ role_permission_mappings:
   permission_id: TERM-PER-004
   permission_code: PROJECT_ARCHIVE
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
 - mapping_id: RPM-0555
@@ -6568,7 +6568,7 @@ role_permission_mappings:
   permission_id: TERM-PER-005
   permission_code: BUSINESS_MODULE_VIEW
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
 - mapping_id: RPM-0556
@@ -6576,7 +6576,7 @@ role_permission_mappings:
   permission_id: TERM-PER-006
   permission_code: BUSINESS_MODULE_CREATE
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
 - mapping_id: RPM-0557
@@ -6584,7 +6584,7 @@ role_permission_mappings:
   permission_id: TERM-PER-007
   permission_code: BUSINESS_MODULE_EDIT
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
 - mapping_id: RPM-0558
@@ -6592,7 +6592,7 @@ role_permission_mappings:
   permission_id: TERM-PER-008
   permission_code: BUSINESS_MODULE_ARCHIVE
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
 - mapping_id: RPM-0559
@@ -6600,7 +6600,7 @@ role_permission_mappings:
   permission_id: TERM-PER-009
   permission_code: BUSINESS_TERMINAL_VIEW
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
 - mapping_id: RPM-0560
@@ -6608,7 +6608,7 @@ role_permission_mappings:
   permission_id: TERM-PER-010
   permission_code: BUSINESS_TERMINAL_CREATE
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
 - mapping_id: RPM-0561
@@ -6616,7 +6616,7 @@ role_permission_mappings:
   permission_id: TERM-PER-011
   permission_code: BUSINESS_TERMINAL_EDIT
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
 - mapping_id: RPM-0562
@@ -6624,7 +6624,7 @@ role_permission_mappings:
   permission_id: TERM-PER-012
   permission_code: BUSINESS_TERMINAL_ARCHIVE
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
 - mapping_id: RPM-0563
@@ -6632,7 +6632,7 @@ role_permission_mappings:
   permission_id: TERM-PER-013
   permission_code: CASE_SUITE_VIEW
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
 - mapping_id: RPM-0564
@@ -6640,7 +6640,7 @@ role_permission_mappings:
   permission_id: TERM-PER-014
   permission_code: CASE_SUITE_CREATE
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
 - mapping_id: RPM-0565
@@ -6648,7 +6648,7 @@ role_permission_mappings:
   permission_id: TERM-PER-015
   permission_code: CASE_SUITE_EDIT
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
 - mapping_id: RPM-0566
@@ -6656,7 +6656,7 @@ role_permission_mappings:
   permission_id: TERM-PER-016
   permission_code: RUN_TASK_CREATE
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
 - mapping_id: RPM-0567
@@ -6664,7 +6664,7 @@ role_permission_mappings:
   permission_id: TERM-PER-017
   permission_code: RUN_TASK_CANCEL
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
 - mapping_id: RPM-0568
@@ -6672,7 +6672,7 @@ role_permission_mappings:
   permission_id: TERM-PER-018
   permission_code: REPORT_VIEW
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
 - mapping_id: RPM-0569
@@ -6680,7 +6680,7 @@ role_permission_mappings:
   permission_id: TERM-PER-019
   permission_code: ARTIFACT_DOWNLOAD
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
 - mapping_id: RPM-0570
@@ -6688,7 +6688,7 @@ role_permission_mappings:
   permission_id: TERM-PER-020
   permission_code: AUDIT_VIEW
   decision: DENIED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
 - mapping_id: RPM-0571
@@ -6696,7 +6696,7 @@ role_permission_mappings:
   permission_id: TERM-PER-021
   permission_code: USER_CREATE
   decision: DENIED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
 - mapping_id: RPM-0572
@@ -6704,7 +6704,7 @@ role_permission_mappings:
   permission_id: TERM-PER-022
   permission_code: ROLE_BIND
   decision: DENIED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
 - mapping_id: RPM-0573
@@ -6712,7 +6712,7 @@ role_permission_mappings:
   permission_id: TERM-PER-023
   permission_code: PROJECT_MEMBER_MANAGE
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
 - mapping_id: RPM-0574
@@ -6720,7 +6720,7 @@ role_permission_mappings:
   permission_id: TERM-PER-024
   permission_code: AI_TASK_CREATE
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
 - mapping_id: RPM-0575
@@ -6728,7 +6728,7 @@ role_permission_mappings:
   permission_id: TERM-PER-025
   permission_code: MANUAL_RECORDING_CREATE
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
 - mapping_id: RPM-0576
@@ -6736,7 +6736,7 @@ role_permission_mappings:
   permission_id: TERM-PER-026
   permission_code: CONTROL_SELF
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
 - mapping_id: RPM-0577
@@ -6744,7 +6744,7 @@ role_permission_mappings:
   permission_id: TERM-PER-027
   permission_code: PROJECT_OWNER_ELIGIBLE
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
 - mapping_id: RPM-0578
@@ -6752,7 +6752,7 @@ role_permission_mappings:
   permission_id: TERM-PER-028
   permission_code: NATURAL_CASE_CREATE
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
 - mapping_id: RPM-0579
@@ -6760,7 +6760,7 @@ role_permission_mappings:
   permission_id: TERM-PER-029
   permission_code: MANUAL_RECORDING_VIEW
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
 - mapping_id: RPM-0580
@@ -6768,7 +6768,7 @@ role_permission_mappings:
   permission_id: TERM-PER-030
   permission_code: RUNNER_REGISTER
   decision: DENIED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
 - mapping_id: RPM-0581
@@ -6776,7 +6776,7 @@ role_permission_mappings:
   permission_id: TERM-PER-031
   permission_code: RUNNER_BIND
   decision: DENIED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
 - mapping_id: RPM-0582
@@ -6784,7 +6784,7 @@ role_permission_mappings:
   permission_id: TERM-PER-032
   permission_code: MODEL_CONFIGURATION_MANAGE
   decision: DENIED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
 - mapping_id: RPM-0583
@@ -6792,7 +6792,7 @@ role_permission_mappings:
   permission_id: TERM-PER-033
   permission_code: MODEL_VERSION_REVIEW
   decision: DENIED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
 - mapping_id: RPM-0584
@@ -6800,7 +6800,7 @@ role_permission_mappings:
   permission_id: TERM-PER-034
   permission_code: CROSS_PROJECT_AUTHORIZATION_MANAGE
   decision: DENIED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
 - mapping_id: RPM-0585
@@ -6808,7 +6808,7 @@ role_permission_mappings:
   permission_id: TERM-PER-035
   permission_code: CROSS_PROJECT_AUTHORIZATION_GRANT_ALL
   decision: DENIED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
 - mapping_id: RPM-0586
@@ -6816,7 +6816,7 @@ role_permission_mappings:
   permission_id: TERM-PER-036
   permission_code: TOOL_INTEGRATION_INCIDENT_MANAGE
   decision: DENIED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
 - mapping_id: RPM-0587
@@ -6824,7 +6824,7 @@ role_permission_mappings:
   permission_id: TERM-PER-037
   permission_code: TECHNICAL_ALERT_ENDPOINT_MANAGE
   decision: DENIED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
 - mapping_id: RPM-0588
@@ -6832,7 +6832,7 @@ role_permission_mappings:
   permission_id: TERM-PER-038
   permission_code: VERSION_REVIEW_VIEW
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 提交人不得批准本人提交；高风险操作必须审计
   completion_status: CURRENT_PERMISSION_MAPPING
 - mapping_id: RPM-0589
@@ -6840,7 +6840,7 @@ role_permission_mappings:
   permission_id: TERM-PER-039
   permission_code: TEST_REPORT_VIEW
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
 - mapping_id: RPM-0590
@@ -6848,7 +6848,7 @@ role_permission_mappings:
   permission_id: TERM-PER-040
   permission_code: TEST_ARTIFACT_VIEW
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
 - mapping_id: RPM-0591
@@ -6856,7 +6856,7 @@ role_permission_mappings:
   permission_id: TERM-PER-041
   permission_code: REPORT_SHARE_VIEW
   decision: DENIED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
 - mapping_id: RPM-0592
@@ -6864,7 +6864,7 @@ role_permission_mappings:
   permission_id: TERM-PER-042
   permission_code: MANUAL_RECORDING_TASK_VIEW
   decision: ALLOWED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
 - mapping_id: RPM-0593
@@ -6872,7 +6872,7 @@ role_permission_mappings:
   permission_id: PDBR-PER-001
   permission_code: REPORT_EXPORT
   decision: DENIED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
 - mapping_id: RPM-0594
@@ -6880,7 +6880,7 @@ role_permission_mappings:
   permission_id: PDBR-PER-002
   permission_code: REPORT_SHARE
   decision: DENIED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
 - mapping_id: RPM-0595
@@ -6888,7 +6888,7 @@ role_permission_mappings:
   permission_id: PDBR-PER-003
   permission_code: SENSITIVE_ARTIFACT_VIEW
   decision: DENIED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
 - mapping_id: RPM-0596
@@ -6896,7 +6896,7 @@ role_permission_mappings:
   permission_id: PDBR-PER-004
   permission_code: VERSION_REVIEW_SUBMIT
   decision: DENIED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 提交人不得批准本人提交；高风险操作必须审计
   completion_status: CURRENT_PERMISSION_MAPPING
 - mapping_id: RPM-0597
@@ -6904,7 +6904,7 @@ role_permission_mappings:
   permission_id: PDBR-PER-005
   permission_code: VERSION_REVIEW_APPROVE
   decision: DENIED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 提交人不得批准本人提交；高风险操作必须审计
   completion_status: CURRENT_PERMISSION_MAPPING
 - mapping_id: RPM-0598
@@ -6912,7 +6912,7 @@ role_permission_mappings:
   permission_id: PDBR-PER-006
   permission_code: VERSION_REVIEW_REJECT
   decision: DENIED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 提交人不得批准本人提交；高风险操作必须审计
   completion_status: CURRENT_PERMISSION_MAPPING
 - mapping_id: RPM-0599
@@ -6920,7 +6920,7 @@ role_permission_mappings:
   permission_id: PDBR-PER-007
   permission_code: VERSION_PUBLISH
   decision: DENIED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 提交人不得批准本人提交；高风险操作必须审计
   completion_status: CURRENT_PERMISSION_MAPPING
 - mapping_id: RPM-0600
@@ -6928,7 +6928,7 @@ role_permission_mappings:
   permission_id: PDBR-PER-008
   permission_code: VERSION_REVIEW_WITHDRAW
   decision: DENIED
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   conditions: 提交人不得批准本人提交；高风险操作必须审计
   completion_status: CURRENT_PERMISSION_MAPPING
 permission_inheritance_rules:

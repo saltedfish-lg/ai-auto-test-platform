@@ -4,7 +4,7 @@ metadata:
   version: 1.5.0-p1-remaining-authentication-closure
   status: CURRENT_AUTHORITY_APPEND_ONLY_MIGRATIONS_RUNTIME_FRESHNESS_DERIVED
   code_readiness: IMPLEMENTATION_INPUT_READY
-  last_modified_at: '2026-08-11T00:00:00+08:00'
+  last_modified_at: '2026-08-18T00:00:00+08:00'
 database: MySQL 8.4 LTS
 migration_tool: Flyway
 tables:
@@ -5048,7 +5048,7 @@ tables:
     default: null
   - name: project_code
     type: VARCHAR(191)
-    nullable: true
+    nullable: false
     primary_key: false
     default: null
   - name: lifecycle_status
@@ -5112,6 +5112,132 @@ tables:
   - lifecycle_status
   relationship_fields: []
   extension_json_rule: NON_CONTRACT_EXTENSIONS_ONLY
+- table_name: atp_project_audit
+  table_kind: TECHNICAL_TABLE
+  columns:
+  - name: audit_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: true
+    default: null
+  - name: project_id
+    type: VARCHAR(26)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: project_code
+    type: VARCHAR(191)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: action
+    type: VARCHAR(32)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: operation_id
+    type: VARCHAR(128)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: actor_user_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: participant_user_id
+    type: VARCHAR(26)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: required_permission
+    type: VARCHAR(128)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: scope_decision
+    type: VARCHAR(64)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: previous_status
+    type: VARCHAR(17)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: new_status
+    type: VARCHAR(17)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: result_code
+    type: VARCHAR(64)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: reason
+    type: VARCHAR(1000)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: correlation_id
+    type: VARCHAR(128)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: source_context_hash
+    type: BINARY(32)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: occurred_at
+    type: DATETIME(6)
+    nullable: false
+    primary_key: false
+    default: CURRENT_TIMESTAMP(6)
+  primary_key:
+  - audit_id
+  unique_keys: []
+  check_constraints:
+  - name: ck_atp_project_audit_action
+    expression: (action IN ('PROJECT_CREATED', 'PROJECT_UPDATED', 'PROJECT_DISABLED', 'PROJECT_RECOVERED', 'PROJECT_ARCHIVED', 'PROJECT_OPERATION_DENIED', 'PROJECT_OPERATION_FAILED'))
+  - name: ck_atp_project_audit_scope_decision
+    expression: (scope_decision IN ('ALLOWED', 'DENIED', 'NOT_APPLICABLE', 'DYNAMIC_PROJECT_OWNER_ALL'))
+  foreign_keys:
+  - name: fk_atp_project_audit_actor_user_id
+    column: actor_user_id
+    referenced_table: atp_user
+    referenced_column: user_id
+    on_delete: RESTRICT
+    on_update: RESTRICT
+  - name: fk_atp_project_audit_participant_user_id
+    column: participant_user_id
+    referenced_table: atp_user
+    referenced_column: user_id
+    on_delete: RESTRICT
+    on_update: RESTRICT
+  indexes:
+  - name: ix_atp_project_audit_project_occurred
+    columns:
+    - project_id
+    - occurred_at
+  - name: ix_atp_project_audit_actor_occurred
+    columns:
+    - actor_user_id
+    - occurred_at
+  - name: ix_atp_project_audit_correlation
+    columns:
+    - correlation_id
+  delete_behavior: APPEND_ONLY_UPDATE_DELETE_FORBIDDEN
+  data_owner: ProjectAuditService
+  idempotency_and_audit: IMMUTABLE_BUSINESS_AUDIT
+  business_unique_key: audit_id
+  state_fields: []
+  relationship_fields:
+  - project_id
+  - actor_user_id
+  - participant_user_id
+  extension_json_rule: FORBIDDEN
 - table_name: atp_project_execution_configuration
   columns:
   - name: project_execution_configuration_id
@@ -5197,12 +5323,12 @@ tables:
     default: null
   - name: project_id
     type: VARCHAR(26)
-    nullable: true
+    nullable: false
     primary_key: false
     default: null
   - name: user_id
     type: VARCHAR(26)
-    nullable: true
+    nullable: false
     primary_key: false
     default: null
   - name: role_id
@@ -5255,6 +5381,7 @@ tables:
   unique_keys:
   - name: uq_atp_project_member_business
     columns:
+    - project_id
     - user_id
   check_constraints:
   - name: ck_atp_project_member_lifecycle_status
@@ -5278,7 +5405,10 @@ tables:
     referenced_column: role_id
     on_delete: RESTRICT
     on_update: RESTRICT
-  indexes: []
+  indexes:
+  - name: ix_atp_project_member_user_id
+    columns:
+    - user_id
   delete_behavior: DECLARED_PER_FOREIGN_KEY
   data_owner: DOMAIN_OR_TECHNICAL_OWNER
   idempotency_and_audit: ROW_VERSION_OR_TECHNICAL_TABLE_RULE

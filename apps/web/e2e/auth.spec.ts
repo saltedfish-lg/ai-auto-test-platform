@@ -161,7 +161,9 @@ test("authentication browser closure", async ({ page, context }) => {
   const normalLogin = await submitLogin(page, normalUsername, normalPassword);
   expect(normalLogin.status()).toBe(200);
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByText("当前身份未获得用户创建权限。")).toBeVisible();
+  await expect(
+    page.getByText("当前身份不能创建新项目；可见项目仍由服务端实时权限与范围决定。"),
+  ).toBeVisible();
 
   await page.route("**/api/v1/auth/me", async (route) => {
     await route.fulfill({

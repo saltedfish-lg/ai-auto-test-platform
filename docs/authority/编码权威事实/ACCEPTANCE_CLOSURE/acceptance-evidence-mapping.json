@@ -1,0 +1,188 @@
+{
+  "schema_version": 3,
+  "authority_model": "SINGLE_LIVING_AUTHORITY",
+  "items": [
+    {
+      "acceptance_id": "ACC-R3-1283",
+      "final_status": "PASSED",
+      "authority_refs": [{"path": "docs/authority/编码权威事实/ACCEPTANCE_CLOSURE/acceptance-closure.json", "anchor_kind": "CANONICAL_ID", "id": "ACC-R3-1283"}],
+      "implementation_refs": [{"path": "services/api/src/platform_api/project_service.py", "anchor_kind": "PYTHON_SYMBOL", "symbol": "ProjectService.create_project"}],
+      "direct_evidence": [{"kind": "RUNTIME_GATE", "gate_id": "REAL_ACCEPTANCE_GATE", "result": "PASS", "assertion": "Qualified creator becomes Owner and ROLE-PLATFORM-ADMIN can designate an eligible USER Owner."}]
+    },
+    {
+      "acceptance_id": "ACC-R3-1285",
+      "final_status": "PASSED",
+      "authority_refs": [{"path": "docs/authority/编码权威事实/ACCEPTANCE_CLOSURE/acceptance-closure.json", "anchor_kind": "CANONICAL_ID", "id": "ACC-R3-1285"}],
+      "implementation_refs": [{"path": "services/api/src/platform_api/project_service.py", "anchor_kind": "PYTHON_SYMBOL", "symbol": "ProjectService._append_audit"}],
+      "direct_evidence": [{"kind": "RUNTIME_GATE", "gate_id": "REAL_ACCEPTANCE_GATE", "result": "PASS", "assertion": "Browser create/update/lifecycle commands produced directly linked ProjectAudit records."}]
+    },
+    {
+      "acceptance_id": "ACC-R3-1286",
+      "final_status": "PASSED",
+      "authority_refs": [{"path": "docs/authority/编码权威事实/ACCEPTANCE_CLOSURE/acceptance-closure.json", "anchor_kind": "CANONICAL_ID", "id": "ACC-R3-1286"}],
+      "implementation_refs": [{"path": "services/api/src/platform_api/project_service.py", "anchor_kind": "PYTHON_SYMBOL", "symbol": "ProjectService._append_audit"}],
+      "direct_evidence": [{"kind": "RUNTIME_GATE", "gate_id": "REAL_ACCEPTANCE_GATE", "result": "PASS", "assertion": "Success and rejection audits contain actor, participant/object, permission, scope decision, state, result, correlation, timestamp and source hash fields."}]
+    },
+    {
+      "acceptance_id": "ACC-R3-1287",
+      "final_status": "PASSED",
+      "authority_refs": [{"path": "docs/authority/编码权威事实/ACCEPTANCE_CLOSURE/acceptance-closure.json", "anchor_kind": "CANONICAL_ID", "id": "ACC-R3-1287"}],
+      "implementation_refs": [{"path": "services/api/src/platform_api/project_service.py", "anchor_kind": "PYTHON_SYMBOL", "symbol": "ProjectService.create_project"}],
+      "direct_evidence": [{"kind": "RUNTIME_GATE", "gate_id": "REAL_ACCEPTANCE_GATE", "result": "PASS", "assertion": "Project state, immutable audit and Outbox events committed together; audit-table unavailability returned 500 with zero Project and idempotency rows."}]
+    },
+    {
+      "acceptance_id": "ACC-R3-1288",
+      "final_status": "PASSED",
+      "authority_refs": [{"path": "docs/authority/编码权威事实/ACCEPTANCE_CLOSURE/acceptance-closure.json", "anchor_kind": "CANONICAL_ID", "id": "ACC-R3-1288"}],
+      "implementation_refs": [{"path": "services/api/src/platform_api/project_service.py", "anchor_kind": "PYTHON_SYMBOL", "symbol": "ProjectService._require_version"}],
+      "direct_evidence": [{"kind": "RUNTIME_GATE", "gate_id": "REAL_ACCEPTANCE_GATE", "result": "PASS", "assertion": "Same-key replay returned the same Project, mismatched payload and stale row_version returned 409, and seven-plus command rows were terminal."}]
+    },
+    {
+      "acceptance_id": "ACC-R3-1289",
+      "final_status": "PASSED",
+      "authority_refs": [{"path": "docs/authority/编码权威事实/ACCEPTANCE_CLOSURE/acceptance-closure.json", "anchor_kind": "CANONICAL_ID", "id": "ACC-R3-1289"}],
+      "implementation_refs": [{"path": "services/api/src/platform_api/auth_service.py", "anchor_kind": "PYTHON_SYMBOL", "symbol": "AuthenticationService.require_project_permissions_in_transaction"}],
+      "direct_evidence": [{"kind": "RUNTIME_GATE", "gate_id": "REAL_ACCEPTANCE_GATE", "result": "PASS", "assertion": "Platform create permission was checked before initialization; the resulting Owner scope was project-bounded and had zero physical Owner grants."}]
+    },
+    {
+      "acceptance_id": "ACC-R3-1290",
+      "final_status": "PASSED",
+      "authority_refs": [{"path": "docs/authority/编码权威事实/ACCEPTANCE_CLOSURE/acceptance-closure.json", "anchor_kind": "CANONICAL_ID", "id": "ACC-R3-1290"}],
+      "implementation_refs": [{"path": "services/api/src/platform_api/project_service.py", "anchor_kind": "PYTHON_SYMBOL", "symbol": "ProjectService.create_project"}],
+      "direct_evidence": [{"kind": "RUNTIME_GATE", "gate_id": "REAL_ACCEPTANCE_GATE", "result": "PASS", "assertion": "Ineligible Owner and unavailable audit paths left no partial Project; corrected retry succeeded and no intermediate lifecycle row remained."}]
+    },
+    {
+      "acceptance_id": "ACC-R3-1291",
+      "final_status": "PASSED",
+      "authority_refs": [{"path": "docs/authority/编码权威事实/ACCEPTANCE_CLOSURE/acceptance-closure.json", "anchor_kind": "CANONICAL_ID", "id": "ACC-R3-1291"}],
+      "implementation_refs": [{"path": "services/api/src/platform_api/project_service.py", "anchor_kind": "PYTHON_SYMBOL", "symbol": "ProjectService.create_project"}],
+      "direct_evidence": [{"kind": "RUNTIME_GATE", "gate_id": "REAL_ACCEPTANCE_GATE", "result": "PASS", "assertion": "A non-USER/service-style Owner identifier was rejected with PROJECT_OWNER_NOT_ELIGIBLE and no Project row."}]
+    },
+    {
+      "acceptance_id": "ACC-R3-1292",
+      "final_status": "PASSED",
+      "authority_refs": [{"path": "docs/authority/编码权威事实/ACCEPTANCE_CLOSURE/acceptance-closure.json", "anchor_kind": "CANONICAL_ID", "id": "ACC-R3-1292"}],
+      "implementation_refs": [{"path": "services/api/src/platform_api/project_service.py", "anchor_kind": "PYTHON_SYMBOL", "symbol": "ProjectService.create_project"}],
+      "direct_evidence": [{"kind": "RUNTIME_GATE", "gate_id": "REAL_ACCEPTANCE_GATE", "result": "PASS", "assertion": "Permission, Owner qualification, uniqueness, concurrency, idempotency and audit-resource failure paths all failed closed without unauthorized or duplicate side effects."}]
+    },
+    {
+      "acceptance_id": "ACC-R3-1293",
+      "final_status": "PASSED",
+      "authority_refs": [{"path": "docs/authority/编码权威事实/ACCEPTANCE_CLOSURE/acceptance-closure.json", "anchor_kind": "CANONICAL_ID", "id": "ACC-R3-1293"}],
+      "implementation_refs": [{"path": "services/api/src/platform_api/project_service.py", "anchor_kind": "PYTHON_SYMBOL", "symbol": "ProjectService.create_project"}],
+      "direct_evidence": [{"kind": "RUNTIME_GATE", "gate_id": "REAL_ACCEPTANCE_GATE", "result": "PASS", "assertion": "The real MySQL workflow proved a single local transaction boundary and zero partial rows after command failure."}]
+    },
+    {
+      "acceptance_id": "ACC-R3-1294",
+      "final_status": "PASSED",
+      "authority_refs": [{"path": "docs/authority/编码权威事实/ACCEPTANCE_CLOSURE/acceptance-closure.json", "anchor_kind": "CANONICAL_ID", "id": "ACC-R3-1294"}],
+      "implementation_refs": [{"path": "services/api/src/platform_api/project_service.py", "anchor_kind": "PYTHON_SYMBOL", "symbol": "ProjectService.create_project"}],
+      "direct_evidence": [{"kind": "RUNTIME_GATE", "gate_id": "REAL_ACCEPTANCE_GATE", "result": "PASS", "assertion": "Browser POST created the unique Project master record and refresh preserved it."}]
+    },
+    {
+      "acceptance_id": "ACC-R3-1295",
+      "final_status": "PASSED",
+      "authority_refs": [{"path": "docs/authority/编码权威事实/ACCEPTANCE_CLOSURE/acceptance-closure.json", "anchor_kind": "CANONICAL_ID", "id": "ACC-R3-1295"}],
+      "implementation_refs": [{"path": "services/api/src/platform_api/project_service.py", "anchor_kind": "PYTHON_SYMBOL", "symbol": "ProjectService.create_project"}],
+      "direct_evidence": [{"kind": "RUNTIME_GATE", "gate_id": "REAL_ACCEPTANCE_GATE", "result": "PASS", "assertion": "The same create transaction persisted exactly one ACTIVE first USER ProjectMember."}]
+    },
+    {
+      "acceptance_id": "ACC-R3-1296",
+      "final_status": "PASSED",
+      "authority_refs": [{"path": "docs/authority/编码权威事实/ACCEPTANCE_CLOSURE/acceptance-closure.json", "anchor_kind": "CANONICAL_ID", "id": "ACC-R3-1296"}],
+      "implementation_refs": [{"path": "services/api/src/platform_api/project_service.py", "anchor_kind": "PYTHON_SYMBOL", "symbol": "ProjectService.create_project"}],
+      "direct_evidence": [{"kind": "RUNTIME_GATE", "gate_id": "REAL_ACCEPTANCE_GATE", "result": "PASS", "assertion": "The first ACTIVE member was linked to ROLE-PROJECT-OWNER-DUTY and could execute Owner project commands."}]
+    },
+    {
+      "acceptance_id": "ACC-R3-1297",
+      "final_status": "PASSED",
+      "authority_refs": [{"path": "docs/authority/编码权威事实/ACCEPTANCE_CLOSURE/acceptance-closure.json", "anchor_kind": "CANONICAL_ID", "id": "ACC-R3-1297"}],
+      "implementation_refs": [{"path": "services/api/src/platform_api/auth_service.py", "anchor_kind": "PYTHON_SYMBOL", "symbol": "AuthenticationService.require_project_permissions_in_transaction"}],
+      "direct_evidence": [{"kind": "RUNTIME_GATE", "gate_id": "REAL_ACCEPTANCE_GATE", "result": "PASS", "assertion": "ACTIVE membership plus Owner duty dynamically authorized only the current project with zero physical Owner grants; the same live token was immediately denied after membership or Owner-duty role invalidation, restored after fact recovery, and produced no Project business-state side effect."}]
+    },
+    {
+      "acceptance_id": "ACC-R3-1298",
+      "final_status": "PASSED",
+      "authority_refs": [{"path": "docs/authority/编码权威事实/ACCEPTANCE_CLOSURE/acceptance-closure.json", "anchor_kind": "CANONICAL_ID", "id": "ACC-R3-1298"}],
+      "implementation_refs": [{"path": "services/api/src/platform_api/project_service.py", "anchor_kind": "PYTHON_SYMBOL", "symbol": "ProjectService.create_project"}],
+      "direct_evidence": [{"kind": "RUNTIME_GATE", "gate_id": "REAL_ACCEPTANCE_GATE", "result": "PASS", "assertion": "Required first-member/Owner relations, immutable audit and Outbox children were initialized with the Project."}]
+    },
+    {
+      "acceptance_id": "ACC-R3-1299",
+      "final_status": "PASSED",
+      "authority_refs": [{"path": "docs/authority/编码权威事实/ACCEPTANCE_CLOSURE/acceptance-closure.json", "anchor_kind": "CANONICAL_ID", "id": "ACC-R3-1299"}],
+      "implementation_refs": [{"path": "services/api/src/platform_api/auth_service.py", "anchor_kind": "PYTHON_SYMBOL", "symbol": "AuthenticationService.require_platform_permissions_in_transaction"}],
+      "direct_evidence": [{"kind": "RUNTIME_GATE", "gate_id": "REAL_ACCEPTANCE_GATE", "result": "PASS", "assertion": "PROJECT_CREATE and PROJECT_OWNER_ELIGIBLE were independently enforced; unauthorized POST returned 403 with zero Project row."}]
+    },
+    {
+      "acceptance_id": "ACC-R3-1300",
+      "final_status": "PASSED",
+      "authority_refs": [{"path": "docs/authority/编码权威事实/ACCEPTANCE_CLOSURE/acceptance-closure.json", "anchor_kind": "CANONICAL_ID", "id": "ACC-R3-1300"}],
+      "implementation_refs": [{"path": "services/api/src/platform_api/auth_service.py", "anchor_kind": "PYTHON_SYMBOL", "symbol": "AuthenticationService.require_platform_permissions_in_transaction"}],
+      "direct_evidence": [{"kind": "RUNTIME_GATE", "gate_id": "REAL_ACCEPTANCE_GATE", "result": "PASS", "assertion": "Identity without PROJECT_CREATE had no create UI and direct POST returned AUTH_PERMISSION_DENIED/403."}]
+    },
+    {
+      "acceptance_id": "ACC-R3-1301",
+      "final_status": "PASSED",
+      "authority_refs": [{"path": "docs/authority/编码权威事实/ACCEPTANCE_CLOSURE/acceptance-closure.json", "anchor_kind": "CANONICAL_ID", "id": "ACC-R3-1301"}],
+      "implementation_refs": [{"path": "services/api/src/platform_api/auth_service.py", "anchor_kind": "PYTHON_SYMBOL", "symbol": "AuthenticationService.user_has_permission_qualification_in_transaction"}],
+      "direct_evidence": [{"kind": "RUNTIME_GATE", "gate_id": "REAL_ACCEPTANCE_GATE", "result": "PASS", "assertion": "An ineligible designated Owner returned PROJECT_OWNER_NOT_ELIGIBLE/403 and a later eligible Owner succeeded."}]
+    },
+    {
+      "acceptance_id": "ACC-R3-1302",
+      "final_status": "PASSED",
+      "authority_refs": [{"path": "docs/authority/编码权威事实/ACCEPTANCE_CLOSURE/acceptance-closure.json", "anchor_kind": "CANONICAL_ID", "id": "ACC-R3-1302"}],
+      "implementation_refs": [{"path": "services/api/src/platform_api/project_service.py", "anchor_kind": "PYTHON_SYMBOL", "symbol": "ProjectService.create_project"}],
+      "direct_evidence": [{"kind": "RUNTIME_GATE", "gate_id": "REAL_ACCEPTANCE_GATE", "result": "PASS", "assertion": "A duplicate project_code returned PROJECT_CODE_CONFLICT/409, produced a failure audit and did not create a second Project."}]
+    },
+    {
+      "acceptance_id": "ACC-R3-1303",
+      "final_status": "PASSED",
+      "authority_refs": [{"path": "docs/authority/编码权威事实/ACCEPTANCE_CLOSURE/acceptance-closure.json", "anchor_kind": "CANONICAL_ID", "id": "ACC-R3-1303"}],
+      "implementation_refs": [{"path": "services/api/src/platform_api/project_service.py", "anchor_kind": "PYTHON_SYMBOL", "symbol": "ProjectService.create_project"}],
+      "direct_evidence": [{"kind": "RUNTIME_GATE", "gate_id": "REAL_ACCEPTANCE_GATE", "result": "PASS", "assertion": "After Owner qualification failure, correction and retry with the same idempotency key succeeded without rewriting committed history."}]
+    },
+    {
+      "acceptance_id": "ACC-R3-1304",
+      "final_status": "PASSED",
+      "authority_refs": [{"path": "docs/authority/编码权威事实/ACCEPTANCE_CLOSURE/acceptance-closure.json", "anchor_kind": "CANONICAL_ID", "id": "ACC-R3-1304"}],
+      "implementation_refs": [{"path": "services/api/src/platform_api/project_service.py", "anchor_kind": "PYTHON_SYMBOL", "symbol": "ProjectService.create_project"}],
+      "direct_evidence": [{"kind": "RUNTIME_GATE", "gate_id": "REAL_ACCEPTANCE_GATE", "result": "PASS", "assertion": "Rollback removed the failed claim and partial rows; corrected Owner/uniqueness input could be retried to one Project."}]
+    },
+    {
+      "acceptance_id": "ACC-R3-1305",
+      "final_status": "PASSED",
+      "authority_refs": [{"path": "docs/authority/编码权威事实/ACCEPTANCE_CLOSURE/acceptance-closure.json", "anchor_kind": "CANONICAL_ID", "id": "ACC-R3-1305"}],
+      "implementation_refs": [{"path": "services/api/src/platform_api/project_service.py", "anchor_kind": "PYTHON_SYMBOL", "symbol": "ProjectService.create_project"}],
+      "direct_evidence": [{"kind": "RUNTIME_GATE", "gate_id": "REAL_ACCEPTANCE_GATE", "result": "PASS", "assertion": "Temporarily unavailable ProjectAudit storage returned INTERNAL_ERROR/500 and left zero Project and idempotency rows."}]
+    },
+    {
+      "acceptance_id": "ACC-R3-1306",
+      "final_status": "PASSED",
+      "authority_refs": [{"path": "docs/authority/编码权威事实/ACCEPTANCE_CLOSURE/acceptance-closure.json", "anchor_kind": "CANONICAL_ID", "id": "ACC-R3-1306"}],
+      "implementation_refs": [{"path": "services/api/src/platform_api/project_service.py", "anchor_kind": "PYTHON_SYMBOL", "symbol": "ProjectService.create_project"}],
+      "direct_evidence": [{"kind": "RUNTIME_GATE", "gate_id": "REAL_ACCEPTANCE_GATE", "result": "PASS", "assertion": "POST atomically traversed CREATED→CONFIGURING→VALIDATING→ACTIVE, returned ACTIVE, and no intermediate Project row remained."}]
+    },
+    {
+      "acceptance_id": "ACC-R3-1307",
+      "final_status": "PASSED",
+      "authority_refs": [{"path": "docs/authority/编码权威事实/ACCEPTANCE_CLOSURE/acceptance-closure.json", "anchor_kind": "CANONICAL_ID", "id": "ACC-R3-1307"}],
+      "implementation_refs": [{"path": "services/api/src/platform_api/project_service.py", "anchor_kind": "PYTHON_SYMBOL", "symbol": "ProjectService.create_project"}],
+      "direct_evidence": [{"kind": "RUNTIME_GATE", "gate_id": "REAL_ACCEPTANCE_GATE", "result": "PASS", "assertion": "The first ProjectMember was persisted directly as ACTIVE in the same transaction."}]
+    },
+    {
+      "acceptance_id": "ACC-R3-1308",
+      "final_status": "PASSED",
+      "authority_refs": [{"path": "docs/authority/编码权威事实/ACCEPTANCE_CLOSURE/acceptance-closure.json", "anchor_kind": "CANONICAL_ID", "id": "ACC-R3-1308"}],
+      "implementation_refs": [{"path": "services/api/src/platform_api/project_service.py", "anchor_kind": "PYTHON_SYMBOL", "symbol": "ProjectService.create_project"}],
+      "direct_evidence": [{"kind": "RUNTIME_GATE", "gate_id": "REAL_ACCEPTANCE_GATE", "result": "PASS", "assertion": "Every successful ACTIVE Project had exactly one effective first Owner and all failed initialization paths left no partial Project."}]
+    },
+    {
+      "acceptance_id": "ACC-R3-1309",
+      "final_status": "PASSED",
+      "authority_refs": [{"path": "docs/authority/编码权威事实/ACCEPTANCE_CLOSURE/acceptance-closure.json", "anchor_kind": "CANONICAL_ID", "id": "ACC-R3-1309"}],
+      "implementation_refs": [{"path": "services/api/src/platform_api/auth_service.py", "anchor_kind": "PYTHON_SYMBOL", "symbol": "AuthenticationService.require_platform_permissions_in_transaction"}],
+      "direct_evidence": [{"kind": "RUNTIME_GATE", "gate_id": "REAL_ACCEPTANCE_GATE", "result": "PASS", "assertion": "ROLE-PLATFORM-ADMIN with formal platform scope passed gates and delegated an eligible Owner; denied gates produced no business side effect."}]
+    }
+  ]
+}

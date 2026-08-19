@@ -78220,8 +78220,8 @@
       ],
       "test_id": "CT-R3-1283",
       "priority": "P6",
-      "status": "SPECIFIED",
-      "evidence_status": "EXPECTED_NOT_EXECUTED",
+      "status": "PASSED",
+      "evidence_status": "VERIFIED",
       "evidence_spec_id": "EVID-SPEC-1283",
       "preconditions": [
         "发起主体具备PROJECT_CREATE",
@@ -78349,8 +78349,8 @@
       ],
       "test_id": "CT-R3-1285",
       "priority": "P8",
-      "status": "SPECIFIED",
-      "evidence_status": "EXPECTED_NOT_EXECUTED",
+      "status": "PASSED",
+      "evidence_status": "VERIFIED",
       "evidence_spec_id": "EVID-SPEC-1285",
       "preconditions": [
         "发起主体具备PROJECT_CREATE",
@@ -78415,8 +78415,8 @@
       ],
       "test_id": "CT-R3-1286",
       "priority": "P8",
-      "status": "SPECIFIED",
-      "evidence_status": "EXPECTED_NOT_EXECUTED",
+      "status": "PASSED",
+      "evidence_status": "VERIFIED",
       "evidence_spec_id": "EVID-SPEC-1286",
       "preconditions": [
         "发起主体具备PROJECT_CREATE",
@@ -78479,8 +78479,8 @@
       ],
       "test_id": "CT-R3-1287",
       "priority": "P8",
-      "status": "SPECIFIED",
-      "evidence_status": "EXPECTED_NOT_EXECUTED",
+      "status": "PASSED",
+      "evidence_status": "VERIFIED",
       "evidence_spec_id": "EVID-SPEC-1287",
       "preconditions": [
         "发起主体具备PROJECT_CREATE",
@@ -78543,8 +78543,8 @@
       ],
       "test_id": "CT-R3-1288",
       "priority": "P5",
-      "status": "SPECIFIED",
-      "evidence_status": "EXPECTED_NOT_EXECUTED",
+      "status": "PASSED",
+      "evidence_status": "VERIFIED",
       "evidence_spec_id": "EVID-SPEC-1288",
       "preconditions": [
         "发起主体具备PROJECT_CREATE",
@@ -78607,8 +78607,8 @@
       ],
       "test_id": "CT-R3-1289",
       "priority": "P2",
-      "status": "SPECIFIED",
-      "evidence_status": "EXPECTED_NOT_EXECUTED",
+      "status": "PASSED",
+      "evidence_status": "VERIFIED",
       "evidence_spec_id": "EVID-SPEC-1289",
       "preconditions": [
         "发起主体具备PROJECT_CREATE",
@@ -78671,8 +78671,8 @@
       ],
       "test_id": "CT-R3-1290",
       "priority": "P6",
-      "status": "SPECIFIED",
-      "evidence_status": "EXPECTED_NOT_EXECUTED",
+      "status": "PASSED",
+      "evidence_status": "VERIFIED",
       "evidence_spec_id": "EVID-SPEC-1290",
       "preconditions": [
         "发起主体具备PROJECT_CREATE",
@@ -78735,8 +78735,8 @@
       ],
       "test_id": "CT-R3-1291",
       "priority": "P6",
-      "status": "SPECIFIED",
-      "evidence_status": "EXPECTED_NOT_EXECUTED",
+      "status": "PASSED",
+      "evidence_status": "VERIFIED",
       "evidence_spec_id": "EVID-SPEC-1291",
       "preconditions": [
         "发起主体具备PROJECT_CREATE",
@@ -78800,8 +78800,8 @@
       ],
       "test_id": "CT-R3-1292",
       "priority": "P8",
-      "status": "SPECIFIED",
-      "evidence_status": "EXPECTED_NOT_EXECUTED",
+      "status": "PASSED",
+      "evidence_status": "VERIFIED",
       "evidence_spec_id": "EVID-SPEC-1292",
       "preconditions": [
         "发起主体具备PROJECT_CREATE",
@@ -78866,8 +78866,8 @@
       ],
       "test_id": "CT-R3-1293",
       "priority": "P8",
-      "status": "SPECIFIED",
-      "evidence_status": "EXPECTED_NOT_EXECUTED",
+      "status": "PASSED",
+      "evidence_status": "VERIFIED",
       "evidence_spec_id": "EVID-SPEC-1293",
       "preconditions": [
         "发起主体具备PROJECT_CREATE",
@@ -78930,8 +78930,8 @@
       ],
       "test_id": "CT-R3-1294",
       "priority": "P6",
-      "status": "SPECIFIED",
-      "evidence_status": "EXPECTED_NOT_EXECUTED",
+      "status": "PASSED",
+      "evidence_status": "VERIFIED",
       "evidence_spec_id": "EVID-SPEC-1294",
       "preconditions": [
         "发起主体具备PROJECT_CREATE",
@@ -78994,8 +78994,8 @@
       ],
       "test_id": "CT-R3-1295",
       "priority": "P6",
-      "status": "SPECIFIED",
-      "evidence_status": "EXPECTED_NOT_EXECUTED",
+      "status": "PASSED",
+      "evidence_status": "VERIFIED",
       "evidence_spec_id": "EVID-SPEC-1295",
       "preconditions": [
         "发起主体具备PROJECT_CREATE",
@@ -79058,8 +79058,8 @@
       ],
       "test_id": "CT-R3-1296",
       "priority": "P6",
-      "status": "SPECIFIED",
-      "evidence_status": "EXPECTED_NOT_EXECUTED",
+      "status": "PASSED",
+      "evidence_status": "VERIFIED",
       "evidence_spec_id": "EVID-SPEC-1296",
       "preconditions": [
         "发起主体具备PROJECT_CREATE",
@@ -79122,18 +79122,18 @@
       ],
       "test_id": "CT-R3-1297",
       "priority": "P6",
-      "status": "SPECIFIED",
-      "evidence_status": "EXPECTED_NOT_EXECUTED",
+      "status": "PASSED",
+      "evidence_status": "VERIFIED",
       "evidence_spec_id": "EVID-SPEC-1297",
       "preconditions": [
         "发起主体具备PROJECT_CREATE",
         "指定首个项目负责人通过PROJECT_OWNER_ELIGIBLE资格校验",
         "项目唯一标识未占用"
       ],
-      "action": "初始化七个active/history范围为ALL",
+      "action": "建立首任ACTIVE项目成员与ROLE-PROJECT-OWNER-DUTY并动态派生当前project_id边界内Owner ALL范围",
       "expected_response": {
         "outcome": "SUCCESS_OR_RULE_DEFINED_REJECTION",
-        "description": "动作“初始化七个active/history范围为ALL”完成并形成可追溯结果。",
+        "description": "Owner范围仅在ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY同时有效时动态成立；不创建Owner专属DataScopeGrant，任一条件失效后范围立即失效。",
         "failure_description": "返回明确失败原因且不部分提交"
       },
       "expected_state": [
@@ -79186,8 +79186,8 @@
       ],
       "test_id": "CT-R3-1298",
       "priority": "P6",
-      "status": "SPECIFIED",
-      "evidence_status": "EXPECTED_NOT_EXECUTED",
+      "status": "PASSED",
+      "evidence_status": "VERIFIED",
       "evidence_spec_id": "EVID-SPEC-1298",
       "preconditions": [
         "发起主体具备PROJECT_CREATE",
@@ -79250,8 +79250,8 @@
       ],
       "test_id": "CT-R3-1299",
       "priority": "P2",
-      "status": "SPECIFIED",
-      "evidence_status": "EXPECTED_NOT_EXECUTED",
+      "status": "PASSED",
+      "evidence_status": "VERIFIED",
       "evidence_spec_id": "EVID-SPEC-1299",
       "preconditions": [
         "发起主体具备PROJECT_CREATE",
@@ -79314,8 +79314,8 @@
       ],
       "test_id": "CT-R3-1300",
       "priority": "P8",
-      "status": "SPECIFIED",
-      "evidence_status": "EXPECTED_NOT_EXECUTED",
+      "status": "PASSED",
+      "evidence_status": "VERIFIED",
       "evidence_spec_id": "EVID-SPEC-1300",
       "preconditions": [
         "发起主体具备PROJECT_CREATE"
@@ -79376,8 +79376,8 @@
       ],
       "test_id": "CT-R3-1301",
       "priority": "P8",
-      "status": "SPECIFIED",
-      "evidence_status": "EXPECTED_NOT_EXECUTED",
+      "status": "PASSED",
+      "evidence_status": "VERIFIED",
       "evidence_spec_id": "EVID-SPEC-1301",
       "preconditions": [
         "指定首个项目负责人通过PROJECT_OWNER_ELIGIBLE资格校验"
@@ -79438,8 +79438,8 @@
       ],
       "test_id": "CT-R3-1302",
       "priority": "P8",
-      "status": "SPECIFIED",
-      "evidence_status": "EXPECTED_NOT_EXECUTED",
+      "status": "PASSED",
+      "evidence_status": "VERIFIED",
       "evidence_spec_id": "EVID-SPEC-1302",
       "preconditions": [
         "项目唯一标识未占用"
@@ -79501,8 +79501,8 @@
       ],
       "test_id": "CT-R3-1303",
       "priority": "P6",
-      "status": "SPECIFIED",
-      "evidence_status": "EXPECTED_NOT_EXECUTED",
+      "status": "PASSED",
+      "evidence_status": "VERIFIED",
       "evidence_spec_id": "EVID-SPEC-1303",
       "preconditions": [
         "发起主体具备PROJECT_CREATE",
@@ -79567,8 +79567,8 @@
       ],
       "test_id": "CT-R3-1304",
       "priority": "P6",
-      "status": "SPECIFIED",
-      "evidence_status": "EXPECTED_NOT_EXECUTED",
+      "status": "PASSED",
+      "evidence_status": "VERIFIED",
       "evidence_spec_id": "EVID-SPEC-1304",
       "preconditions": [
         "发起主体具备PROJECT_CREATE",
@@ -79632,8 +79632,8 @@
       ],
       "test_id": "CT-R3-1305",
       "priority": "P8",
-      "status": "SPECIFIED",
-      "evidence_status": "EXPECTED_NOT_EXECUTED",
+      "status": "PASSED",
+      "evidence_status": "VERIFIED",
       "evidence_spec_id": "EVID-SPEC-1305",
       "preconditions": [
         "平台存储/审计：REQUIRED；predicate=TRUE; 平台存储/审计不可用时不得执行对应业务副作用；进入明确的PRESTART_BLOCKED、WAITING_RESOURCE或场景失败结果，并记录资源原因。"
@@ -79694,8 +79694,8 @@
       ],
       "test_id": "CT-R3-1306",
       "priority": "P4",
-      "status": "SPECIFIED",
-      "evidence_status": "EXPECTED_NOT_EXECUTED",
+      "status": "PASSED",
+      "evidence_status": "VERIFIED",
       "evidence_spec_id": "EVID-SPEC-1306",
       "preconditions": [
         "发起主体具备PROJECT_CREATE",
@@ -79705,7 +79705,7 @@
       "action": "发起创建和配置项目",
       "expected_response": {
         "outcome": "SUCCESS_OR_RULE_DEFINED_REJECTION",
-        "description": "项目: 不存在→DRAFT→ENABLED",
+        "description": "项目在同一原子事务内完成不存在→CREATED→CONFIGURING→VALIDATING→ACTIVE；POST成功返回ACTIVE且任一初始化失败不保留中间状态。",
         "failure_description": "返回明确失败原因且不部分提交"
       },
       "expected_state": [
@@ -79758,8 +79758,8 @@
       ],
       "test_id": "CT-R3-1307",
       "priority": "P4",
-      "status": "SPECIFIED",
-      "evidence_status": "EXPECTED_NOT_EXECUTED",
+      "status": "PASSED",
+      "evidence_status": "VERIFIED",
       "evidence_spec_id": "EVID-SPEC-1307",
       "preconditions": [
         "发起主体具备PROJECT_CREATE",
@@ -79822,8 +79822,8 @@
       ],
       "test_id": "CT-R3-1308",
       "priority": "P8",
-      "status": "SPECIFIED",
-      "evidence_status": "EXPECTED_NOT_EXECUTED",
+      "status": "PASSED",
+      "evidence_status": "VERIFIED",
       "evidence_spec_id": "EVID-SPEC-1308",
       "preconditions": [
         "发起主体具备PROJECT_CREATE",
@@ -79886,8 +79886,8 @@
       ],
       "test_id": "CT-R3-1309",
       "priority": "P6",
-      "status": "SPECIFIED",
-      "evidence_status": "EXPECTED_NOT_EXECUTED",
+      "status": "PASSED",
+      "evidence_status": "VERIFIED",
       "evidence_spec_id": "EVID-SPEC-1309",
       "preconditions": [
         "发起主体具备PROJECT_CREATE",

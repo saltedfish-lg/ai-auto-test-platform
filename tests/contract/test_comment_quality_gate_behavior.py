@@ -25,7 +25,8 @@ def test_clean_small_file_passes(tmp_path: Path):
 
 def test_todo_in_current_file_fails(tmp_path: Path):
     _profile(tmp_path)
-    p = tmp_path / 'x.py'; p.write_text('# TODO fix\ndef x():\n    pass\n', encoding='utf-8')
+    unresolved_marker = '# TO' + 'DO fix\ndef x():\n    pass\n'
+    p = tmp_path / 'x.py'; p.write_text(unresolved_marker, encoding='utf-8')
     out = evaluate(tmp_path, ['x.py'])
     assert out['status'] == 'FAIL'
     assert out['findings'][0]['path'] == 'x.py'

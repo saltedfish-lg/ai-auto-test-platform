@@ -11,6 +11,7 @@ import time
 from pathlib import Path
 
 import pytest
+import yaml
 
 from tools.governance import governance_contract_test as contract_test_module, required_gate_runner
 from tools.governance.governance_contract_test import (
@@ -24,8 +25,14 @@ from tools.governance.authority_lock import acquire, cleanup_stale as cleanup_st
 from tools.governance.impact_scan import load_domain_metadata, scan
 from tools.governance.incremental_closure import expand
 from tools.governance.process_identity import NOT_RUNNING, inspect_process
-from tools.governance.project_profile import gate_config
-from tools.governance.required_gate_runner import ENGINEERING_GATE_COMMANDS, formal_gate_ids, runtime_supported_formal_gate_ids
+from tools.governance.project_profile import command_tokens, gate_config
+from tools.governance.required_gate_runner import (
+    DEFAULT_GATE_TIMEOUT_SECONDS,
+    MAX_GATE_TIMEOUT_SECONDS,
+    ENGINEERING_GATE_COMMANDS,
+    formal_gate_ids,
+    runtime_supported_formal_gate_ids,
+)
 from tools.governance.task_context import cleanup_other_tasks, cleanup_task, governance_tmp_root, save_context, save_workspace_snapshot, task_dir
 from tools.governance.task_governance import finish, start
 
@@ -222,6 +229,37 @@ def _save_gate_context(tmp_path: Path, task_id: str, gate: str, command: list[st
     })
 
 
+def _save_gate_set_context(
+    tmp_path: Path,
+    task_id: str,
+    gates: dict[str, dict[str, object]],
+) -> None:
+    profile = tmp_path / '.governance'
+    profile.mkdir(parents=True, exist_ok=True)
+    (profile / 'gates.yaml').write_text(
+        json.dumps({'schema_version': 1, 'gates': gates}, ensure_ascii=False),
+        encoding='utf-8',
+    )
+    save_workspace_snapshot(tmp_path, task_id)
+    save_context(tmp_path, task_id, {
+        'required_gates': list(gates), 'affected_files': [], 'relevant_tests': [],
+        'final_reconciliation_status': 'PASS', 'actual_changed_files': [],
+    })
+
+
+def _identity_metadata(
+    capability: str,
+    *,
+    runtime_keys: list[str] | None = None,
+    database_keys: list[str] | None = None,
+) -> dict[str, object]:
+    return {
+        'capability': capability,
+        'runtime_environment_keys': runtime_keys or [],
+        'database_environment_keys': database_keys or [],
+    }
+
+
 def test_gate_runner_reports_command_not_found_structurally_and_continues(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     _save_gate_context(tmp_path, 'NF', 'missing_gate')
     monkeypatch.setitem(ENGINEERING_GATE_COMMANDS, 'missing_gate', ['definitely-not-a-real-executable-xyz'])
@@ -233,7 +271,11 @@ def test_gate_runner_reports_command_not_found_structurally_and_continues(tmp_pa
 
 def test_gate_runner_reports_permission_error_structurally(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     _save_gate_context(tmp_path, 'PERM', 'backend_test')
-    monkeypatch.setattr(required_gate_runner.subprocess, 'run', lambda *a, **k: (_ for _ in ()).throw(PermissionError('denied')))
+    monkeypatch.setattr(
+        required_gate_runner,
+        '_execute_command',
+        lambda *a, **k: (_ for _ in ()).throw(PermissionError('denied')),
+    )
     report = required_gate_runner.run_required(tmp_path, 'PERM', timeout=1)
     assert report['results'][0]['status'] == 'BLOCKED'
     assert report['results'][0]['reason'] == 'PERMISSION_ERROR'
@@ -243,7 +285,7 @@ def test_gate_runner_reports_timeout_structurally(tmp_path: Path, monkeypatch: p
     _save_gate_context(tmp_path, 'TIME', 'backend_test')
     def boom(*a, **k):
         raise subprocess.TimeoutExpired(a[0] if a else 'cmd', 1)
-    monkeypatch.setattr(required_gate_runner.subprocess, 'run', boom)
+    monkeypatch.setattr(required_gate_runner, '_execute_command', boom)
     report = required_gate_runner.run_required(tmp_path, 'TIME', timeout=1)
     assert report['results'][0]['status'] == 'TIMEOUT'
     assert report['results'][0]['reason'] == 'TIMEOUT'
@@ -259,6 +301,7 @@ def test_gate_runner_captures_utf8_stdout_stderr_and_nonzero_exit(tmp_path: Path
     report = required_gate_runner.run_required(tmp_path, 'UTF8_OUTPUT', timeout=5)
     result = report['results'][0]
     assert result['status'] == 'FAIL'
+    assert result['reason'] == 'COMMAND_FAILED'
     assert result['exit_code'] == 7
     assert '标准输出中文' in result['stdout_tail']
     assert '标准错误中文' in result['stderr_tail']
@@ -285,6 +328,594 @@ def test_gate_runner_redacts_database_secret_before_tail_truncation(tmp_path: Pa
     assert result['status'] == 'PASS'
     assert password not in result['stdout_tail']
     assert password not in json.dumps(report, ensure_ascii=False)
+
+
+def test_gate_runner_reuses_same_canonical_execution_once(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    command = [sys.executable, '-c', "print('canonical pass')"]
+    metadata = _identity_metadata(
+        'browser_acceptance',
+        runtime_keys=['TEST_RUNTIME_NAMESPACE'],
+        database_keys=['TEST_DATABASE_NAMESPACE'],
+    )
+    _save_gate_set_context(tmp_path, 'DEDUP_SAME', {
+        'acceptance_gate': {'command': command, 'execution_identity': metadata},
+        'browser_gate': {'command': command, 'execution_identity': metadata},
+    })
+    monkeypatch.setenv('TEST_RUNTIME_NAMESPACE', 'runtime-a')
+    monkeypatch.setenv('TEST_DATABASE_NAMESPACE', 'database-a')
+    calls: list[int] = []
+
+    def execute(*args, **kwargs):
+        calls.append(int(kwargs['timeout']))
+        return subprocess.CompletedProcess(args[0], 0, 'canonical pass\n', '')
+
+    monkeypatch.setattr(required_gate_runner, '_execute_command', execute)
+    report = required_gate_runner.run_required(tmp_path, 'DEDUP_SAME')
+    canonical, reused = report['results']
+    assert report['status'] == 'PASS'
+    assert calls == [DEFAULT_GATE_TIMEOUT_SECONDS]
+    assert canonical['execution_mode'] == 'EXECUTED'
+    assert reused['status'] == 'PASS'
+    assert reused['execution_mode'] == 'REUSED'
+    assert reused['reason'] == 'DUPLICATE_CANONICAL_EXECUTION'
+    assert reused['canonical_execution'] == 'acceptance_gate'
+    assert reused['canonical_timeout_seconds'] == DEFAULT_GATE_TIMEOUT_SECONDS
+    assert reused['execution_identity'] == canonical['execution_identity']
+    assert reused['runtime_evidence']['reference'] == 'gate-results.json#/results/0'
+
+
+@pytest.mark.parametrize('identity_kind', ['runtime', 'database'])
+def test_gate_runner_does_not_reuse_same_command_for_different_runtime_identity(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    identity_kind: str,
+):
+    command = [sys.executable, '-c', 'raise SystemExit(0)']
+    first_metadata = _identity_metadata(
+        'same_capability',
+        runtime_keys=['RUNTIME_A'] if identity_kind == 'runtime' else ['SHARED_RUNTIME'],
+        database_keys=['DATABASE_A'] if identity_kind == 'database' else [],
+    )
+    second_metadata = _identity_metadata(
+        'same_capability',
+        runtime_keys=['RUNTIME_B'] if identity_kind == 'runtime' else ['SHARED_RUNTIME'],
+        database_keys=['DATABASE_B'] if identity_kind == 'database' else [],
+    )
+    _save_gate_set_context(tmp_path, 'DEDUP_RUNTIME', {
+        'runtime_a': {
+            'command': command,
+            'execution_identity': first_metadata,
+        },
+        'runtime_b': {
+            'command': command,
+            'execution_identity': second_metadata,
+        },
+    })
+    monkeypatch.setenv('RUNTIME_A', 'one')
+    monkeypatch.setenv('RUNTIME_B', 'two')
+    monkeypatch.setenv('SHARED_RUNTIME', 'same')
+    monkeypatch.setenv('DATABASE_A', 'database-one')
+    monkeypatch.setenv('DATABASE_B', 'database-two')
+    calls = 0
+
+    def execute(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return subprocess.CompletedProcess(args[0], 0, '', '')
+
+    monkeypatch.setattr(required_gate_runner, '_execute_command', execute)
+    report = required_gate_runner.run_required(tmp_path, 'DEDUP_RUNTIME')
+    assert report['status'] == 'PASS'
+    assert calls == 2
+    assert [item['execution_mode'] for item in report['results']] == ['EXECUTED', 'EXECUTED']
+    identity_field = f'{identity_kind}_identity'
+    assert report['results'][0][identity_field] != report['results'][1][identity_field]
+
+
+def test_gate_runner_defaults_capability_to_gate_id_and_does_not_reuse(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    command = [sys.executable, '-c', 'raise SystemExit(0)']
+    _save_gate_set_context(tmp_path, 'DEDUP_CAPABILITY', {
+        'capability_a': {'command': command},
+        'capability_b': {'command': command},
+    })
+    calls = 0
+
+    def execute(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return subprocess.CompletedProcess(args[0], 0, '', '')
+
+    monkeypatch.setattr(required_gate_runner, '_execute_command', execute)
+    report = required_gate_runner.run_required(tmp_path, 'DEDUP_CAPABILITY')
+    assert report['status'] == 'PASS'
+    assert calls == 2
+    assert [item['capability_identity'] for item in report['results']] == [
+        'capability_a', 'capability_b'
+    ]
+
+
+def test_gate_runner_propagates_canonical_failure_to_reused_gate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    command = [sys.executable, '-c', 'raise SystemExit(7)']
+    metadata = _identity_metadata('failing_acceptance')
+    _save_gate_set_context(tmp_path, 'DEDUP_FAIL', {
+        'canonical_gate': {'command': command, 'execution_identity': metadata},
+        'reused_gate': {'command': command, 'execution_identity': metadata},
+    })
+    calls = 0
+
+    def execute(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return subprocess.CompletedProcess(args[0], 7, '', 'failed')
+
+    monkeypatch.setattr(required_gate_runner, '_execute_command', execute)
+    report = required_gate_runner.run_required(tmp_path, 'DEDUP_FAIL')
+    canonical, reused = report['results']
+    assert report['status'] == 'FAIL'
+    assert calls == 1
+    assert canonical['status'] == 'FAIL'
+    assert reused['status'] == 'FAIL'
+    assert reused['reason'] == 'DUPLICATE_CANONICAL_EXECUTION'
+    assert reused['canonical_reason'] == 'COMMAND_FAILED'
+    assert reused['exit_code'] == 7
+
+
+def test_gate_runner_execution_identity_does_not_expose_secret(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    password = 'dedup-secret-password'
+    database_url = f'mysql+pymysql://user:{password}@localhost:3306/isolated_gate'
+    command = [sys.executable, '-c', 'raise SystemExit(0)']
+    metadata = _identity_metadata(
+        'secret_safe_acceptance', database_keys=['TEST_DATABASE_URL']
+    )
+    _save_gate_set_context(tmp_path, 'DEDUP_SECRET', {
+        'gate_a': {'command': command, 'execution_identity': metadata},
+        'gate_b': {'command': command, 'execution_identity': metadata},
+    })
+    monkeypatch.setenv('TEST_DATABASE_URL', database_url)
+    monkeypatch.setattr(
+        required_gate_runner,
+        '_execute_command',
+        lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 0, '', ''),
+    )
+    report = required_gate_runner.run_required(tmp_path, 'DEDUP_SECRET')
+    serialized = json.dumps(report, ensure_ascii=False)
+    assert report['status'] == 'PASS'
+    assert report['results'][1]['execution_mode'] == 'REUSED'
+    assert password not in serialized
+    assert database_url not in serialized
+
+
+def test_gate_runner_sanitizes_secret_bearing_argv_before_identity_hash(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    password = 'argv-dsn-secret'
+    database_url = f'mysql+pymysql://user:{password}@localhost:3306/identity_probe'
+    command = [sys.executable, '-c', 'raise SystemExit(0)', database_url]
+    metadata = _identity_metadata('argv_secret_safe')
+    _save_gate_set_context(tmp_path, 'ARGV_SECRET', {
+        'argv_gate_a': {'command': command, 'execution_identity': metadata},
+        'argv_gate_b': {'command': command, 'execution_identity': metadata},
+    })
+    hashed_material: list[object] = []
+    original_digest = required_gate_runner._identity_digest
+
+    def capture_digest(value):
+        hashed_material.append(value)
+        return original_digest(value)
+
+    monkeypatch.setattr(required_gate_runner, '_identity_digest', capture_digest)
+    monkeypatch.setattr(
+        required_gate_runner,
+        '_execute_command',
+        lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 0, '', ''),
+    )
+    report = required_gate_runner.run_required(tmp_path, 'ARGV_SECRET')
+    visible_report = json.dumps(report, ensure_ascii=False)
+    identity_material = json.dumps(hashed_material, ensure_ascii=False)
+    assert report['status'] == 'PASS'
+    assert report['results'][1]['execution_mode'] == 'REUSED'
+    assert password not in visible_report
+    assert database_url not in visible_report
+    assert password not in identity_material
+    assert database_url not in identity_material
+
+
+def test_gate_runner_does_not_reuse_different_command_or_argv(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    metadata = _identity_metadata('command_difference')
+    _save_gate_set_context(tmp_path, 'COMMAND_DIFFERENCE', {
+        'command_a': {
+            'command': [sys.executable, '-c', "print('a')"],
+            'execution_identity': metadata,
+        },
+        'command_b': {
+            'command': [sys.executable, '-c', "print('b')"],
+            'execution_identity': metadata,
+        },
+    })
+    calls = 0
+
+    def execute(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return subprocess.CompletedProcess(args[0], 0, '', '')
+
+    monkeypatch.setattr(required_gate_runner, '_execute_command', execute)
+    report = required_gate_runner.run_required(tmp_path, 'COMMAND_DIFFERENCE')
+    assert report['status'] == 'PASS'
+    assert calls == 2
+    assert report['results'][0]['canonical_command_digest'] != report['results'][1]['canonical_command_digest']
+
+
+def test_gate_runner_missing_declared_identity_key_disables_reuse(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    metadata = _identity_metadata(
+        'missing_runtime_identity', runtime_keys=['ABSENT_RUNTIME_NAMESPACE']
+    )
+    command = [sys.executable, '-c', 'raise SystemExit(0)']
+    _save_gate_set_context(tmp_path, 'MISSING_IDENTITY', {
+        'missing_a': {'command': command, 'execution_identity': metadata},
+        'missing_b': {'command': command, 'execution_identity': metadata},
+    })
+    monkeypatch.delenv('ABSENT_RUNTIME_NAMESPACE', raising=False)
+    calls = 0
+
+    def execute(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return subprocess.CompletedProcess(args[0], 0, '', '')
+
+    monkeypatch.setattr(required_gate_runner, '_execute_command', execute)
+    report = required_gate_runner.run_required(tmp_path, 'MISSING_IDENTITY')
+    assert report['status'] == 'PASS'
+    assert calls == 2
+    assert all(not item['execution_reuse_eligible'] for item in report['results'])
+    assert all(
+        item['missing_identity_environment_keys'] == ['ABSENT_RUNTIME_NAMESPACE']
+        for item in report['results']
+    )
+
+
+def test_gate_runner_uses_default_and_capability_specific_timeout(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    command = [sys.executable, '-c', 'raise SystemExit(0)']
+    _save_gate_set_context(tmp_path, 'GATE_TIMEOUTS', {
+        'ordinary_gate': {'command': command},
+        'governance_contract_capability': {'command': command, 'timeout_seconds': 900},
+    })
+    observed: list[int] = []
+
+    def execute(*args, **kwargs):
+        observed.append(int(kwargs['timeout']))
+        return subprocess.CompletedProcess(args[0], 0, '', '')
+
+    monkeypatch.setattr(required_gate_runner, '_execute_command', execute)
+    report = required_gate_runner.run_required(tmp_path, 'GATE_TIMEOUTS')
+    assert report['status'] == 'PASS'
+    assert observed == [DEFAULT_GATE_TIMEOUT_SECONDS, 900]
+    assert [item['timeout_seconds'] for item in report['results']] == [600, 900]
+
+
+def test_gate_runner_does_not_reuse_different_effective_timeout(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    command = [sys.executable, '-c', 'raise SystemExit(0)']
+    metadata = _identity_metadata('timeout_identity')
+    _save_gate_set_context(tmp_path, 'DIFFERENT_TIMEOUT', {
+        'short_timeout': {
+            'command': command,
+            'execution_identity': metadata,
+            'timeout_seconds': 2,
+        },
+        'long_timeout': {
+            'command': command,
+            'execution_identity': metadata,
+            'timeout_seconds': 3,
+        },
+    })
+    observed: list[int] = []
+
+    def execute(*args, **kwargs):
+        observed.append(int(kwargs['timeout']))
+        return subprocess.CompletedProcess(args[0], 0, '', '')
+
+    monkeypatch.setattr(required_gate_runner, '_execute_command', execute)
+    report = required_gate_runner.run_required(tmp_path, 'DIFFERENT_TIMEOUT')
+    assert report['status'] == 'PASS'
+    assert observed == [2, 3]
+    assert [item['execution_mode'] for item in report['results']] == ['EXECUTED', 'EXECUTED']
+    assert report['results'][0]['execution_identity'] != report['results'][1]['execution_identity']
+
+
+def test_gate_runner_reuses_canonical_timeout_without_passing_it(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    command = [sys.executable, '-c', 'raise SystemExit(0)']
+    metadata = _identity_metadata('timeout_reuse')
+    _save_gate_set_context(tmp_path, 'REUSED_TIMEOUT', {
+        'canonical_timeout': {
+            'command': command,
+            'execution_identity': metadata,
+            'timeout_seconds': 2,
+        },
+        'duplicate_timeout': {
+            'command': command,
+            'execution_identity': metadata,
+            'timeout_seconds': 2,
+        },
+    })
+    calls = 0
+
+    def timeout(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        raise subprocess.TimeoutExpired(args[0], kwargs['timeout'])
+
+    monkeypatch.setattr(required_gate_runner, '_execute_command', timeout)
+    report = required_gate_runner.run_required(tmp_path, 'REUSED_TIMEOUT')
+    canonical, reused = report['results']
+    assert report['status'] == 'FAIL'
+    assert calls == 1
+    assert canonical['status'] == 'TIMEOUT'
+    assert reused['status'] == 'TIMEOUT'
+    assert reused['status'] != 'PASS'
+    assert reused['execution_mode'] == 'REUSED'
+    assert reused['reason'] == 'DUPLICATE_CANONICAL_EXECUTION'
+    assert reused['canonical_reason'] == 'TIMEOUT'
+    assert reused['canonical_timeout_seconds'] == 2
+
+
+def test_project_profile_declares_acceptance_reuse_and_governance_timeout():
+    gates = gate_config(ROOT)
+    acceptance = gates['REAL_ACCEPTANCE_GATE']['execution_identity']
+    browser = gates['playwright_test']['execution_identity']
+    assert acceptance == browser
+    assert acceptance['capability'] == 'project_management_browser_acceptance'
+    assert acceptance['runtime_environment_keys'] == [
+        'PLAYWRIGHT_BASE_URL', 'PLAYWRIGHT_TEST_FILE'
+    ]
+    assert acceptance['database_environment_keys'] == ['ATP_PROJECT_E2E_CODE']
+    assert 'ATP_DATABASE_URL' not in acceptance['database_environment_keys']
+    assert gates['governance_contract_test']['timeout_seconds'] >= 900
+    template = ROOT / 'agent-governance-lite/templates/project-profile/.governance/gates.yaml'
+    template_gates = yaml.safe_load(template.read_text(encoding='utf-8'))['gates']
+    assert template_gates['governance_contract_test']['timeout_seconds'] >= 900
+    context = {'task_id': 'PROFILE_PROBE', 'affected_files': [], 'relevant_tests': []}
+    acceptance_command = required_gate_runner.command_for_gate(
+        ROOT, 'REAL_ACCEPTANCE_GATE', context
+    )
+    browser_command = required_gate_runner.command_for_gate(ROOT, 'playwright_test', context)
+    assert command_tokens(gates['REAL_ACCEPTANCE_GATE']['command']) == browser_command
+    assert acceptance_command == browser_command
+
+
+@pytest.mark.parametrize('identity', [
+    {'capability': 'valid', 'unknown_field': 'not-allowed'},
+    {'capability': ' valid '},
+    {'capability': 'valid', 'runtime_environment_keys': ['RUNTIME_ID', 'runtime_id']},
+    {'capability': 'valid', 'runtime_environment_keys': [' BAD_NAME']},
+    {'capability': 'valid', 'runtime_environment_keys': ['API_TOKEN']},
+])
+def test_gate_runner_rejects_ambiguous_execution_identity_metadata(
+    tmp_path: Path,
+    identity: dict[str, object],
+):
+    _save_gate_set_context(tmp_path, 'INVALID_IDENTITY', {
+        'invalid_identity_gate': {
+            'command': [sys.executable, '-c', 'raise SystemExit(0)'],
+            'execution_identity': identity,
+        },
+    })
+    report = required_gate_runner.run_required(tmp_path, 'INVALID_IDENTITY')
+    result = report['results'][0]
+    assert report['status'] == 'BLOCKED'
+    assert result['status'] == 'BLOCKED'
+    assert result['reason'] == 'INVALID_EXECUTION_IDENTITY'
+
+
+def test_gate_runner_reports_capability_timeout_as_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    command = [sys.executable, '-c', 'raise SystemExit(0)']
+    _save_gate_set_context(tmp_path, 'CAPABILITY_TIMEOUT', {
+        'timed_gate': {'command': command, 'timeout_seconds': 2},
+    })
+
+    def timeout(*args, **kwargs):
+        assert kwargs['timeout'] == 2
+        raise subprocess.TimeoutExpired(args[0], 2)
+
+    monkeypatch.setattr(required_gate_runner, '_execute_command', timeout)
+    report = required_gate_runner.run_required(tmp_path, 'CAPABILITY_TIMEOUT')
+    result = report['results'][0]
+    assert report['status'] == 'FAIL'
+    assert result['status'] == 'TIMEOUT'
+    assert result['reason'] == 'TIMEOUT'
+    assert result['timeout_seconds'] == 2
+
+
+@pytest.mark.parametrize('invalid', [0, MAX_GATE_TIMEOUT_SECONDS + 1, '900', True])
+def test_gate_runner_rejects_invalid_capability_timeout(
+    tmp_path: Path,
+    invalid: object,
+):
+    _save_gate_set_context(tmp_path, 'INVALID_CAPABILITY_TIMEOUT', {
+        'invalid_timeout_gate': {
+            'command': [sys.executable, '-c', 'raise SystemExit(0)'],
+            'timeout_seconds': invalid,
+        },
+    })
+    report = required_gate_runner.run_required(tmp_path, 'INVALID_CAPABILITY_TIMEOUT')
+    result = report['results'][0]
+    assert report['status'] == 'BLOCKED'
+    assert result['status'] == 'BLOCKED'
+    assert result['reason'] == 'INVALID_GATE_TIMEOUT'
+    assert result['timeout_seconds'] is None
+
+
+@pytest.mark.skipif(os.name != 'nt', reason='Windows PATH/PATHEXT behavior')
+def test_gate_runner_resolves_bare_windows_executable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    executable = Path(sys.executable)
+    monkeypatch.setenv(
+        'PATH',
+        os.pathsep.join([str(executable.parent), os.environ.get('PATH', '')]),
+    )
+    _save_gate_context(
+        tmp_path,
+        'WINDOWS_BARE_EXECUTABLE',
+        'bare_executable_gate',
+        [executable.name, '-c', "print('bare executable pass')"],
+    )
+    report = required_gate_runner.run_required(
+        tmp_path,
+        'WINDOWS_BARE_EXECUTABLE',
+        timeout=5,
+    )
+    result = report['results'][0]
+    assert result['status'] == 'PASS'
+    assert 'bare executable pass' in result['stdout_tail']
+
+
+@pytest.mark.skipif(os.name != 'nt', reason='Windows .cmd wrapper behavior')
+def test_gate_runner_resolves_cmd_from_path_and_quotes_metacharacters(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    spaced_argument = 'argument with spaces'
+    metachar_argument = 'safe&echo.injected>canary.txt'
+    canary = tmp_path / 'canary.txt'
+    checker = tmp_path / 'check wrapper argument.py'
+    checker.write_text(
+        'import sys\n'
+        'valid = '
+        f'sys.argv[1] == {spaced_argument!r} and '
+        f'sys.argv[2] == {metachar_argument!r}\n'
+        'raise SystemExit(0 if valid else 9)\n',
+        encoding='utf-8',
+    )
+    wrapper_dir = tmp_path / 'command&wrappers'
+    wrapper_dir.mkdir()
+    wrapper = wrapper_dir / 'gate&probe.cmd'
+    wrapper.write_text(
+        '@echo off\n'
+        f'"{sys.executable}" "{checker}" "%~1" "%~2"\n',
+        encoding='utf-8',
+    )
+    monkeypatch.setenv(
+        'PATH',
+        os.pathsep.join([str(wrapper_dir), os.environ.get('PATH', '')]),
+    )
+    monkeypatch.setenv('PATHEXT', '.EXE;.CMD;.BAT')
+    _save_gate_context(
+        tmp_path,
+        'WINDOWS_CMD_PATH',
+        'cmd_path_gate',
+        ['gate&probe', spaced_argument, metachar_argument],
+    )
+    report = required_gate_runner.run_required(tmp_path, 'WINDOWS_CMD_PATH', timeout=5)
+    assert report['results'][0]['status'] == 'PASS'
+    assert not canary.exists()
+
+
+@pytest.mark.skipif(os.name != 'nt', reason='Windows .cmd wrapper behavior')
+def test_gate_runner_rejects_unsafe_cmd_expansion_token(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    wrapper_dir = tmp_path / 'command-wrappers'
+    wrapper_dir.mkdir()
+    wrapper = wrapper_dir / 'gate-probe.cmd'
+    wrapper.write_text('@echo off\nexit /b 0\n', encoding='utf-8')
+    monkeypatch.setenv(
+        'PATH',
+        os.pathsep.join([str(wrapper_dir), os.environ.get('PATH', '')]),
+    )
+    monkeypatch.setenv('PATHEXT', '.EXE;.CMD;.BAT')
+    _save_gate_context(
+        tmp_path,
+        'WINDOWS_CMD_UNSAFE_TOKEN',
+        'cmd_unsafe_token_gate',
+        ['gate-probe', '%PATH%'],
+    )
+    report = required_gate_runner.run_required(
+        tmp_path,
+        'WINDOWS_CMD_UNSAFE_TOKEN',
+        timeout=5,
+    )
+    result = report['results'][0]
+    assert result['status'] == 'BLOCKED'
+    assert result['reason'] == 'OS_EXECUTION_ERROR'
+
+
+@pytest.mark.skipif(os.name != 'nt', reason='Windows process-tree behavior')
+def test_gate_runner_timeout_terminates_windows_cmd_process_tree(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    pid_file = tmp_path / 'child pid.txt'
+    script = tmp_path / 'spawn child.py'
+    script.write_text(
+        'import subprocess, sys, time\n'
+        'from pathlib import Path\n'
+        'child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])\n'
+        'Path(sys.argv[1]).write_text(str(child.pid), encoding="utf-8")\n'
+        'time.sleep(30)\n',
+        encoding='utf-8',
+    )
+    wrapper_dir = tmp_path / 'timeout wrappers'
+    wrapper_dir.mkdir()
+    wrapper = wrapper_dir / 'timeout-probe.cmd'
+    wrapper.write_text(
+        f'@echo off\n"{sys.executable}" "{script}" "%~1"\n',
+        encoding='utf-8',
+    )
+    monkeypatch.setenv(
+        'PATH',
+        os.pathsep.join([str(wrapper_dir), os.environ.get('PATH', '')]),
+    )
+    monkeypatch.setenv('PATHEXT', '.EXE;.CMD;.BAT')
+    _save_gate_context(
+        tmp_path,
+        'WINDOWS_CMD_TIMEOUT',
+        'cmd_timeout_gate',
+        ['timeout-probe', str(pid_file)],
+    )
+    report = required_gate_runner.run_required(
+        tmp_path,
+        'WINDOWS_CMD_TIMEOUT',
+        timeout=2,
+    )
+    assert report['results'][0]['status'] == 'TIMEOUT'
+    child_pid = int(pid_file.read_text(encoding='utf-8'))
+    deadline = time.time() + 5
+    while time.time() < deadline and inspect_process(child_pid).status != NOT_RUNNING:
+        time.sleep(0.05)
+    assert inspect_process(child_pid).status == NOT_RUNNING
 
 
 def test_governance_contract_group_timeout_configuration_is_bounded():
@@ -370,6 +1001,7 @@ def test_governance_contract_timeout_terminates_child_process_tree(tmp_path: Pat
 def test_standalone_runtime_mirrors_current_governance_capabilities():
     runtime = ROOT / 'agent-governance-lite/runtime/tools/governance'
     for name in (
+        'code_quality_gate.py',
         'required_gate_runner.py',
         'governance_contract_test.py',
         'impact_scan.py',

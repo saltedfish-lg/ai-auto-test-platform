@@ -684,7 +684,7 @@ human_roles:
   - 不得操作非负责项目
   - SERVICE_ACCOUNT不得成为项目负责人
   - 不得在新负责人资格和范围未原子完成前移除最后一名旧负责人
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
 system_actors:
 - actor_id: SYS-PLATFORM-SERVICE
   name: 平台服务

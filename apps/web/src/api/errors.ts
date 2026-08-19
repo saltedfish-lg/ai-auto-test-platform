@@ -58,3 +58,26 @@ export function getAuthenticationErrorMessage(
 export function getCorrelationId(error: unknown): string | undefined {
   return error instanceof ApiRequestError ? error.problem?.correlation_id : undefined;
 }
+
+const projectErrorMessages: Record<string, string> = {
+  PROJECT_NOT_FOUND: "项目不存在或已不可访问。",
+  PROJECT_OWNER_NOT_ELIGIBLE: "指定负责人不具备项目负责人资格。",
+  PROJECT_CODE_CONFLICT: "项目编码已被使用，请更换后重试。",
+  PROJECT_CONCURRENCY_CONFLICT: "项目已被其他操作更新，请刷新后重试。",
+  PROJECT_OPERATION_FORBIDDEN_FOR_STATE: "当前项目状态不允许执行此操作。",
+  PROJECT_UPDATE_EMPTY: "请至少修改一个可编辑字段。",
+  PROJECT_CONFIGURATION_UNAVAILABLE: "项目初始化配置暂不可用，请稍后重试。",
+  AUTH_PERMISSION_DENIED: "当前账号没有执行此操作的权限。",
+};
+
+export function getApiErrorMessage(error: unknown, fallback: string): string {
+  if (!(error instanceof ApiRequestError)) return fallback;
+  const code = error.problem?.code;
+  if (code && projectErrorMessages[code]) return projectErrorMessages[code];
+  if (error.status === 401) return "登录状态已失效，请重新登录。";
+  if (error.status === 403) return "当前账号没有执行此操作的权限。";
+  if (error.status === 404) return "请求的项目不存在。";
+  if (error.status === 409) return "项目状态或版本已变化，请刷新后重试。";
+  if (error.status === 422) return "提交内容不符合接口要求，请检查表单。";
+  return error.problem?.detail ?? fallback;
+}

@@ -19,7 +19,22 @@ from typing import Any
 from .project_profile import command_tokens, format_command, match_any, technology_config
 from .task_context import load_context, task_dir
 
-TODO_RE = re.compile(r'\b(?:TODO|FIXME)\b', re.IGNORECASE)
+LEADING_TODO_MARKER_RE = re.compile(
+    r'^\s*(?:[-+*]\s+)?(?:TODO|FIXME)(?![\w.-])',
+    re.IGNORECASE,
+)
+COMMENT_TODO_MARKER_RE = re.compile(
+    r'(?:#|//|/\*+|\*|<!--|--)\s*(?:TODO|FIXME)(?![\w.-])',
+    re.IGNORECASE,
+)
+
+
+def _has_unresolved_todo_marker(line: str) -> bool:
+    """Recognize development markers without treating product identifiers as TODOs."""
+    return bool(
+        LEADING_TODO_MARKER_RE.search(line)
+        or COMMENT_TODO_MARKER_RE.search(line)
+    )
 
 
 def _language_for(rel: str, tech: dict[str, Any]) -> str | None:
@@ -59,7 +74,7 @@ def evaluate(root: Path, affected_files: list[str]) -> dict[str, Any]:
                 for rel in files:
                     text = (root / rel).read_text(encoding='utf-8', errors='ignore')
                     for line_no, line in enumerate(text.splitlines(), 1):
-                        if TODO_RE.search(line):
+                        if _has_unresolved_todo_marker(line):
                             findings.append({'path': rel, 'line': line_no, 'check': check, 'reason': 'unresolved TODO/FIXME in current task file'})
                 executed.append({'adapter': adapter, 'check': check, 'files': files})
             elif check == 'python_syntax':

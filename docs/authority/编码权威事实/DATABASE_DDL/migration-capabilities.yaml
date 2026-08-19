@@ -8,3 +8,5 @@ capabilities:
     migration_name: V4__rbac_seed_data.sql
   LEGACY_UPGRADE_FIXTURE_BOUNDARY:
     migration_name: V7__p1_remaining_authentication_closure.sql
+  PROJECT_MANAGEMENT_FOUNDATION_SCHEMA:
+    migration_name: V9__project_management_foundation.sql

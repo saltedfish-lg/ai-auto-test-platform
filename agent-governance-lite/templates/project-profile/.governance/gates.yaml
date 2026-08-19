@@ -26,3 +26,4 @@ gates:
     - tools/governance/governance_contract_test.py
     - --root
     - .
+    timeout_seconds: 900

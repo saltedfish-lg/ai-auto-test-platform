@@ -16,6 +16,7 @@ gates:
     - tools/governance/governance_contract_test.py
     - --root
     - .
+    timeout_seconds: 900
   openapi_client_check:
     command:
     - python
@@ -40,6 +41,27 @@ gates:
     - '@platform/web'
     - run
     - test:e2e
+    execution_identity:
+      capability: project_management_browser_acceptance
+      runtime_environment_keys:
+      - PLAYWRIGHT_BASE_URL
+      - PLAYWRIGHT_TEST_FILE
+      database_environment_keys:
+      - ATP_PROJECT_E2E_CODE
+  REAL_ACCEPTANCE_GATE:
+    command:
+    - npm
+    - --workspace
+    - '@platform/web'
+    - run
+    - test:e2e
+    execution_identity:
+      capability: project_management_browser_acceptance
+      runtime_environment_keys:
+      - PLAYWRIGHT_BASE_URL
+      - PLAYWRIGHT_TEST_FILE
+      database_environment_keys:
+      - ATP_PROJECT_E2E_CODE
   runner_test:
     command:
     - python

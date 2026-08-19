@@ -1,4 +1,4 @@
-"""SQLAlchemy mappings for the current P1 authentication tables."""
+"""SQLAlchemy mappings for the current platform tables used by the API."""
 
 from __future__ import annotations
 
@@ -132,8 +132,8 @@ class DataScopeGrant(Base):
 class ProjectMember(Base):
     __tablename__ = "atp_project_member"
     project_member_id: Mapped[str] = mapped_column(String(26), primary_key=True)
-    project_id: Mapped[str | None] = mapped_column(String(26), ForeignKey("atp_project.project_id"))
-    user_id: Mapped[str | None] = mapped_column(String(26), ForeignKey("atp_user.user_id"))
+    project_id: Mapped[str] = mapped_column(String(26), ForeignKey("atp_project.project_id"))
+    user_id: Mapped[str] = mapped_column(String(26), ForeignKey("atp_user.user_id"))
     role_id: Mapped[str | None] = mapped_column(String(26), ForeignKey("atp_role.role_id"))
     lifecycle_status: Mapped[str] = mapped_column(String(17))
     display_name: Mapped[str | None] = mapped_column(String(255))
@@ -145,10 +145,34 @@ class ProjectMember(Base):
     extension_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
 
 
+class ProjectAudit(Base):
+    """Append-only project command evidence owned by the caller transaction."""
+
+    __tablename__ = "atp_project_audit"
+    audit_id: Mapped[str] = mapped_column(String(26), primary_key=True)
+    project_id: Mapped[str | None] = mapped_column(String(26))
+    project_code: Mapped[str] = mapped_column(String(191))
+    action: Mapped[str] = mapped_column(String(32))
+    operation_id: Mapped[str] = mapped_column(String(128))
+    actor_user_id: Mapped[str] = mapped_column(String(26), ForeignKey("atp_user.user_id"))
+    participant_user_id: Mapped[str | None] = mapped_column(
+        String(26), ForeignKey("atp_user.user_id")
+    )
+    required_permission: Mapped[str] = mapped_column(String(128))
+    scope_decision: Mapped[str] = mapped_column(String(64))
+    previous_status: Mapped[str | None] = mapped_column(String(17))
+    new_status: Mapped[str | None] = mapped_column(String(17))
+    result_code: Mapped[str] = mapped_column(String(64))
+    reason: Mapped[str | None] = mapped_column(String(1000))
+    correlation_id: Mapped[str] = mapped_column(String(128))
+    occurred_at: Mapped[datetime] = mapped_column(DateTime)
+    source_context_hash: Mapped[bytes] = mapped_column(MySQLBinary(32))
+
+
 class Project(Base):
     __tablename__ = "atp_project"
     project_id: Mapped[str] = mapped_column(String(26), primary_key=True)
-    project_code: Mapped[str | None] = mapped_column(String(191), unique=True)
+    project_code: Mapped[str] = mapped_column(String(191), unique=True)
     lifecycle_status: Mapped[str] = mapped_column(String(17))
     display_name: Mapped[str | None] = mapped_column(String(255))
     row_version: Mapped[int] = mapped_column(BigInteger)

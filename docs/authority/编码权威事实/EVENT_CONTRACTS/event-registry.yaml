@@ -12103,6 +12103,64 @@ events:
   aggregate_id_field: platform_technical_event_id
   payload_identity_fields:
   - platform_technical_event_id
+- event_type: project.created
+  event_id: EVT-0C4A1B8D7E21
+  version: 1.0.0
+  producer_object_id: OBJ-007
+  producer: 项目管理_module
+  source_transition_ids: []
+  partition_key: aggregate_id
+  ordering: PER_AGGREGATE_SEQUENCE
+  idempotency: event_id
+  delivery: AT_LEAST_ONCE_OUTBOX
+  consumers:
+  - audit_projection
+  sensitive_fields: []
+  forbidden_fields:
+  - plaintext_password
+  - secret_value
+  - access_token
+  - refresh_token
+  - raw_credential
+  retry_policy:
+    max_attempts: 12
+    backoff: EXPONENTIAL_JITTER
+    dead_letter_after: MAX_ATTEMPTS
+  compatibility: BACKWARD_COMPATIBLE_WITHIN_MAJOR
+  schema_path: schemas/project.created.schema.json
+  release_id: CURRENT_LIVING_AUTHORITY
+  aggregate_id_field: project_id
+  payload_identity_fields:
+  - project_id
+- event_type: project.updated
+  event_id: EVT-8C5D2F0A9B31
+  version: 1.0.0
+  producer_object_id: OBJ-007
+  producer: 项目管理_module
+  source_transition_ids: []
+  partition_key: aggregate_id
+  ordering: PER_AGGREGATE_SEQUENCE
+  idempotency: event_id
+  delivery: AT_LEAST_ONCE_OUTBOX
+  consumers:
+  - audit_projection
+  sensitive_fields: []
+  forbidden_fields:
+  - plaintext_password
+  - secret_value
+  - access_token
+  - refresh_token
+  - raw_credential
+  retry_policy:
+    max_attempts: 12
+    backoff: EXPONENTIAL_JITTER
+    dead_letter_after: MAX_ATTEMPTS
+  compatibility: BACKWARD_COMPATIBLE_WITHIN_MAJOR
+  schema_path: schemas/project.updated.schema.json
+  release_id: CURRENT_LIVING_AUTHORITY
+  aggregate_id_field: project_id
+  payload_identity_fields:
+  - project_id
 - event_type: project.active
   event_id: EVT-106D58F27FE2
   version: 1.0.0

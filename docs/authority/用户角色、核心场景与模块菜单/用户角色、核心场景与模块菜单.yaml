@@ -521,7 +521,7 @@ human_roles:
   - 不得操作非负责项目
   - SERVICE_ACCOUNT不得成为项目负责人
   - 不得在新负责人资格和范围未原子完成前移除最后一名旧负责人
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   project_scope: OWNED_PROJECTS
   menu_scope_summary: 项目管理及经系统角色授权的相关项目菜单
   authorization_capability: 可在负责项目内授予符合项目授权上限的职责与范围
@@ -1140,7 +1140,7 @@ role_data_scopes:
   data_scope: 平台级模型版本审核范围；项目业务内容仍按项目数据权限
   project_scope: PLATFORM_MODEL_VERSION_REVIEW
 - role_id: ROLE-PROJECT-OWNER-DUTY
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   project_scope: OWNED_PROJECTS
 role_authorization_capabilities:
 - role_id: ROLE-SUPER-ADMIN
@@ -1554,7 +1554,7 @@ business_scenarios:
   - 创建项目主记录
   - 同事务创建首个USER成员
   - 赋予项目负责人和项目配置维护职责
-  - 初始化七个active/history范围为ALL
+  - 建立ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY，并动态派生当前project_id边界内Owner ALL范围（不持久化Owner专属DataScopeGrant）
   - 初始化必要子对象并审计
   alternative_flows:
   - 合格创建人可自动成为负责人；平台管理员代建时指定负责人
@@ -1582,10 +1582,10 @@ business_scenarios:
   - 被测环境：NOT_APPLICABLE；predicate=FALSE_FOR_THIS_SCENARIO; 本场景不读取、不分配且不参与门禁。
   - 外部组件：NOT_APPLICABLE；predicate=FALSE_FOR_THIS_SCENARIO; 本场景不读取、不分配且不参与门禁。
   state_transitions:
-  - '项目: 不存在→DRAFT→ENABLED'
+  - '项目: 不存在→CREATED→CONFIGURING→VALIDATING→ACTIVE（同一原子事务，成功返回ACTIVE）'
   - '项目成员: 不存在→ACTIVE'
   data_changes:
-  - '仅对ENT-PROJECT、ENT-PROJECT-MEMBER、ENT-AUDIT执行本场景定义的数据写入；状态变化为“项目: 不存在→DRAFT→ENABLED；项目成员: 不存在→ACTIVE”；同步形成不可变事件和审计，不改写历史快照。'
+  - '仅对ENT-PROJECT、ENT-PROJECT-MEMBER、ENT-AUDIT执行本场景定义的数据写入；状态变化为“项目: 不存在→CREATED→CONFIGURING→VALIDATING→ACTIVE（同一原子事务，成功返回ACTIVE）；项目成员: 不存在→ACTIVE”；同步形成不可变事件和审计，不改写历史快照。'
   output:
   - 创建和配置项目的可追溯结果
   artifacts:
@@ -5047,14 +5047,14 @@ scenario_steps:
   scenario_id: USR-SCN-010
   sequence: 4
   actor: SYS-PLATFORM-SERVICE
-  action: 初始化七个active/history范围为ALL
-  expected_result: 动作“初始化七个active/history范围为ALL”的直接结果已形成；只断言当前动作，不提前断言场景最终结果。 仅校验本动作明确涉及的对象/关系/技术投影；未在动作中出现的后续状态不得提前出现。 权限、数据范围、资源或并发前置不满足时，业务副作用必须为零；重复命令按场景幂等规则返回既有结果。
+  action: 建立ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY，并动态派生当前project_id边界内Owner ALL范围（不持久化Owner专属DataScopeGrant）
+  expected_result: 动作“建立ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY，并动态派生当前project_id边界内Owner ALL范围（不持久化Owner专属DataScopeGrant）”的直接结果已形成；只断言当前动作，不提前断言场景最终结果。 仅校验本动作明确涉及的对象/关系/技术投影；未在动作中出现的后续状态不得提前出现。 权限、数据范围、资源或并发前置不满足时，业务副作用必须为零；重复命令按场景幂等规则返回既有结果。
     本步骤记录关联trace/事件；最终业务审计只在场景明确的审计提交步骤完成。
-  immediate_result: 动作“初始化七个active/history范围为ALL”的直接结果已形成；只断言当前动作，不提前断言场景最终结果。
+  immediate_result: 动作“建立ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY，并动态派生当前project_id边界内Owner ALL范围（不持久化Owner专属DataScopeGrant）”的直接结果已形成；只断言当前动作，不提前断言场景最终结果。
   state_assertion: 仅校验本动作明确涉及的对象/关系/技术投影；未在动作中出现的后续状态不得提前出现。
   side_effect_guard: 权限、数据范围、资源或并发前置不满足时，业务副作用必须为零；重复命令按场景幂等规则返回既有结果。
   audit_commit: 本步骤记录关联trace/事件；最终业务审计只在场景明确的审计提交步骤完成。
-  failure_result: 动作“初始化七个active/history范围为ALL”失败时保留该动作前的稳定状态，返回该场景已声明的权限、范围、资源、并发或外部失败原因；不得推测新原因码。
+  failure_result: 动作“建立ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY，并动态派生当前project_id边界内Owner ALL范围（不持久化Owner专属DataScopeGrant）”失败时保留该动作前的稳定状态，返回该场景已声明的权限、范围、资源、并发或外部失败原因；不得推测新原因码。
 - step_id: USR-SCN-010-STEP-05
   scenario_id: USR-SCN-010
   sequence: 5
@@ -7879,7 +7879,7 @@ scenario_variants:
   - 创建项目主记录
   - 同事务创建首个USER成员
   - 赋予项目负责人和项目配置维护职责
-  - 初始化七个active/history范围为ALL
+  - 建立ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY，并动态派生当前project_id边界内Owner ALL范围（不持久化Owner专属DataScopeGrant）
   - 初始化必要子对象并审计
 - variant_id: USR-SCN-010-VAR-PERMISSION
   scenario_id: USR-SCN-010
@@ -10494,7 +10494,7 @@ scenario_state_changes:
   owner_rule: 由对应主对象Owner服务在同一事务写事件、更新当前修订指针并递增并发版本标识；终态不回退
 - mapping_id: USR-SCN-010-STATE-0009
   scenario_id: USR-SCN-010
-  transition: '项目: 不存在→DRAFT→ENABLED'
+  transition: '项目: 不存在→CREATED→CONFIGURING→VALIDATING→ACTIVE（同一原子事务，成功返回ACTIVE）'
   owner_rule: 由对应主对象Owner服务在同一事务写事件、更新当前修订指针并递增并发版本标识；终态不回退
 - mapping_id: USR-SCN-010-STATE-0010
   scenario_id: USR-SCN-010
@@ -22114,7 +22114,7 @@ role_menu_mappings:
   allowed_operations:
   - VIEW
   - OPEN_SHORTCUT
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   limitations:
   - 不得操作非负责项目
   - SERVICE_ACCOUNT不得成为项目负责人
@@ -22276,7 +22276,7 @@ role_menu_mappings:
   allowed_operations:
   - VIEW
   - OPEN_OWNER_DETAIL
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   limitations:
   - 不得操作非负责项目
   - SERVICE_ACCOUNT不得成为项目负责人
@@ -22351,7 +22351,7 @@ role_menu_mappings:
   - ARCHIVE
   - MANAGE_MEMBERS
   - CHANGE_OWNER
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   limitations:
   - 不得操作非负责项目
   - SERVICE_ACCOUNT不得成为项目负责人
@@ -22444,7 +22444,7 @@ role_menu_mappings:
   - ENABLE
   - DISABLE
   - ARCHIVE
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   limitations:
   - 不得操作非负责项目
   - SERVICE_ACCOUNT不得成为项目负责人
@@ -22537,7 +22537,7 @@ role_menu_mappings:
   - ENABLE
   - DISABLE
   - ARCHIVE
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   limitations:
   - 不得操作非负责项目
   - SERVICE_ACCOUNT不得成为项目负责人
@@ -22619,7 +22619,7 @@ role_menu_mappings:
   - DISABLE
   - ARCHIVE
   - VIEW_SECRET
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   limitations:
   - 不得操作非负责项目
   - SERVICE_ACCOUNT不得成为项目负责人
@@ -22717,7 +22717,7 @@ role_menu_mappings:
   - RECYCLE
   - DISABLE
   - ARCHIVE
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   limitations:
   - 不得操作非负责项目
   - SERVICE_ACCOUNT不得成为项目负责人
@@ -22835,7 +22835,7 @@ role_menu_mappings:
   - DELETE
   - CONVERT
   - EXPLORE
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   limitations:
   - 不得操作非负责项目
   - SERVICE_ACCOUNT不得成为项目负责人
@@ -22974,7 +22974,7 @@ role_menu_mappings:
   - DISABLE
   - ARCHIVE
   - DELETE
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   limitations:
   - 不得操作非负责项目
   - SERVICE_ACCOUNT不得成为项目负责人
@@ -23159,7 +23159,7 @@ role_menu_mappings:
   - ENABLE
   - DISABLE
   - ARCHIVE
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   limitations:
   - 不得操作非负责项目
   - SERVICE_ACCOUNT不得成为项目负责人
@@ -23602,7 +23602,7 @@ role_menu_mappings:
   - DISABLE
   - ARCHIVE
   - TRIGGER_NOW
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   limitations:
   - 不得操作非负责项目
   - SERVICE_ACCOUNT不得成为项目负责人
@@ -23700,7 +23700,7 @@ role_menu_mappings:
   - RECOVER
   - VIEW_BATCHES
   - VIEW_ATTEMPTS
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   limitations:
   - 不得操作非负责项目
   - SERVICE_ACCOUNT不得成为项目负责人
@@ -23863,7 +23863,7 @@ role_menu_mappings:
   - DISABLE
   - REMOTE_COMMAND
   - ARCHIVE
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   limitations:
   - 不得操作非负责项目
   - SERVICE_ACCOUNT不得成为项目负责人
@@ -23974,7 +23974,7 @@ role_menu_mappings:
   - BIND
   - UNBIND
   - TRANSFER
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   limitations:
   - 不得操作非负责项目
   - SERVICE_ACCOUNT不得成为项目负责人
@@ -24067,7 +24067,7 @@ role_menu_mappings:
   - REFRESH
   - VALIDATE
   - DISABLE_CAPABILITY
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   limitations:
   - 不得操作非负责项目
   - SERVICE_ACCOUNT不得成为项目负责人
@@ -24270,7 +24270,7 @@ role_menu_mappings:
   - REBUILD
   - EXPORT
   - SHARE
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   limitations:
   - 不得操作非负责项目
   - SERVICE_ACCOUNT不得成为项目负责人
@@ -24388,7 +24388,7 @@ role_menu_mappings:
   - VIEW
   - FILTER
   - EXPORT
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   limitations:
   - 不得操作非负责项目
   - SERVICE_ACCOUNT不得成为项目负责人
@@ -24523,7 +24523,7 @@ role_menu_mappings:
   - REMOVE_LONG_TERM
   - REQUEST_PURGE
   - SHARE
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   limitations:
   - 不得操作非负责项目
   - SERVICE_ACCOUNT不得成为项目负责人
@@ -24949,7 +24949,7 @@ role_menu_mappings:
   - GRANT_SCOPE
   - REVOKE_SCOPE
   - CROSS_PROJECT_GRANT
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   limitations:
   - 不得操作非负责项目
   - SERVICE_ACCOUNT不得成为项目负责人
@@ -25031,7 +25031,7 @@ role_menu_mappings:
   - EDIT_PROJECT_RANGE
   - VALIDATE
   - PUBLISH
-  data_scope: 负责项目七个子范围active=ALL、history=ALL
+  data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   limitations:
   - 不得操作非负责项目
   - SERVICE_ACCOUNT不得成为项目负责人

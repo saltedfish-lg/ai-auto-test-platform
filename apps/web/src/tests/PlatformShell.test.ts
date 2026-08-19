@@ -7,9 +7,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { apiClient } from "../api/client";
 import PlatformShell from "../components/PlatformShell.vue";
 import { useSessionStore } from "../stores/session";
+import WorkspaceHomeView from "../views/WorkspaceHomeView.vue";
 import { authenticationResponse, currentUser, currentUserResponse } from "./auth-fixtures";
 
-async function renderShell(permissions = ["PROJECT_VIEW", "USER_CREATE"]): Promise<Router> {
+async function renderShell(permissions = ["PROJECT_VIEW", "PROJECT_CREATE"]): Promise<Router> {
   const pinia = createPinia();
   setActivePinia(pinia);
   vi.spyOn(apiClient, "login_platform_user").mockResolvedValue(
@@ -22,7 +23,18 @@ async function renderShell(permissions = ["PROJECT_VIEW", "USER_CREATE"]): Promi
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
-      { path: "/", component: PlatformShell },
+      {
+        path: "/",
+        component: PlatformShell,
+        children: [
+          { path: "", name: "platform-home", component: WorkspaceHomeView },
+          {
+            path: "projects",
+            name: "projects.list",
+            component: { template: "<div>projects</div>" },
+          },
+        ],
+      },
       {
         path: "/login",
         component: { template: "<div>login route</div>" },
@@ -35,9 +47,10 @@ async function renderShell(permissions = ["PROJECT_VIEW", "USER_CREATE"]): Promi
   });
   await router.push("/");
   await router.isReady();
-  render(PlatformShell, {
-    global: { plugins: [pinia, ElementPlus, router] },
-  });
+  render(
+    { template: "<RouterView />" },
+    { global: { plugins: [pinia, ElementPlus, router] } },
+  );
   return router;
 }
 
@@ -51,13 +64,15 @@ describe("身份工作台（组件测试，API 为 mock）", () => {
     expect(screen.getByText("ROLE-SUPER-ADMIN")).toBeTruthy();
     expect(screen.getByText("PROJECT_VIEW")).toBeTruthy();
     expect(
-      screen.getByText("当前身份具备用户创建权限；用户治理功能将在对应正式模块实现。"),
+      screen.getByText("当前身份可创建项目；所有写操作仍由服务端执行实时权限与范围校验。"),
     ).toBeTruthy();
   });
 
   it("shows the fallback UX when the realtime permission is absent", async () => {
     await renderShell(["PROJECT_VIEW"]);
-    expect(screen.getByText("当前身份未获得用户创建权限。")).toBeTruthy();
+    expect(
+      screen.getByText("当前身份不能创建新项目；可见项目仍由服务端实时权限与范围决定。"),
+    ).toBeTruthy();
   });
 
   it("reloads current-user data and clears local state on logout", async () => {

@@ -2,6 +2,7 @@ import { computed, ref, shallowRef } from "vue";
 import { defineStore } from "pinia";
 
 import { apiClient, bindAuthTransport } from "../api/client";
+import { useProjectsStore } from "./projects";
 import type {
   AuthenticationResponse,
   ChangePasswordRequest,
@@ -29,11 +30,15 @@ export const useSessionStore = defineStore("session", () => {
   const requiresPasswordChange = computed(() => currentUser.value?.force_password_change === true);
 
   function acceptAuthentication(response: AuthenticationResponse): void {
+    if (currentUser.value?.user_id !== response.data.current_user.user_id) {
+      useProjectsStore().clearProjects();
+    }
     accessToken.value = response.data.access_token;
     currentUser.value = response.data.current_user;
   }
 
   function clearSession(): void {
+    useProjectsStore().clearProjects();
     accessToken.value = null;
     currentUser.value = null;
   }
