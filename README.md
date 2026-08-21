@@ -220,3 +220,8 @@ python tools/package_delivery.py verify --archive ..\ai-auto-test-platform-deliv
 ### Local process ownership safety
 
 Governance lock/task owner checks are platform-aware. On Windows, GovernanceLite never uses `os.kill(pid, 0)` as a liveness probe. Where available, lock ownership is matched with `PID + process creation identity` so a reused PID is not treated as the original owner. A query that cannot establish identity is handled conservatively and does not authorize stale-lock deletion.
+
+### Token-efficient context
+Local task context uses progressive disclosure for large project Authority. `tools/context/authority_index.py` builds a derived locator index under `.runtime/context-index/`; the first build is explicit (`python -m tools.context.authority_query --root . --rebuild-index`) so Task Start never hides a heavy repository-wide rebuild. Afterward, `context_refresh` attaches record-level `authority_refs` plus a bounded locator slice instead of requiring Codex to preload whole multi-megabyte Authority files. The original files under `docs/authority/` remain the sole Authority source of truth.
+
+Context limits are advisory and configured in `.governance/context-efficiency.yaml`; they reduce initial context volume but do not weaken Impact Scan, Required Gates, Product Sovereignty, or Authority validation. `tools/context/repo_intelligence.py` reserves an optional future code-location interface (for example a local MCP/index provider). It is deliberately disabled by default and is forbidden from acting as Authority.

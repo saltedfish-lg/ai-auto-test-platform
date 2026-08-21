@@ -26,6 +26,26 @@ from .workspace_writer_lock import current_owner as current_workspace_writer_own
 from .workspace_writer_lock import release as release_workspace_writer_lock
 
 
+def _apply_project_context_projection(root: Path, ctx: dict[str, Any]) -> dict[str, Any]:
+    """Consume an optional project-owned context projection without binding Generic Runtime to it."""
+    try:
+        from tools.context.context_projection import enrich_task_context
+    except ModuleNotFoundError as exc:
+        if str(getattr(exc, 'name', '')).startswith('tools.context'):
+            return ctx
+        raise
+    try:
+        return enrich_task_context(root, ctx)
+    except Exception as exc:
+        out = dict(ctx)
+        out['context_efficiency'] = {
+            'status': 'DEGRADED_NON_BLOCKING',
+            'reason': type(exc).__name__,
+            'governance_facts_unchanged': True,
+        }
+        return out
+
+
 def start(root: Path, task_id: str, request: str, seed_files: list[str] | None = None, owner_pid: int | None = None, mode: str = 'writer') -> dict[str, Any]:
     """Start one task, capture task-start workspace, then run one Full Impact Scan.
 
@@ -46,6 +66,7 @@ def start(root: Path, task_id: str, request: str, seed_files: list[str] | None =
         ctx = scan(root, task_id, request, seed_files or [], effective_pid)
         ctx['task_start_workspace_snapshot'] = snapshot.name
         ctx['task_mode'] = normalized_mode
+        ctx = _apply_project_context_projection(root, ctx)
         save_context(root, task_id, ctx)
         return ctx
     except BaseException:

@@ -20,6 +20,43 @@ policies:
     - login
     - session
     - refresh token
+    AUTHORIZATION:
+    - authorization
+    - 授权
+    - 权限校验
+    - permission
+    - 权限
+    RBAC:
+    - rbac
+    - 角色权限
+    - role permission
+    - role-permission
+    - 权限矩阵
+    - 角色授权
+    CREDENTIAL:
+    - credential
+    - 凭据
+    - 密码
+    - credential_version
+    - 密码重置
+    - 凭据重置
+    SESSION:
+    - session
+    - refresh session
+    - refresh token
+    - 会话
+    - 撤销会话
+    - session revoke
+    DEFAULT_ADMIN:
+    - default admin
+    - 默认 admin
+    - super_admin
+    - 默认管理员
+    ACCOUNT_SECURITY:
+    - account security
+    - 账号安全
+    - 认证安全
+    - 登录安全
     DATABASE_SCHEMA:
     - migration
     - 数据库

@@ -342,7 +342,21 @@ def _merged_signal_map(root: Path, key: str, baseline: dict[str, tuple[str, ...]
 def _request_domains(request: str, root: Path | None = None) -> set[str]:
     text = request.lower()
     signals = BASE_REQUEST_DOMAIN_SIGNALS if root is None else _merged_signal_map(root, 'request_domain_signals', BASE_REQUEST_DOMAIN_SIGNALS)
-    return {domain for domain, words in signals.items() if any(_signal_in_text(text, word) for word in words)}
+    domains = {domain for domain, words in signals.items() if any(_signal_in_text(text, word) for word in words)}
+    # Small semantic implications keep request routing aligned with the project's domain model
+    # without adding another scan or a second routing engine.
+    changed = True
+    while changed:
+        changed = False
+        implied: set[str] = set()
+        if domains & {'CREDENTIAL', 'SESSION', 'ACCOUNT_SECURITY'}:
+            implied.add('AUTHENTICATION')
+        if domains & {'RBAC', 'DEFAULT_ADMIN'}:
+            implied.add('AUTHORIZATION')
+        if 'DEFAULT_ADMIN' in domains:
+            implied.add('RBAC')
+        before = len(domains); domains.update(implied); changed = len(domains) != before
+    return domains
 
 
 def _request_sovereignty(request: str, root: Path | None = None) -> set[str]:

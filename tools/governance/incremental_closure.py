@@ -17,6 +17,25 @@ from .task_context import load_context, save_context
 from .workspace_path_policy import consumer_allows_relative, load_policy
 
 
+def _refresh_project_context_projection(root: Path, ctx: dict[str, Any]) -> dict[str, Any]:
+    try:
+        from tools.context.context_projection import enrich_task_context
+    except ModuleNotFoundError as exc:
+        if str(getattr(exc, 'name', '')).startswith('tools.context'):
+            return ctx
+        raise
+    try:
+        return enrich_task_context(root, ctx)
+    except Exception as exc:
+        out = dict(ctx)
+        out['context_efficiency'] = {
+            'status': 'DEGRADED_NON_BLOCKING',
+            'reason': type(exc).__name__,
+            'governance_facts_unchanged': True,
+        }
+        return out
+
+
 def expand(root: Path, task_id: str, new_files: list[str], unknown: bool = False) -> dict[str, Any]:
     """Expand impact first, then recompute every routing field from final files."""
     root = root.resolve()
@@ -49,6 +68,7 @@ def expand(root: Path, task_id: str, new_files: list[str], unknown: bool = False
     })
     ctx.pop('actual_changed_files', None)
     ctx.pop('final_reconciliation_rounds', None)
+    ctx = _refresh_project_context_projection(root, ctx)
     save_context(root, task_id, ctx)
     return ctx
 

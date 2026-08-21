@@ -186,8 +186,11 @@ def test_task_context_declares_local_workspace_as_change_source(tmp_path: Path):
 
 
 def test_governance_success_is_unchanged_when_git_executable_is_unavailable(tmp_path: Path, monkeypatch):
+    from types import SimpleNamespace
     from tools.governance import git_readonly_adapter
-    monkeypatch.setattr(git_readonly_adapter.shutil, 'which', lambda name: None)
+    # Replace the adapter-local module binding instead of mutating the process-global
+    # shutil module object, which would also change required_gate_runner.shutil.which.
+    monkeypatch.setattr(git_readonly_adapter, 'shutil', SimpleNamespace(which=lambda name: None))
     _start(tmp_path, 'NOGITBIN')
     assert read_git_summary(tmp_path)['git_auxiliary_status'] == 'unavailable'
     (tmp_path / 'src/a.py').write_text('x=999\n', encoding='utf-8')

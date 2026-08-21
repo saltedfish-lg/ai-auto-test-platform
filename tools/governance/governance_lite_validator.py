@@ -473,7 +473,7 @@ def _versioned_governance_test_naming_errors(root: Path) -> list[str]:
                 continue
             name = node.name
             bad = bool(re.search(r'(?:^|_)(r\d+|finalfixed\d*|fixed\d*)(?:_|$)', name, re.IGNORECASE))
-            if re.search(r'(?:^|_)closure(?:_|$)', name, re.IGNORECASE) and 'incremental_closure' not in name:
+            if re.search(r'(?:^|_)closure(?:_|$)', name, re.IGNORECASE) and not any(capability in name for capability in ('incremental_closure', 'relationship_closure')):
                 bad = True
             if name.startswith('test_final_') and not (
                 name.startswith('test_final_reconciliation') or name.startswith('test_final_workspace_reconciliation')

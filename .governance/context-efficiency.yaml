@@ -1,0 +1,107 @@
+schema_version: 1
+context_efficiency:
+  mode: adaptive_context_loading
+  governance_gate: false
+  note: Context Efficiency reduces repeated and low-relevance reads; it never blocks context required for correctness.
+
+context_loading:
+  authority:
+    strategy: precise_slice
+    initial_records: 12
+    preview_chars: 12000
+    allow_on_demand_expand: true
+    avoid_repeat_unchanged_read: true
+  source_code:
+    strategy: agent_tool_driven_symbol_first
+    allow_full_file_when_required: true
+    avoid_repeat_unchanged_read: true
+  tests:
+    strategy: agent_tool_driven_relevant_first
+    allow_expand_when_required: true
+    avoid_repeat_unchanged_read: true
+  tool_output:
+    strategy: diagnostic_projection_then_expand
+    summary_chars: 4000
+    allow_raw_expand_when_required: true
+    avoid_repeat_unchanged_read: true
+  deduplication:
+    enabled: true
+  context_history:
+    enabled: true
+  repo_intelligence_max_results: 20
+  minimum_records_per_authority: 1
+  minimum_records_per_domain: 1
+
+authority_index:
+  source_roots:
+    - docs/authority
+  cache_path: .runtime/context-index/authority-index.sqlite3
+  extensions: [.yaml, .yml, .json, .csv]
+  canonical_identity_keys:
+    - rule_id
+    - decision_id
+    - scenario_id
+    - lifecycle_id
+    - state_definition_id
+    - transition_id
+    - permission_code
+    - permission_id
+    - role_code
+    - role_id
+    - operationId
+    - operation_id
+    - acceptance_id
+    - requirement_id
+    - capability_id
+    - data_asset_id
+    - architecture_decision_id
+    - contract_id
+    - gate_id
+    - policy_id
+    - module_id
+    - menu_id
+    - domain_id
+    - object_id
+  exclude_patterns:
+    - docs/authority/validation/**
+    - '**/.governance-domain.yaml'
+    - '**/*.governance-domain.yaml'
+  identity_strategies:
+    operation-permission-mapping.csv:
+      primary: [operationId]
+      secondary: [permission_code]
+      composite: [operationId, permission_code]
+    role-permission-matrix.csv:
+      primary: [mapping_id]
+      secondary: [role_id, permission_id, permission_code]
+    openapi.operations:
+      primary: [operationId]
+      fallback: [method, path]
+
+repo_intelligence:
+  provider: none
+  authority_role: forbidden
+  max_results: 20
+  include_paths:
+    - apps/**
+    - services/**
+    - workers/**
+    - runner/**
+    - packages/**
+    - tools/**
+    - tests/**
+  exclude_paths:
+    - docs/authority/**
+    - '**/__pycache__/**'
+    - '*.pyc'
+    - '*.pyo'
+    - .pytest_cache/**
+    - node_modules/**
+    - dist/**
+    - build/**
+    - test-results/**
+    - coverage/**
+    - .runtime/**
+    - .tmp/**
+    - .git/**
+    - .env*

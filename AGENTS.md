@@ -22,7 +22,7 @@
 - `$code-quality`
 
 ## 4. Task Workflow
-1. 读取本文件、`.governance/` Project Governance Profile 和必要 Authority。
+1. 读取本文件和 `.governance/` Project Governance Profile；任务开始前不要整份预加载大型 Authority。
 2. 使用 `python tools/governance/task_governance.py start ...` 启动 Task：建立本地 Workspace Baseline（轻量 metadata），并执行唯一一次 Full Impact Scan；Task 变更事实来自 Baseline 与当前 Workspace，不读取 Git changed-files。
 3. 执行 Product Decision Check；若 `product_decision_status=REQUIRED`，Required Gates 与 SUCCESS/COMPLETED 必须机械阻断，只有用户通过受控入口提供正式裁决后才可变为 RESOLVED。
 4. `default_coder` 实施；发现新文件/依赖立即执行 Incremental Closure。
@@ -63,3 +63,8 @@ Governance 回归测试必须按稳定能力命名；长期测试文件/测试�
 - 本地开发数据 UPDATE/DELETE 必须有当前任务理由与明确作用范围；默认禁止无 WHERE 的 UPDATE/DELETE 或无任务依据的大范围数据清理。
 - 完整 DSN、密码和连接异常中的 Secret 不得写入源码、README、`.governance`、Authority、Task Context、Gate Result、日志或正式 ZIP。诊断统一使用脱敏 URL/错误信息。
 - 连接自检使用 `python tools/database/check_connection.py`；数据库密码包含 URL 特殊字符时必须 percent-encoding。
+
+
+## Authority 精准上下文顺序
+
+正式顺序为：最小项目规则 → Task Start/一次 Impact Scan → Task Context → Authority Index 状态 → `authority_refs`/preview → 绑定 `--task-id` 按需 expand → 经 Task-lifetime Adaptive Context Loading 投影必要代码/测试/工具输出。除 Index `PARTIAL/INVALID` 且命中受影响 Authority 的定向降级读取外，不在 Task Start 前整份读取大型 Authority。Repo Intelligence 只能辅助代码定位，不能成为 Authority。
