@@ -31,7 +31,7 @@ RPM-R3-0029,ROLE-SUPER-ADMIN,TERM-PER-029,MANUAL_RECORDING_VIEW,ALLOWED,平台�
 RPM-R3-0030,ROLE-SUPER-ADMIN,TERM-PER-030,RUNNER_REGISTER,ALLOWED,平台全部active数据和依法保留的history数据；高风险操作仍必须审计。,仍受数据范围、对象状态和接口鉴权约束
 RPM-R3-0031,ROLE-SUPER-ADMIN,TERM-PER-031,RUNNER_BIND,ALLOWED,平台全部active数据和依法保留的history数据；高风险操作仍必须审计。,仍受数据范围、对象状态和接口鉴权约束
 RPM-R3-0032,ROLE-SUPER-ADMIN,TERM-PER-032,MODEL_CONFIGURATION_MANAGE,ALLOWED,平台全部active数据和依法保留的history数据；高风险操作仍必须审计。,仍受数据范围、对象状态和接口鉴权约束
-RPM-R3-0033,ROLE-SUPER-ADMIN,TERM-PER-033,MODEL_VERSION_REVIEW,ALLOWED,平台全部active数据和依法保留的history数据；高风险操作仍必须审计。,仍受数据范围、对象状态和接口鉴权约束
+RPM-R3-0033,ROLE-SUPER-ADMIN,TERM-PER-033,MODEL_VERSION_REVIEW,ALLOWED,平台全部active数据和依法保留的history数据；高风险操作仍必须审计。,ROLE-SUPER-ADMIN可审核本人提交的ModelConfig；自审必须写入actor、submitter、reviewer、self_approval=true和operator_role=SUPER_ADMIN；仍受对象状态、接口鉴权和不可变审计约束
 RPM-R3-0034,ROLE-SUPER-ADMIN,TERM-PER-034,CROSS_PROJECT_AUTHORIZATION_MANAGE,ALLOWED,平台全部active数据和依法保留的history数据；高风险操作仍必须审计。,仍受数据范围、对象状态和接口鉴权约束
 RPM-R3-0035,ROLE-SUPER-ADMIN,TERM-PER-035,CROSS_PROJECT_AUTHORIZATION_GRANT_ALL,ALLOWED,平台全部active数据和依法保留的history数据；高风险操作仍必须审计。,强制二次确认、填写原因、写入不可变审计；不得向其他主体分配SUPER_ADMIN；仍执行敏感数据和对象状态校验
 RPM-R3-0036,ROLE-SUPER-ADMIN,TERM-PER-036,TOOL_INTEGRATION_INCIDENT_MANAGE,ALLOWED,平台全部active数据和依法保留的history数据；高风险操作仍必须审计。,仍受数据范围、对象状态和接口鉴权约束
@@ -531,7 +531,7 @@ RPM-R3-0529,ROLE-MODEL-REVIEWER,TERM-PER-029,MANUAL_RECORDING_VIEW,DENIED,平台
 RPM-R3-0530,ROLE-MODEL-REVIEWER,TERM-PER-030,RUNNER_REGISTER,DENIED,平台级模型版本审核范围；项目业务内容仍按项目数据权限,仍受数据范围、对象状态和接口鉴权约束
 RPM-R3-0531,ROLE-MODEL-REVIEWER,TERM-PER-031,RUNNER_BIND,DENIED,平台级模型版本审核范围；项目业务内容仍按项目数据权限,仍受数据范围、对象状态和接口鉴权约束
 RPM-R3-0532,ROLE-MODEL-REVIEWER,TERM-PER-032,MODEL_CONFIGURATION_MANAGE,DENIED,平台级模型版本审核范围；项目业务内容仍按项目数据权限,仍受数据范围、对象状态和接口鉴权约束
-RPM-R3-0533,ROLE-MODEL-REVIEWER,TERM-PER-033,MODEL_VERSION_REVIEW,ALLOWED,平台级模型版本审核范围；项目业务内容仍按项目数据权限,仍受数据范围、对象状态和接口鉴权约束
+RPM-R3-0533,ROLE-MODEL-REVIEWER,TERM-PER-033,MODEL_VERSION_REVIEW,ALLOWED,平台级模型版本审核范围；项目业务内容仍按项目数据权限,提交人不得审核本人提交的ModelConfig；高风险操作必须审计；仍受数据范围、对象状态和接口鉴权约束
 RPM-R3-0534,ROLE-MODEL-REVIEWER,TERM-PER-034,CROSS_PROJECT_AUTHORIZATION_MANAGE,DENIED,平台级模型版本审核范围；项目业务内容仍按项目数据权限,仍受数据范围、对象状态和接口鉴权约束
 RPM-R3-0535,ROLE-MODEL-REVIEWER,TERM-PER-035,CROSS_PROJECT_AUTHORIZATION_GRANT_ALL,DENIED,平台级模型版本审核范围；项目业务内容仍按项目数据权限,仍受数据范围、对象状态和接口鉴权约束
 RPM-R3-0536,ROLE-MODEL-REVIEWER,TERM-PER-036,TOOL_INTEGRATION_INCIDENT_MANAGE,DENIED,平台级模型版本审核范围；项目业务内容仍按项目数据权限,仍受数据范围、对象状态和接口鉴权约束

@@ -374,6 +374,31 @@ class AuthenticationService:
             ):
                 self._raise_permission_denied(identity, operation_id, audit_context, db=db)
 
+    def user_has_active_platform_role_in_transaction(
+        self,
+        db: Session,
+        user_id: str,
+        role_code: str,
+    ) -> bool:
+        """Check an active platform role binding without relying on usernames or token claims."""
+        now = utc_now()
+        return (
+            db.scalar(
+                select(UserRoleBinding.binding_id)
+                .join(Role, Role.role_id == UserRoleBinding.role_id)
+                .where(
+                    UserRoleBinding.user_id == user_id,
+                    UserRoleBinding.project_id.is_(None),
+                    UserRoleBinding.valid_from <= now,
+                    or_(UserRoleBinding.valid_to.is_(None), UserRoleBinding.valid_to > now),
+                    Role.lifecycle_status == ACTIVE,
+                    Role.role_code == role_code,
+                )
+                .limit(1)
+            )
+            is not None
+        )
+
     def authenticate_access_in_transaction(
         self,
         db: Session,

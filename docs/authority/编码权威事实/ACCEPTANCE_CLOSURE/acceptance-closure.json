@@ -3397,7 +3397,7 @@
       "evidence_spec_id": "EVID-SPEC-0054",
       "preconditions": [
         "发起人有模型配置权限",
-        "审核人具有独立模型版本审核角色"
+        "审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交"
       ],
       "action": "AI_EXPLORATION只允许一个平台级effective default；不得创建项目偏好、继承或fallback",
       "expected_response": {
@@ -3460,7 +3460,7 @@
       "evidence_spec_id": "EVID-SPEC-0055",
       "preconditions": [
         "发起人有模型配置权限",
-        "审核人具有独立模型版本审核角色"
+        "审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交"
       ],
       "action": "发起配置和启用AI模型",
       "expected_response": {
@@ -3523,7 +3523,7 @@
       "evidence_spec_id": "EVID-SPEC-0056",
       "preconditions": [
         "发起人有模型配置权限",
-        "审核人具有独立模型版本审核角色"
+        "审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交"
       ],
       "action": "记录“配置和启用AI模型”的发起主体、参与主体、对象ID、权限与数据范围判定、状态前后值、结果/原因码和时间。",
       "expected_response": {
@@ -3586,7 +3586,7 @@
       "evidence_spec_id": "EVID-SPEC-0057",
       "preconditions": [
         "发起人有模型配置权限",
-        "审核人具有独立模型版本审核角色"
+        "审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交"
       ],
       "action": "本地状态变化、不可变事件和审计在同一原子提交边界内完成；提交前审计失败则不提交或回滚本地变化。",
       "expected_response": {
@@ -3649,7 +3649,7 @@
       "evidence_spec_id": "EVID-SPEC-0058",
       "preconditions": [
         "发起人有模型配置权限",
-        "审核人具有独立模型版本审核角色"
+        "审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交"
       ],
       "action": "发起配置和启用AI模型",
       "expected_response": {
@@ -3712,7 +3712,7 @@
       "evidence_spec_id": "EVID-SPEC-0059",
       "preconditions": [
         "发起人有模型配置权限",
-        "审核人具有独立模型版本审核角色"
+        "审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交"
       ],
       "action": "发起配置和启用AI模型",
       "expected_response": {
@@ -3775,13 +3775,13 @@
       "evidence_spec_id": "EVID-SPEC-0060",
       "preconditions": [
         "发起人有模型配置权限",
-        "审核人具有独立模型版本审核角色"
+        "审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交"
       ],
       "action": "发起配置和启用AI模型",
       "expected_response": {
         "outcome": "SUCCESS_OR_RULE_DEFINED_REJECTION",
-        "description": "在“配置和启用AI模型”中，异常流程必须满足：凭证无效、真实连接测试失败、审核职责冲突、非ACTIVE默认绑定或默认模型禁用冲突时拒绝。",
-        "failure_description": "凭证无效、真实连接测试失败、审核职责冲突、非ACTIVE默认绑定或默认模型禁用冲突时拒绝"
+        "description": "凭证无效、真实连接测试失败、审核提交证据缺失、非SUPER_ADMIN自审、非ACTIVE默认绑定或默认模型禁用冲突时拒绝；ROLE-SUPER-ADMIN自审ModelConfig属于允许路径并必须记录明确自审审计。",
+        "failure_description": "凭证无效、真实连接测试失败、审核提交证据缺失、非SUPER_ADMIN自审、非ACTIVE默认绑定或默认模型禁用冲突时拒绝"
       },
       "expected_state": [
         "仅发生规则允许的状态变化；拒绝路径保持原状态"
@@ -3838,7 +3838,7 @@
       "evidence_spec_id": "EVID-SPEC-0061",
       "preconditions": [
         "发起人有模型配置权限",
-        "审核人具有独立模型版本审核角色"
+        "审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交"
       ],
       "action": "发起配置和启用AI模型",
       "expected_response": {
@@ -3901,7 +3901,7 @@
       "evidence_spec_id": "EVID-SPEC-0062",
       "preconditions": [
         "发起人有模型配置权限",
-        "审核人具有独立模型版本审核角色"
+        "审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交"
       ],
       "action": "发起配置和启用AI模型",
       "expected_response": {
@@ -3964,7 +3964,7 @@
       "evidence_spec_id": "EVID-SPEC-0063",
       "preconditions": [
         "发起人有模型配置权限",
-        "审核人具有独立模型版本审核角色"
+        "审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交"
       ],
       "action": "在平台级范围创建单一ModelConfig，选择固定白名单Provider、填写Provider原生model_name并加密保存Secret",
       "expected_response": {
@@ -4027,7 +4027,7 @@
       "evidence_spec_id": "EVID-SPEC-0064",
       "preconditions": [
         "发起人有模型配置权限",
-        "审核人具有独立模型版本审核角色"
+        "审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交"
       ],
       "action": "经ModelGateway和LiteLLM Proxy执行真实Connection Test并返回结构化结果，不改变生命周期",
       "expected_response": {
@@ -4090,12 +4090,12 @@
       "evidence_spec_id": "EVID-SPEC-0065",
       "preconditions": [
         "发起人有模型配置权限",
-        "审核人具有独立模型版本审核角色"
+        "审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交"
       ],
-      "action": "使用MODEL_VERSION_REVIEW审核VALIDATING的同一ModelConfig并进入ACTIVE，不创建ModelConfigVersion",
+      "action": "按非SUPER_ADMIN职责分离或ROLE-SUPER-ADMIN自审例外使用MODEL_VERSION_REVIEW审核VALIDATING的同一ModelConfig并进入ACTIVE，不创建ModelConfigVersion",
       "expected_response": {
         "outcome": "SUCCESS_OR_RULE_DEFINED_REJECTION",
-        "description": "动作“使用MODEL_VERSION_REVIEW审核VALIDATING的同一ModelConfig并进入ACTIVE，不创建ModelConfigVersion”完成并形成可追溯结果。",
+        "description": "动作“按非SUPER_ADMIN职责分离或ROLE-SUPER-ADMIN自审例外使用MODEL_VERSION_REVIEW审核VALIDATING的同一ModelConfig并进入ACTIVE，不创建ModelConfigVersion”完成并形成可追溯结果。",
         "failure_description": "返回明确失败原因且不部分提交"
       },
       "expected_state": [
@@ -4153,12 +4153,12 @@
       "evidence_spec_id": "EVID-SPEC-0066",
       "preconditions": [
         "发起人有模型配置权限",
-        "审核人具有独立模型版本审核角色"
+        "审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交"
       ],
-      "action": "独立审核通过后将同一ModelConfig从VALIDATING推进到ACTIVE",
+      "action": "非SUPER_ADMIN独立审核或ROLE-SUPER-ADMIN自审通过后将同一ModelConfig从VALIDATING推进到ACTIVE",
       "expected_response": {
         "outcome": "SUCCESS_OR_RULE_DEFINED_REJECTION",
-        "description": "动作“独立审核通过后将同一ModelConfig从VALIDATING推进到ACTIVE”完成并形成可追溯结果。",
+        "description": "动作“非SUPER_ADMIN独立审核或ROLE-SUPER-ADMIN自审通过后将同一ModelConfig从VALIDATING推进到ACTIVE”完成并形成可追溯结果。",
         "failure_description": "返回明确失败原因且不部分提交"
       },
       "expected_state": [
@@ -4216,7 +4216,7 @@
       "evidence_spec_id": "EVID-SPEC-0067",
       "preconditions": [
         "发起人有模型配置权限",
-        "审核人具有独立模型版本审核角色"
+        "审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交"
       ],
       "action": "将一个ACTIVE ModelConfig设置为AI_EXPLORATION唯一平台级effective default",
       "expected_response": {
@@ -4279,12 +4279,12 @@
       "evidence_spec_id": "EVID-SPEC-0068",
       "preconditions": [
         "发起人有模型配置权限",
-        "审核人具有独立模型版本审核角色"
+        "审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交"
       ],
-      "action": "记录创建、修改、Secret更新、启用、禁用、默认绑定和Connection Test不可变审计，且不记录Secret",
+      "action": "记录创建、修改、Secret更新、启用、禁用、默认绑定和Connection Test不可变审计，且不记录Secret；ModelConfig审核记录actor、submitter、reviewer和self_approval，SUPER_ADMIN自审同时记录operator_role=SUPER_ADMIN",
       "expected_response": {
         "outcome": "SUCCESS_OR_RULE_DEFINED_REJECTION",
-        "description": "动作“记录创建、修改、Secret更新、启用、禁用、默认绑定和Connection Test不可变审计，且不记录Secret”完成并形成可追溯结果。",
+        "description": "动作“记录创建、修改、Secret更新、启用、禁用、默认绑定和Connection Test不可变审计，且不记录Secret；ModelConfig审核记录actor、submitter、reviewer和self_approval，SUPER_ADMIN自审同时记录operator_role=SUPER_ADMIN”完成并形成可追溯结果。",
         "failure_description": "返回明确失败原因且不部分提交"
       },
       "expected_state": [
@@ -4293,7 +4293,8 @@
       "database_assertions": [
         "主记录与关系记录满足唯一键、外键和row_version约束",
         "拒绝路径不产生部分提交",
-        "审计与Outbox在同一事务边界持久化"
+        "审计与Outbox在同一事务边界持久化",
+        "普通审核self_approval=false；ROLE-SUPER-ADMIN自审包含actor、submitter、reviewer、self_approval=true和operator_role=SUPER_ADMIN"
       ],
       "event_assertions": [
         "成功状态变化按注册表产生对应事件并携带sequence",
@@ -4342,12 +4343,12 @@
       "evidence_spec_id": "EVID-SPEC-0069",
       "preconditions": [
         "发起人有模型配置权限",
-        "审核人具有独立模型版本审核角色"
+        "审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交"
       ],
       "action": "发起配置和启用AI模型",
       "expected_response": {
         "outcome": "SUCCESS_OR_RULE_DEFINED_REJECTION",
-        "description": "ModelConfig查看、创建、编辑、Connection Test、禁用和默认绑定由MODEL_CONFIGURATION_MANAGE维护；VALIDATING到ACTIVE仅由MODEL_VERSION_REVIEW独立审核。",
+        "description": "ModelConfig查看、创建、编辑、Connection Test、禁用和默认绑定由MODEL_CONFIGURATION_MANAGE维护；VALIDATING到ACTIVE仅由MODEL_VERSION_REVIEW审核，非SUPER_ADMIN必须职责分离，ROLE-SUPER-ADMIN允许自审。",
         "failure_description": "返回无权限或超范围结果，业务副作用为零。"
       },
       "expected_state": [
@@ -4364,7 +4365,7 @@
         "重复投递由event_id幂等处理"
       ],
       "permission_assertions": [
-        "ModelConfig查看、创建、编辑、Connection Test、禁用和默认绑定由MODEL_CONFIGURATION_MANAGE维护；VALIDATING到ACTIVE仅由MODEL_VERSION_REVIEW独立审核。"
+        "ModelConfig查看、创建、编辑、Connection Test、禁用和默认绑定由MODEL_CONFIGURATION_MANAGE维护；VALIDATING到ACTIVE仅由MODEL_VERSION_REVIEW审核，非SUPER_ADMIN必须职责分离，ROLE-SUPER-ADMIN允许自审。"
       ],
       "idempotency_assertions": [
         "同一Idempotency-Key和请求哈希返回同一结果",
@@ -4466,12 +4467,12 @@
       "evidence_status": "EXPECTED_NOT_EXECUTED",
       "evidence_spec_id": "EVID-SPEC-0071",
       "preconditions": [
-        "审核人具有独立模型版本审核角色"
+        "审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交"
       ],
       "action": "发起配置和启用AI模型",
       "expected_response": {
         "outcome": "SUCCESS_OR_RULE_DEFINED_REJECTION",
-        "description": "在“配置和启用AI模型”中，前置条件必须满足：审核人具有独立模型版本审核角色。",
+        "description": "审核人必须具有MODEL_VERSION_REVIEW；非SUPER_ADMIN不得审核本人提交，ROLE-SUPER-ADMIN可审核本人提交。",
         "failure_description": "前置条件不满足时拒绝进入主流程且业务副作用为零。"
       },
       "expected_state": [
@@ -4529,7 +4530,7 @@
       "evidence_spec_id": "EVID-SPEC-0072",
       "preconditions": [
         "发起人有模型配置权限",
-        "审核人具有独立模型版本审核角色"
+        "审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交"
       ],
       "action": "修复前置原因后使用幂等命令重试；不得改写已提交历史。",
       "expected_response": {
@@ -4592,12 +4593,12 @@
       "evidence_spec_id": "EVID-SPEC-0073",
       "preconditions": [
         "发起人有模型配置权限",
-        "审核人具有独立模型版本审核角色"
+        "审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交"
       ],
-      "action": "修复ModelConfig后重新进入VALIDATING并由MODEL_VERSION_REVIEW审核激活",
+      "action": "修复ModelConfig后重新进入VALIDATING并按非SUPER_ADMIN职责分离或ROLE-SUPER-ADMIN自审例外审核激活",
       "expected_response": {
         "outcome": "SUCCESS_OR_RULE_DEFINED_REJECTION",
-        "description": "修复ModelConfig后重新进入VALIDATING并由MODEL_VERSION_REVIEW审核激活",
+        "description": "修复ModelConfig后重新进入VALIDATING并按非SUPER_ADMIN职责分离或ROLE-SUPER-ADMIN自审例外审核激活",
         "failure_description": "返回明确失败原因且不部分提交"
       },
       "expected_state": [
@@ -4779,7 +4780,7 @@
       "evidence_spec_id": "EVID-SPEC-0076",
       "preconditions": [
         "发起人有模型配置权限",
-        "审核人具有独立模型版本审核角色"
+        "审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交"
       ],
       "action": "发起配置和启用AI模型",
       "expected_response": {
@@ -4842,7 +4843,7 @@
       "evidence_spec_id": "EVID-SPEC-0077",
       "preconditions": [
         "发起人有模型配置权限",
-        "审核人具有独立模型版本审核角色"
+        "审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交"
       ],
       "action": "发起配置和启用AI模型",
       "expected_response": {
@@ -4905,7 +4906,7 @@
       "evidence_spec_id": "EVID-SPEC-0078",
       "preconditions": [
         "发起人有模型配置权限",
-        "审核人具有独立模型版本审核角色"
+        "审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交"
       ],
       "action": "先执行场景门禁，再进入首个业务副作用。",
       "expected_response": {

@@ -24798,7 +24798,7 @@ business_rules:
   trigger: 发起配置和启用AI模型
   preconditions:
   - 发起人有模型配置权限
-  - 审核人具有独立模型版本审核角色
+  - 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   rule_statement: AI_EXPLORATION只允许一个平台级effective default；不得创建项目偏好、继承或fallback
   required_action: AI_EXPLORATION只允许一个平台级effective default；不得创建项目偏好、继承或fallback
   prohibited_action: null
@@ -24835,7 +24835,7 @@ business_rules:
   trigger: 发起配置和启用AI模型
   preconditions:
   - 发起人有模型配置权限
-  - 审核人具有独立模型版本审核角色
+  - 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   rule_statement: 业务审计记录
   required_action: null
   prohibited_action: null
@@ -24875,7 +24875,7 @@ business_rules:
   trigger: 发起配置和启用AI模型
   preconditions:
   - 发起人有模型配置权限
-  - 审核人具有独立模型版本审核角色
+  - 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   rule_statement: 记录“配置和启用AI模型”的发起主体、参与主体、对象ID、权限与数据范围判定、状态前后值、结果/原因码和时间。
   required_action: 记录“配置和启用AI模型”的发起主体、参与主体、对象ID、权限与数据范围判定、状态前后值、结果/原因码和时间。
   prohibited_action: null
@@ -24914,7 +24914,7 @@ business_rules:
   trigger: 发起配置和启用AI模型
   preconditions:
   - 发起人有模型配置权限
-  - 审核人具有独立模型版本审核角色
+  - 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   rule_statement: 在“配置和启用AI模型”中，审计必须满足：本地状态变化、不可变事件和审计在同一原子提交边界内完成；提交前审计失败则不提交或回滚本地变化。。
   required_action: 本地状态变化、不可变事件和审计在同一原子提交边界内完成；提交前审计失败则不提交或回滚本地变化。
   prohibited_action: null
@@ -24954,7 +24954,7 @@ business_rules:
   trigger: 发起配置和启用AI模型
   preconditions:
   - 发起人有模型配置权限
-  - 审核人具有独立模型版本审核角色
+  - 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   rule_statement: 在“配置和启用AI模型”中，并发校验必须满足：ModelConfig使用row_version CAS；Capability默认绑定以capability_code唯一约束；消费者固化配置快照。
   required_action: null
   prohibited_action: null
@@ -24997,7 +24997,7 @@ business_rules:
   trigger: 发起配置和启用AI模型
   preconditions:
   - 发起人有模型配置权限
-  - 审核人具有独立模型版本审核角色
+  - 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   rule_statement: 在“配置和启用AI模型”中，数据范围必须满足：ModelConfig与AI_EXPLORATION默认绑定均属于平台级范围；模型管理员的配置权限不授予项目业务内容访问。。
   required_action: null
   prohibited_action: null
@@ -25037,16 +25037,16 @@ business_rules:
   trigger: 发起配置和启用AI模型
   preconditions:
   - 发起人有模型配置权限
-  - 审核人具有独立模型版本审核角色
-  rule_statement: 在“配置和启用AI模型”中，异常流程必须满足：凭证无效、真实连接测试失败、审核职责冲突、非ACTIVE默认绑定或默认模型禁用冲突时拒绝。
+  - 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
+  rule_statement: 在“配置和启用AI模型”中，异常流程必须满足：凭证无效、真实连接测试失败、审核提交证据缺失、非SUPER_ADMIN自审、非ACTIVE默认绑定或默认模型禁用冲突时拒绝；ROLE-SUPER-ADMIN自审ModelConfig属于允许路径并必须记录明确自审审计。
   required_action: null
   prohibited_action: null
   allowed_action: null
   expected_result: null
-  failure_result: 凭证无效、真实连接测试失败、审核职责冲突、非ACTIVE默认绑定或默认模型禁用冲突时拒绝
+  failure_result: 凭证无效、真实连接测试失败、审核提交证据缺失、非SUPER_ADMIN自审、非ACTIVE默认绑定或默认模型禁用冲突时拒绝
   exception_conditions:
-  - 凭证无效、真实连接测试失败、审核职责冲突、非ACTIVE默认绑定或默认模型禁用冲突时拒绝
-  exception_behavior: 凭证无效、真实连接测试失败、审核职责冲突、非ACTIVE默认绑定或默认模型禁用冲突时拒绝
+  - 凭证无效、真实连接测试失败、审核提交证据缺失、非SUPER_ADMIN自审、非ACTIVE默认绑定或默认模型禁用冲突时拒绝
+  exception_behavior: 凭证无效、真实连接测试失败、审核提交证据缺失、非SUPER_ADMIN自审、非ACTIVE默认绑定或默认模型禁用冲突时拒绝；ROLE-SUPER-ADMIN自审不属于审核职责冲突
   priority:
     level: P6
     rank: 50
@@ -25078,7 +25078,7 @@ business_rules:
   trigger: 发起配置和启用AI模型
   preconditions:
   - 发起人有模型配置权限
-  - 审核人具有独立模型版本审核角色
+  - 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   rule_statement: 任一前置、权限、数据范围、并发或明确资源条件不满足，或未进入声明状态、产生越权/重复副作用、证据未密封、审计缺失时失败。
   required_action: null
   prohibited_action: null
@@ -25116,7 +25116,7 @@ business_rules:
   trigger: 发起配置和启用AI模型
   preconditions:
   - 发起人有模型配置权限
-  - 审核人具有独立模型版本审核角色
+  - 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   rule_statement: 在“配置和启用AI模型”中，失败判定必须满足：事务/补偿策略：LOCAL_TRANSACTION。。
   required_action: null
   prohibited_action: null
@@ -25154,7 +25154,7 @@ business_rules:
   trigger: 发起配置和启用AI模型
   preconditions:
   - 发起人有模型配置权限
-  - 审核人具有独立模型版本审核角色
+  - 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   rule_statement: 在平台级范围创建单一ModelConfig，选择固定白名单Provider、填写Provider原生model_name并加密保存Secret
   required_action: 在平台级范围创建单一ModelConfig，选择固定白名单Provider、填写Provider原生model_name并加密保存Secret
   prohibited_action: null
@@ -25201,7 +25201,7 @@ business_rules:
   trigger: 发起配置和启用AI模型
   preconditions:
   - 发起人有模型配置权限
-  - 审核人具有独立模型版本审核角色
+  - 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   rule_statement: 经ModelGateway和LiteLLM Proxy执行真实Connection Test，返回结构化结果并写不可变审计，不改变生命周期
   required_action: 经ModelGateway和LiteLLM Proxy执行真实Connection Test，返回结构化结果并写不可变审计，不改变生命周期
   prohibited_action: null
@@ -25248,12 +25248,12 @@ business_rules:
   trigger: 发起配置和启用AI模型
   preconditions:
   - 发起人有模型配置权限
-  - 审核人具有独立模型版本审核角色
-  rule_statement: 使用MODEL_VERSION_REVIEW审核VALIDATING的同一ModelConfig并进入ACTIVE，不创建ModelConfigVersion
-  required_action: 使用MODEL_VERSION_REVIEW审核VALIDATING的同一ModelConfig并进入ACTIVE，不创建ModelConfigVersion
+  - 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
+  rule_statement: 使用MODEL_VERSION_REVIEW审核VALIDATING的同一ModelConfig并进入ACTIVE，不创建ModelConfigVersion；非SUPER_ADMIN不得自审，ROLE-SUPER-ADMIN可自审
+  required_action: 按非SUPER_ADMIN职责分离或ROLE-SUPER-ADMIN自审例外审核VALIDATING的同一ModelConfig并进入ACTIVE，不创建ModelConfigVersion
   prohibited_action: null
   allowed_action: null
-  expected_result: 动作“使用MODEL_VERSION_REVIEW审核VALIDATING的同一ModelConfig并进入ACTIVE，不创建ModelConfigVersion”完成并形成可追溯结果。
+  expected_result: 动作“按非SUPER_ADMIN职责分离或ROLE-SUPER-ADMIN自审例外审核VALIDATING的同一ModelConfig并进入ACTIVE，不创建ModelConfigVersion”完成并形成可追溯结果。
   failure_result: null
   exception_conditions: []
   exception_behavior: null
@@ -25294,12 +25294,12 @@ business_rules:
   trigger: 发起配置和启用AI模型
   preconditions:
   - 发起人有模型配置权限
-  - 审核人具有独立模型版本审核角色
-  rule_statement: 独立审核通过后将同一ModelConfig从VALIDATING推进到ACTIVE，不创建独立版本对象
-  required_action: 独立审核通过后将同一ModelConfig从VALIDATING推进到ACTIVE，不创建独立版本对象
+  - 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
+  rule_statement: 非SUPER_ADMIN独立审核或ROLE-SUPER-ADMIN自审通过后，将同一ModelConfig从VALIDATING推进到ACTIVE，不创建独立版本对象
+  required_action: 按非SUPER_ADMIN职责分离或ROLE-SUPER-ADMIN自审例外将同一ModelConfig从VALIDATING推进到ACTIVE，不创建独立版本对象
   prohibited_action: null
   allowed_action: null
-  expected_result: 动作“独立审核通过后将同一ModelConfig从VALIDATING推进到ACTIVE，不创建独立版本对象”完成并形成可追溯结果。
+  expected_result: 动作“按非SUPER_ADMIN职责分离或ROLE-SUPER-ADMIN自审例外将同一ModelConfig从VALIDATING推进到ACTIVE，不创建独立版本对象”完成并形成可追溯结果。
   failure_result: null
   exception_conditions: []
   exception_behavior: null
@@ -25341,7 +25341,7 @@ business_rules:
   trigger: 发起配置和启用AI模型
   preconditions:
   - 发起人有模型配置权限
-  - 审核人具有独立模型版本审核角色
+  - 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   rule_statement: 在“配置和启用AI模型”中，主流程必须满足：将一个ACTIVE ModelConfig设置为AI_EXPLORATION平台级effective default，并保证唯一性。
   required_action: 将一个ACTIVE ModelConfig设置为AI_EXPLORATION平台级effective default，并保证唯一性
   prohibited_action: null
@@ -25388,9 +25388,9 @@ business_rules:
   trigger: 发起配置和启用AI模型
   preconditions:
   - 发起人有模型配置权限
-  - 审核人具有独立模型版本审核角色
-  rule_statement: 记录创建、修改、Secret更新、审核启用、禁用、默认绑定和Connection Test不可变审计，且不记录Secret
-  required_action: 记录创建、修改、Secret更新、审核启用、禁用、默认绑定和Connection Test不可变审计，且不记录Secret
+  - 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
+  rule_statement: 记录创建、修改、Secret更新、审核启用、禁用、默认绑定和Connection Test不可变审计，且不记录Secret；ModelConfig审核审计记录actor、submitter、reviewer和self_approval，ROLE-SUPER-ADMIN自审时同时记录operator_role=SUPER_ADMIN
+  required_action: 记录创建、修改、Secret更新、审核启用、禁用、默认绑定和Connection Test不可变审计，且不记录Secret；ModelConfig审核审计明确记录自审判定和SUPER_ADMIN自审角色
   prohibited_action: null
   allowed_action: null
   expected_result: 动作“记录创建、修改、Secret更新、审核启用、禁用、默认绑定和Connection Test不可变审计，且不记录Secret”完成并形成可追溯结果。
@@ -25435,8 +25435,8 @@ business_rules:
   trigger: 发起配置和启用AI模型
   preconditions:
   - 发起人有模型配置权限
-  - 审核人具有独立模型版本审核角色
-  rule_statement: ModelConfig查看、创建、编辑、Connection Test、禁用和默认绑定由MODEL_CONFIGURATION_MANAGE维护；VALIDATING到ACTIVE仅由MODEL_VERSION_REVIEW独立审核。
+  - 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
+  rule_statement: ModelConfig查看、创建、编辑、Connection Test、禁用和默认绑定由MODEL_CONFIGURATION_MANAGE维护；VALIDATING到ACTIVE仅由MODEL_VERSION_REVIEW审核，非SUPER_ADMIN必须职责分离，ROLE-SUPER-ADMIN允许自审。
   required_action: null
   prohibited_action: null
   allowed_action: null
@@ -25449,7 +25449,7 @@ business_rules:
     rank: 90
     name: 权限与数据范围
   permission_requirements:
-  - ModelConfig查看、创建、编辑、Connection Test、禁用和默认绑定由MODEL_CONFIGURATION_MANAGE维护；VALIDATING到ACTIVE仅由MODEL_VERSION_REVIEW独立审核。
+  - ModelConfig查看、创建、编辑、Connection Test、禁用和默认绑定由MODEL_CONFIGURATION_MANAGE维护；VALIDATING到ACTIVE仅由MODEL_VERSION_REVIEW审核，非SUPER_ADMIN必须职责分离，ROLE-SUPER-ADMIN允许自审。
   state_requirements: []
   concurrency_requirements: []
   audit_requirements: []
@@ -25512,8 +25512,8 @@ business_rules:
   - OBJ-058
   trigger: 发起配置和启用AI模型
   preconditions:
-  - 审核人具有独立模型版本审核角色
-  rule_statement: 在“配置和启用AI模型”中，前置条件必须满足：审核人具有独立模型版本审核角色。
+  - 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
+  rule_statement: 在“配置和启用AI模型”中，前置条件必须满足：审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN不得审核本人提交，ROLE-SUPER-ADMIN可审核本人提交。
   required_action: null
   prohibited_action: null
   allowed_action: null
@@ -25549,7 +25549,7 @@ business_rules:
   trigger: 发起配置和启用AI模型
   preconditions:
   - 发起人有模型配置权限
-  - 审核人具有独立模型版本审核角色
+  - 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   rule_statement: 修复前置原因后使用幂等命令重试；不得改写已提交历史。
   required_action: 修复前置原因后使用幂等命令重试；不得改写已提交历史。
   prohibited_action: null
@@ -25595,16 +25595,16 @@ business_rules:
   trigger: 发起配置和启用AI模型
   preconditions:
   - 发起人有模型配置权限
-  - 审核人具有独立模型版本审核角色
-  rule_statement: 修复ModelConfig后重新进入VALIDATING并由MODEL_VERSION_REVIEW审核激活
-  required_action: 修复ModelConfig后重新进入VALIDATING并由MODEL_VERSION_REVIEW审核激活
+  - 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
+  rule_statement: 修复ModelConfig后重新进入VALIDATING并由MODEL_VERSION_REVIEW审核激活；非SUPER_ADMIN不得自审，ROLE-SUPER-ADMIN可自审
+  required_action: 修复ModelConfig后重新进入VALIDATING并按非SUPER_ADMIN职责分离或ROLE-SUPER-ADMIN自审例外审核激活
   prohibited_action: null
   allowed_action: null
   expected_result: null
   failure_result: null
   exception_conditions:
   - 场景失败或中断
-  exception_behavior: 修复ModelConfig后重新进入VALIDATING并由MODEL_VERSION_REVIEW审核激活
+  exception_behavior: 修复ModelConfig后重新进入VALIDATING并按非SUPER_ADMIN职责分离或ROLE-SUPER-ADMIN自审例外审核激活
   priority:
     level: P6
     rank: 50
@@ -25719,7 +25719,7 @@ business_rules:
   trigger: 发起配置和启用AI模型
   preconditions:
   - 发起人有模型配置权限
-  - 审核人具有独立模型版本审核角色
+  - 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   rule_statement: '在“配置和启用AI模型”中，状态流转必须满足：ModelConfig: CREATED→CONFIGURING→VALIDATING→ACTIVE→DISABLED/ARCHIVED。'
   required_action: null
   prohibited_action: null
@@ -25761,7 +25761,7 @@ business_rules:
   trigger: 发起配置和启用AI模型
   preconditions:
   - 发起人有模型配置权限
-  - 审核人具有独立模型版本审核角色
+  - 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   rule_statement: 只有ACTIVE ModelConfig可被Capability绑定；AI_EXPLORATION在平台级最多一个effective default
   required_action: null
   prohibited_action: null
@@ -25799,7 +25799,7 @@ business_rules:
   trigger: 发起配置和启用AI模型
   preconditions:
   - 发起人有模型配置权限
-  - 审核人具有独立模型版本审核角色
+  - 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   rule_statement: 当“发起配置和启用AI模型”发生时，ROLE-MODEL-ADMIN可以发起“配置和启用AI模型”；发起后必须先完成本场景前置、权限、范围、资源和并发门禁。
   required_action: 先执行场景门禁，再进入首个业务副作用。
   prohibited_action: null
@@ -100338,7 +100338,7 @@ rule_conditions:
 - condition_id: COND-000166
   rule_id: BR-AI-0005
   condition_type: PRECONDITION
-  expression: 审核人具有独立模型版本审核角色
+  expression: 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   evaluation_order: 166
 - condition_id: COND-000167
   rule_id: BR-AI-0006
@@ -100353,7 +100353,7 @@ rule_conditions:
 - condition_id: COND-000169
   rule_id: BR-AI-0006
   condition_type: PRECONDITION
-  expression: 审核人具有独立模型版本审核角色
+  expression: 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   evaluation_order: 169
 - condition_id: COND-000170
   rule_id: BR-AI-0007
@@ -100368,7 +100368,7 @@ rule_conditions:
 - condition_id: COND-000172
   rule_id: BR-AI-0007
   condition_type: PRECONDITION
-  expression: 审核人具有独立模型版本审核角色
+  expression: 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   evaluation_order: 172
 - condition_id: COND-000173
   rule_id: BR-AI-0008
@@ -100383,7 +100383,7 @@ rule_conditions:
 - condition_id: COND-000175
   rule_id: BR-AI-0008
   condition_type: PRECONDITION
-  expression: 审核人具有独立模型版本审核角色
+  expression: 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   evaluation_order: 175
 - condition_id: COND-000176
   rule_id: BR-AI-0009
@@ -100398,7 +100398,7 @@ rule_conditions:
 - condition_id: COND-000178
   rule_id: BR-AI-0009
   condition_type: PRECONDITION
-  expression: 审核人具有独立模型版本审核角色
+  expression: 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   evaluation_order: 178
 - condition_id: COND-000179
   rule_id: BR-AI-0009
@@ -100418,7 +100418,7 @@ rule_conditions:
 - condition_id: COND-000182
   rule_id: BR-AI-0010
   condition_type: PRECONDITION
-  expression: 审核人具有独立模型版本审核角色
+  expression: 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   evaluation_order: 182
 - condition_id: COND-000183
   rule_id: BR-AI-0010
@@ -100438,7 +100438,7 @@ rule_conditions:
 - condition_id: COND-000186
   rule_id: BR-AI-0011
   condition_type: PRECONDITION
-  expression: 审核人具有独立模型版本审核角色
+  expression: 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   evaluation_order: 186
 - condition_id: COND-000187
   rule_id: BR-AI-0012
@@ -100453,7 +100453,7 @@ rule_conditions:
 - condition_id: COND-000189
   rule_id: BR-AI-0012
   condition_type: PRECONDITION
-  expression: 审核人具有独立模型版本审核角色
+  expression: 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   evaluation_order: 189
 - condition_id: COND-000190
   rule_id: BR-AI-0012
@@ -100473,7 +100473,7 @@ rule_conditions:
 - condition_id: COND-000193
   rule_id: BR-AI-0013
   condition_type: PRECONDITION
-  expression: 审核人具有独立模型版本审核角色
+  expression: 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   evaluation_order: 193
 - condition_id: COND-000194
   rule_id: BR-AI-0013
@@ -100493,7 +100493,7 @@ rule_conditions:
 - condition_id: COND-000197
   rule_id: BR-AI-0014
   condition_type: PRECONDITION
-  expression: 审核人具有独立模型版本审核角色
+  expression: 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   evaluation_order: 197
 - condition_id: COND-000198
   rule_id: BR-AI-0015
@@ -100508,7 +100508,7 @@ rule_conditions:
 - condition_id: COND-000200
   rule_id: BR-AI-0015
   condition_type: PRECONDITION
-  expression: 审核人具有独立模型版本审核角色
+  expression: 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   evaluation_order: 200
 - condition_id: COND-000201
   rule_id: BR-AI-0016
@@ -100523,7 +100523,7 @@ rule_conditions:
 - condition_id: COND-000203
   rule_id: BR-AI-0016
   condition_type: PRECONDITION
-  expression: 审核人具有独立模型版本审核角色
+  expression: 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   evaluation_order: 203
 - condition_id: COND-000204
   rule_id: BR-AI-0017
@@ -100538,7 +100538,7 @@ rule_conditions:
 - condition_id: COND-000206
   rule_id: BR-AI-0017
   condition_type: PRECONDITION
-  expression: 审核人具有独立模型版本审核角色
+  expression: 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   evaluation_order: 206
 - condition_id: COND-000207
   rule_id: BR-AI-0018
@@ -100553,7 +100553,7 @@ rule_conditions:
 - condition_id: COND-000209
   rule_id: BR-AI-0018
   condition_type: PRECONDITION
-  expression: 审核人具有独立模型版本审核角色
+  expression: 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   evaluation_order: 209
 - condition_id: COND-000210
   rule_id: BR-AI-0019
@@ -100568,7 +100568,7 @@ rule_conditions:
 - condition_id: COND-000212
   rule_id: BR-AI-0019
   condition_type: PRECONDITION
-  expression: 审核人具有独立模型版本审核角色
+  expression: 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   evaluation_order: 212
 - condition_id: COND-000213
   rule_id: BR-AI-0020
@@ -100583,12 +100583,12 @@ rule_conditions:
 - condition_id: COND-000215
   rule_id: BR-AI-0020
   condition_type: PRECONDITION
-  expression: 审核人具有独立模型版本审核角色
+  expression: 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   evaluation_order: 215
 - condition_id: COND-000216
   rule_id: BR-AI-0020
   condition_type: CONDITION_EXPRESSION
-  expression: ModelConfig查看、创建、编辑、Connection Test、禁用和默认绑定由MODEL_CONFIGURATION_MANAGE维护；VALIDATING到ACTIVE仅由MODEL_VERSION_REVIEW独立审核。
+  expression: ModelConfig查看、创建、编辑、Connection Test、禁用和默认绑定由MODEL_CONFIGURATION_MANAGE维护；VALIDATING到ACTIVE仅由MODEL_VERSION_REVIEW审核，非SUPER_ADMIN必须职责分离，ROLE-SUPER-ADMIN允许自审。
   evaluation_order: 216
 - condition_id: COND-000217
   rule_id: BR-AI-0021
@@ -100613,12 +100613,12 @@ rule_conditions:
 - condition_id: COND-000221
   rule_id: BR-AI-0022
   condition_type: PRECONDITION
-  expression: 审核人具有独立模型版本审核角色
+  expression: 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   evaluation_order: 221
 - condition_id: COND-000222
   rule_id: BR-AI-0022
   condition_type: CONDITION_EXPRESSION
-  expression: 审核人具有独立模型版本审核角色
+  expression: 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   evaluation_order: 222
 - condition_id: COND-000223
   rule_id: BR-AI-0023
@@ -100633,7 +100633,7 @@ rule_conditions:
 - condition_id: COND-000225
   rule_id: BR-AI-0023
   condition_type: PRECONDITION
-  expression: 审核人具有独立模型版本审核角色
+  expression: 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   evaluation_order: 225
 - condition_id: COND-000226
   rule_id: BR-AI-0024
@@ -100648,7 +100648,7 @@ rule_conditions:
 - condition_id: COND-000228
   rule_id: BR-AI-0024
   condition_type: PRECONDITION
-  expression: 审核人具有独立模型版本审核角色
+  expression: 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   evaluation_order: 228
 - condition_id: COND-000229
   rule_id: BR-AI-0025
@@ -100683,7 +100683,7 @@ rule_conditions:
 - condition_id: COND-000235
   rule_id: BR-AI-0027
   condition_type: PRECONDITION
-  expression: 审核人具有独立模型版本审核角色
+  expression: 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   evaluation_order: 235
 - condition_id: COND-000236
   rule_id: BR-AI-0028
@@ -100698,7 +100698,7 @@ rule_conditions:
 - condition_id: COND-000238
   rule_id: BR-AI-0028
   condition_type: PRECONDITION
-  expression: 审核人具有独立模型版本审核角色
+  expression: 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   evaluation_order: 238
 - condition_id: COND-000239
   rule_id: BR-AI-0028
@@ -100718,7 +100718,7 @@ rule_conditions:
 - condition_id: COND-000242
   rule_id: BR-AI-0029
   condition_type: PRECONDITION
-  expression: 审核人具有独立模型版本审核角色
+  expression: 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   evaluation_order: 242
 - condition_id: COND-000243
   rule_id: BR-AI-0030
@@ -116173,8 +116173,8 @@ rule_exceptions:
   priority_over_base_rule: true
 - exception_id: EXC-000007
   rule_id: BR-AI-0011
-  condition: 凭证无效、真实连接测试失败、审核职责冲突、非ACTIVE默认绑定或默认模型禁用冲突时拒绝
-  behavior: 凭证无效、真实连接测试失败、审核职责冲突、非ACTIVE默认绑定或默认模型禁用冲突时拒绝
+  condition: 凭证无效、真实连接测试失败、审核提交证据缺失、非SUPER_ADMIN自审、非ACTIVE默认绑定或默认模型禁用冲突时拒绝
+  behavior: 凭证无效、真实连接测试失败、审核提交证据缺失、非SUPER_ADMIN自审、非ACTIVE默认绑定或默认模型禁用冲突时拒绝
   priority_over_base_rule: true
 - exception_id: EXC-000008
   rule_id: BR-AI-0023

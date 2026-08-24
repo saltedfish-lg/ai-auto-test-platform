@@ -602,6 +602,43 @@ def test_project_scoped_role_binding_denies_when_matching_project_duty_is_absent
     )
 
 
+def test_active_platform_role_check_uses_current_platform_super_admin_binding() -> None:
+    class CaptureSession:
+        statement: object | None = None
+
+        def scalar(self, statement: object) -> str:
+            self.statement = statement
+            return "binding-id"
+
+    db = CaptureSession()
+    service = object.__new__(AuthenticationService)
+
+    assert service.user_has_active_platform_role_in_transaction(  # type: ignore[arg-type]
+        db, "user-1", "ROLE-SUPER-ADMIN"
+    )
+    assert db.statement is not None
+    compiled = str(db.statement.compile(compile_kwargs={"literal_binds": True}))
+    assert "atp_user_role_binding.user_id = 'user-1'" in compiled
+    assert "atp_user_role_binding.project_id IS NULL" in compiled
+    assert "atp_user_role_binding.valid_from <=" in compiled
+    assert "atp_user_role_binding.valid_to IS NULL" in compiled
+    assert "atp_user_role_binding.valid_to >" in compiled
+    assert "atp_role.lifecycle_status = 'ACTIVE'" in compiled
+    assert "atp_role.role_code = 'ROLE-SUPER-ADMIN'" in compiled
+
+
+def test_active_platform_role_check_denies_without_matching_binding() -> None:
+    class EmptySession:
+        def scalar(self, statement: object) -> None:
+            del statement
+            return None
+
+    service = object.__new__(AuthenticationService)
+    assert not service.user_has_active_platform_role_in_transaction(  # type: ignore[arg-type]
+        EmptySession(), "user-1", "ROLE-SUPER-ADMIN"
+    )
+
+
 def test_require_project_permissions_binds_every_permission_to_target_project(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

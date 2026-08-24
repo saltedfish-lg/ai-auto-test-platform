@@ -478,6 +478,7 @@ class ModelConfigurationService:
                     + " or ".join(expected_states)
                     + "."
                 )
+            review_audit_details: dict[str, object] | None = None
             if action == "activate" and row.lifecycle_status == "VALIDATING":
                 submitting_actor_id = db.scalar(
                     select(ModelConfigurationAudit.actor_user_id)
@@ -491,7 +492,25 @@ class ModelConfigurationService:
                     )
                     .limit(1)
                 )
-                if submitting_actor_id == actor.user.user_id:
+                if submitting_actor_id is None:
+                    raise PlatformError(
+                        title="Model review submission evidence missing",
+                        detail=(
+                            "The validating model configuration has no immutable review "
+                            "submission evidence."
+                        ),
+                        status=409,
+                        code="MODEL_CONFIG_REVIEW_SUBMISSION_EVIDENCE_MISSING",
+                    )
+                self_approval = submitting_actor_id == actor.user.user_id
+                is_super_admin = self_approval and (
+                    self._authentication.user_has_active_platform_role_in_transaction(
+                        db,
+                        actor.user.user_id,
+                        "ROLE-SUPER-ADMIN",
+                    )
+                )
+                if self_approval and not is_super_admin:
                     raise PlatformError(
                         title="Independent model review required",
                         detail=(
@@ -501,6 +520,14 @@ class ModelConfigurationService:
                         status=403,
                         code="MODEL_CONFIG_SELF_REVIEW_FORBIDDEN",
                     )
+                review_audit_details = {
+                    "actor_user_id": actor.user.user_id,
+                    "submitter_user_id": submitting_actor_id,
+                    "reviewer_user_id": actor.user.user_id,
+                    "self_approval": self_approval,
+                }
+                if is_super_admin:
+                    review_audit_details["operator_role"] = "SUPER_ADMIN"
             if action == "disable":
                 default_binding = db.get(ModelCapabilityDefault, AI_EXPLORATION)
                 if (
@@ -529,7 +556,7 @@ class ModelConfigurationService:
                 previous_status=previous_status,
                 new_status=target_state,
                 reason=body.reason,
-                details=None,
+                details=review_audit_details,
             )
             self._append_event(
                 db,

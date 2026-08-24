@@ -848,11 +848,13 @@ permission_catalog:
   permission_type: HIGH_RISK_OPERATION
   scope_level: PLATFORM
   target_object: 模型配置
-  definition: 独立审核和发布模型配置、路由与Prompt版本。
+  definition: 审核和发布模型配置、路由与Prompt版本；非SUPER_ADMIN审核人必须与提交人分离，ROLE-SUPER-ADMIN审核ModelConfig时允许审核本人提交；ModelConfig激活缺少不可变提交者证据时必须拒绝。
   allowed_actions:
   - 审核模型版本
+  - ROLE-SUPER-ADMIN可审核并激活本人提交的ModelConfig
   prohibited_actions:
   - 不得超出角色授权上限、项目范围、对象状态和敏感数据边界
+  - 非SUPER_ADMIN不得审核本人提交的ModelConfig
   assignable_roles:
   - ROLE-SUPER-ADMIN
   - ROLE-MODEL-REVIEWER
@@ -1872,7 +1874,7 @@ role_permission_mappings:
   permission_code: MODEL_VERSION_REVIEW
   decision: ALLOWED
   data_scope: 平台全部active数据和依法保留的history数据；高风险操作仍必须审计。
-  conditions: 仍受数据范围、对象状态和接口鉴权约束
+  conditions: ROLE-SUPER-ADMIN可审核本人提交的ModelConfig；自审必须写入actor、submitter、reviewer、self_approval=true和operator_role=SUPER_ADMIN；仍受对象状态、接口鉴权和不可变审计约束
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
 - mapping_id: RPM-R3-0034
@@ -6372,7 +6374,7 @@ role_permission_mappings:
   permission_code: MODEL_VERSION_REVIEW
   decision: ALLOWED
   data_scope: 平台级模型版本审核范围；项目业务内容仍按项目数据权限
-  conditions: 仍受数据范围、对象状态和接口鉴权约束
+  conditions: 提交人不得审核本人提交的ModelConfig；高风险操作必须审计；仍受数据范围、对象状态和接口鉴权约束
   completion_status: CURRENT_PERMISSION_MAPPING
   release_id: PDBR-2026.08.06-R4.1
 - mapping_id: RPM-R3-0534

@@ -43,6 +43,9 @@ from platform_api.secret_store import AesGcmSecretProtector, SecretStoreError
 from pydantic import ValidationError
 
 
+_SUBMITTER_UNSET = object()
+
+
 def _model(*, status: str = "VALIDATING", updated_by: str = "submitter") -> ModelConfiguration:
     now = datetime.now(UTC).replace(tzinfo=None)
     return ModelConfiguration(
@@ -101,13 +104,15 @@ class _Session:
         *,
         secret: ModelConfigurationSecret | None = None,
         default: ModelCapabilityDefault | None = None,
-        submitted_by: str | None = None,
+        submitted_by: str | None | object = _SUBMITTER_UNSET,
         allow_create: bool = False,
     ) -> None:
         self.model = model
         self.secret = secret
         self.default = default
-        self.submitted_by = submitted_by or model.updated_by
+        self.submitted_by = (
+            model.updated_by if submitted_by is _SUBMITTER_UNSET else submitted_by
+        )
         self.allow_create = allow_create
         self.added: list[object] = []
         self.deleted: list[object] = []
@@ -162,6 +167,11 @@ class _Session:
 
     def add(self, value: object) -> None:
         self.added.append(value)
+        if (
+            isinstance(value, ModelConfigurationAudit)
+            and value.action == "MODEL_CONFIG_REVIEW_SUBMITTED"
+        ):
+            self.submitted_by = value.actor_user_id
 
     def delete(self, value: object) -> None:
         self.deleted.append(value)
@@ -177,10 +187,18 @@ class _Session:
 
 
 class _Authentication:
-    def __init__(self, user_id: str = "reviewer", *, allowed: bool = True) -> None:
+    def __init__(
+        self,
+        user_id: str = "reviewer",
+        *,
+        allowed: bool = True,
+        super_admin: bool = False,
+    ) -> None:
         self.identity = SimpleNamespace(user=SimpleNamespace(user_id=user_id))
         self.allowed = allowed
+        self.super_admin = super_admin
         self.permissions: list[tuple[str, tuple[str, ...]]] = []
+        self.role_checks: list[tuple[str, str]] = []
 
     def authenticate_access_in_transaction(self, *args: object) -> object:
         del args
@@ -203,6 +221,16 @@ class _Authentication:
                 status=403,
                 code="MODEL_CONFIG_PERMISSION_DENIED",
             )
+
+    def user_has_active_platform_role_in_transaction(
+        self,
+        db: object,
+        user_id: str,
+        role_code: str,
+    ) -> bool:
+        del db
+        self.role_checks.append((user_id, role_code))
+        return self.super_admin and role_code == "ROLE-SUPER-ADMIN"
 
 
 class _Idempotency:
@@ -579,7 +607,7 @@ def test_model_secret_key_ring_rejects_duplicate_or_oversized_key_ids(
         AesGcmSecretProtector.load(key_file)
 
 
-def test_activation_requires_reviewer_permission_and_independent_actor(
+def test_non_super_admin_cannot_review_own_model_configuration(
     key_directory: Path,
 ) -> None:
     model = _model(updated_by="same-operator")
@@ -611,6 +639,44 @@ def test_activation_requires_reviewer_permission_and_independent_actor(
     assert not any(isinstance(value, OutboxEvent) for value in session.added)
 
 
+def test_super_admin_can_review_own_model_configuration_with_explicit_audit(
+    key_directory: Path,
+) -> None:
+    model = _model(updated_by="super-admin")
+    session = _Session(model, submitted_by="super-admin")
+    authentication = _Authentication(user_id="super-admin", super_admin=True)
+    service = ModelConfigurationService(
+        _Factory(session),  # type: ignore[arg-type]
+        authentication,  # type: ignore[arg-type]
+        _Idempotency(),  # type: ignore[arg-type]
+        _protector(key_directory),
+        _Gateway(GatewayConnectionResult("SUCCESS", 1, None, "ok")),
+    )
+
+    result = service.transition_model_config(
+        "token",
+        model.model_config_id,
+        ModelConfigLifecycleRequest(expected_version=4, reason="emergency self review"),
+        "super-admin-activation-key",
+        _context(),
+        action="activate",
+    )
+
+    assert result.lifecycle_status == "ACTIVE"
+    assert authentication.role_checks == [("super-admin", "ROLE-SUPER-ADMIN")]
+    audit = next(
+        value for value in session.added if isinstance(value, ModelConfigurationAudit)
+    )
+    assert audit.actor_user_id == "super-admin"
+    assert audit.details_json == {
+        "actor_user_id": "super-admin",
+        "submitter_user_id": "super-admin",
+        "reviewer_user_id": "super-admin",
+        "self_approval": True,
+        "operator_role": "SUPER_ADMIN",
+    }
+
+
 def test_intervening_update_cannot_erase_submitter_identity(
     key_directory: Path,
 ) -> None:
@@ -636,6 +702,34 @@ def test_intervening_update_cannot_erase_submitter_identity(
 
     assert caught.value.code == "MODEL_CONFIG_SELF_REVIEW_FORBIDDEN"
     assert model.lifecycle_status == "VALIDATING"
+
+
+def test_activation_fails_closed_without_review_submission_evidence(
+    key_directory: Path,
+) -> None:
+    model = _model(updated_by="manager")
+    session = _Session(model, submitted_by=None)
+    service = ModelConfigurationService(
+        _Factory(session),  # type: ignore[arg-type]
+        _Authentication(user_id="reviewer"),  # type: ignore[arg-type]
+        _Idempotency(),  # type: ignore[arg-type]
+        _protector(key_directory),
+        _Gateway(GatewayConnectionResult("SUCCESS", 1, None, "ok")),
+    )
+
+    with pytest.raises(PlatformError) as caught:
+        service.transition_model_config(
+            "token",
+            model.model_config_id,
+            ModelConfigLifecycleRequest(expected_version=4, reason="reviewed"),
+            "activation-without-submission-key",
+            _context(),
+            action="activate",
+        )
+
+    assert caught.value.code == "MODEL_CONFIG_REVIEW_SUBMISSION_EVIDENCE_MISSING"
+    assert model.lifecycle_status == "VALIDATING"
+    assert not any(isinstance(value, OutboxEvent) for value in session.added)
 
 
 def test_independent_reviewer_activates_single_config_and_emits_safe_evidence(
@@ -674,7 +768,15 @@ def test_independent_reviewer_activates_single_config_and_emits_safe_evidence(
     assert result.lifecycle_status == "ACTIVE"
     assert result.row_version == 5
     assert result.secret_configured is True
-    assert any(isinstance(value, ModelConfigurationAudit) for value in session.added)
+    audit = next(
+        value for value in session.added if isinstance(value, ModelConfigurationAudit)
+    )
+    assert audit.details_json == {
+        "actor_user_id": "independent-reviewer",
+        "submitter_user_id": "submitter",
+        "reviewer_user_id": "independent-reviewer",
+        "self_approval": False,
+    }
     event = next(value for value in session.added if isinstance(value, OutboxEvent))
     assert event.event_type == "model_config.active"
     assert set(event.payload_json) == {
@@ -704,6 +806,68 @@ def test_independent_reviewer_activates_single_config_and_emits_safe_evidence(
     }
     assert "secret" not in json.dumps(event.payload_json).lower()
     assert "secret_value" not in json.dumps(idempotency.completed).lower()
+
+
+def test_submitter_submission_evidence_is_consumed_by_independent_reviewer(
+    key_directory: Path,
+) -> None:
+    model = _model(status="CONFIGURING", updated_by="manager")
+    session = _Session(model, submitted_by=None)
+    submit_service = ModelConfigurationService(
+        _Factory(session),  # type: ignore[arg-type]
+        _Authentication(user_id="ordinary-submitter"),  # type: ignore[arg-type]
+        _Idempotency(),  # type: ignore[arg-type]
+        _protector(key_directory),
+        _Gateway(GatewayConnectionResult("SUCCESS", 1, None, "ok")),
+    )
+
+    submitted = submit_service.transition_model_config(
+        "token",
+        model.model_config_id,
+        ModelConfigLifecycleRequest(expected_version=4, reason="ready for review"),
+        "submission-key",
+        _context(),
+        action="submit_review",
+    )
+
+    assert submitted.lifecycle_status == "VALIDATING"
+    submission_audit = next(
+        value
+        for value in session.added
+        if isinstance(value, ModelConfigurationAudit)
+        and value.action == "MODEL_CONFIG_REVIEW_SUBMITTED"
+    )
+    assert submission_audit.actor_user_id == "ordinary-submitter"
+
+    review_service = ModelConfigurationService(
+        _Factory(session),  # type: ignore[arg-type]
+        _Authentication(user_id="independent-reviewer"),  # type: ignore[arg-type]
+        _Idempotency(),  # type: ignore[arg-type]
+        _protector(key_directory),
+        _Gateway(GatewayConnectionResult("SUCCESS", 1, None, "ok")),
+    )
+    activated = review_service.transition_model_config(
+        "token",
+        model.model_config_id,
+        ModelConfigLifecycleRequest(expected_version=5, reason="approved"),
+        "independent-activation-key",
+        _context(),
+        action="activate",
+    )
+
+    assert activated.lifecycle_status == "ACTIVE"
+    activation_audit = next(
+        value
+        for value in session.added
+        if isinstance(value, ModelConfigurationAudit)
+        and value.action == "MODEL_CONFIG_ACTIVATED"
+    )
+    assert activation_audit.details_json == {
+        "actor_user_id": "independent-reviewer",
+        "submitter_user_id": "ordinary-submitter",
+        "reviewer_user_id": "independent-reviewer",
+        "self_approval": False,
+    }
 
 
 def test_reviewer_can_return_invalid_configuration_for_repair(

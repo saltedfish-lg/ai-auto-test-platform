@@ -7871,7 +7871,7 @@ concurrency_rules:
   trigger: 发起配置和启用AI模型
   preconditions:
   - 发起人有模型配置权限
-  - 审核人具有独立模型版本审核角色
+  - 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   condition_expression: 模型版本与路由指针CAS；调用固化配置快照
   required_action: 在“配置和启用AI模型”中，并发校验必须满足：模型版本与路由指针CAS；调用固化配置快照。
   prohibited_action: null

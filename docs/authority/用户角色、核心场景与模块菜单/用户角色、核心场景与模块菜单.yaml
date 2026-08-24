@@ -3924,19 +3924,19 @@ business_scenarios:
   trigger: 发起配置和启用AI模型
   preconditions:
   - 发起人有模型配置权限
-  - 审核人具有独立模型版本审核角色
+  - 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   input: []
   main_flow:
   - 在平台级范围创建单一ModelConfig，选择固定白名单Provider、填写Provider原生model_name并加密保存Secret
   - 经ModelGateway和LiteLLM Proxy执行真实Connection Test并返回结构化结果，不改变生命周期
   - 使用MODEL_VERSION_REVIEW审核VALIDATING的同一ModelConfig并进入ACTIVE，不创建ModelConfigVersion
-  - 独立审核通过后将同一ModelConfig从VALIDATING推进到ACTIVE
+  - 非SUPER_ADMIN独立审核或ROLE-SUPER-ADMIN自审通过后将同一ModelConfig从VALIDATING推进到ACTIVE
   - 将一个ACTIVE ModelConfig设置为AI_EXPLORATION唯一平台级effective default
   - 记录创建、修改、Secret更新、启用、禁用、默认绑定和Connection Test不可变审计，且不记录Secret
   alternative_flows:
   - 当前不提供项目偏好、继承或fallback
   exception_flows:
-  - 凭证无效、真实连接测试失败、审核职责冲突、非ACTIVE默认绑定或默认模型禁用冲突时拒绝
+  - 凭证无效、真实连接测试失败、审核提交证据缺失、非SUPER_ADMIN自审、非ACTIVE默认绑定或默认模型禁用冲突时拒绝
   involved_entities:
   - ENT-MODEL-CONFIG
   - ENT-AUDIT
@@ -3948,7 +3948,7 @@ business_scenarios:
   - AI设置—Connection Test
   - AI设置—模型审核启用
   permission_checks:
-  - ModelConfig查看、创建、编辑、Connection Test、禁用和默认绑定由MODEL_CONFIGURATION_MANAGE维护；VALIDATING到ACTIVE仅由MODEL_VERSION_REVIEW独立审核。
+  - ModelConfig查看、创建、编辑、Connection Test、禁用和默认绑定由MODEL_CONFIGURATION_MANAGE维护；VALIDATING到ACTIVE仅由MODEL_VERSION_REVIEW审核，非SUPER_ADMIN必须职责分离，ROLE-SUPER-ADMIN允许自审。
   data_scope_checks:
   - ModelConfig与AI_EXPLORATION默认绑定均属于平台级范围；模型管理员配置权限不授予项目业务内容访问。
   concurrency_checks:
@@ -7015,14 +7015,14 @@ scenario_steps:
   scenario_id: USR-SCN-070
   sequence: 4
   actor: SYS-PLATFORM-SERVICE
-  action: 独立审核通过后将同一ModelConfig从VALIDATING推进到ACTIVE
-  expected_result: “独立审核通过后将同一ModelConfig从VALIDATING推进到ACTIVE”对应的数据或配置已在当前步骤的提交边界内保存；未涉及字段和对象保持不变。 仅校验本动作明确涉及的对象/关系/技术投影；未在动作中出现的后续状态不得提前出现。 权限、数据范围、资源或并发前置不满足时，业务副作用必须为零；重复命令按场景幂等规则返回既有结果。
+  action: 非SUPER_ADMIN独立审核或ROLE-SUPER-ADMIN自审通过后将同一ModelConfig从VALIDATING推进到ACTIVE
+  expected_result: “非SUPER_ADMIN独立审核或ROLE-SUPER-ADMIN自审通过后将同一ModelConfig从VALIDATING推进到ACTIVE”对应的数据或配置已在当前步骤的提交边界内保存；未涉及字段和对象保持不变。 仅校验本动作明确涉及的对象/关系/技术投影；未在动作中出现的后续状态不得提前出现。 权限、数据范围、资源或并发前置不满足时，业务副作用必须为零；重复命令按场景幂等规则返回既有结果。
     本步骤记录关联trace/事件；最终业务审计只在场景明确的审计提交步骤完成。
-  immediate_result: “独立审核通过后将同一ModelConfig从VALIDATING推进到ACTIVE”对应的数据或配置已在当前步骤的提交边界内保存；未涉及字段和对象保持不变。
+  immediate_result: “非SUPER_ADMIN独立审核或ROLE-SUPER-ADMIN自审通过后将同一ModelConfig从VALIDATING推进到ACTIVE”对应的数据或配置已在当前步骤的提交边界内保存；未涉及字段和对象保持不变。
   state_assertion: 仅校验本动作明确涉及的对象/关系/技术投影；未在动作中出现的后续状态不得提前出现。
   side_effect_guard: 权限、数据范围、资源或并发前置不满足时，业务副作用必须为零；重复命令按场景幂等规则返回既有结果。
   audit_commit: 本步骤记录关联trace/事件；最终业务审计只在场景明确的审计提交步骤完成。
-  failure_result: 动作“独立审核通过后将同一ModelConfig从VALIDATING推进到ACTIVE”失败时保留该动作前的稳定状态，返回该场景已声明的权限、范围、资源、并发或外部失败原因；不得推测新原因码。
+  failure_result: 动作“非SUPER_ADMIN独立审核或ROLE-SUPER-ADMIN自审通过后将同一ModelConfig从VALIDATING推进到ACTIVE”失败时保留该动作前的稳定状态，返回该场景已声明的权限、范围、资源、并发或外部失败原因；不得推测新原因码。
 - step_id: USR-SCN-070-STEP-05
   scenario_id: USR-SCN-070
   sequence: 5
@@ -9667,7 +9667,7 @@ scenario_variants:
   - 在平台级范围创建单一ModelConfig，选择固定白名单Provider、填写Provider原生model_name并加密保存Secret
   - 经ModelGateway和LiteLLM Proxy执行真实Connection Test并返回结构化结果，不改变生命周期
   - 使用MODEL_VERSION_REVIEW审核VALIDATING的同一ModelConfig并进入ACTIVE，不创建ModelConfigVersion
-  - 独立审核通过后将同一ModelConfig从VALIDATING推进到ACTIVE
+  - 非SUPER_ADMIN独立审核或ROLE-SUPER-ADMIN自审通过后将同一ModelConfig从VALIDATING推进到ACTIVE
   - 将一个ACTIVE ModelConfig设置为AI_EXPLORATION唯一平台级effective default
   - 记录创建、修改、Secret更新、启用、禁用、默认绑定和Connection Test不可变审计，且不记录Secret
 - variant_id: USR-SCN-070-VAR-PERMISSION
@@ -9685,11 +9685,11 @@ scenario_variants:
 - variant_id: USR-SCN-070-VAR-EXCEPTION
   scenario_id: USR-SCN-070
   variant_type: EXCEPTION
-  description: 配置和启用AI模型—EXCEPTION分支：凭证无效、真实连接测试失败、审核职责冲突、非ACTIVE默认绑定或默认模型禁用冲突时拒绝
+  description: 配置和启用AI模型—EXCEPTION分支：凭证无效、真实连接测试失败、审核提交证据缺失、非SUPER_ADMIN自审、非ACTIVE默认绑定或默认模型禁用冲突时拒绝
   expected_result: ENT-MODEL-CONFIG保持异常发生前最后稳定状态或进入场景明确失败状态；不宣称后续步骤成功；按“修复前置原因后使用幂等命令重试；不得改写已提交历史。”提供恢复。
-  trigger_condition: 凭证无效、真实连接测试失败、审核职责冲突、非ACTIVE默认绑定或默认模型禁用冲突时拒绝
+  trigger_condition: 凭证无效、真实连接测试失败、审核提交证据缺失、非SUPER_ADMIN自审、非ACTIVE默认绑定或默认模型禁用冲突时拒绝
   flow:
-  - 检测“配置和启用AI模型”异常：凭证无效、真实连接测试失败、审核职责冲突、非ACTIVE默认绑定或默认模型禁用冲突时拒绝
+  - 检测“配置和启用AI模型”异常：凭证无效、真实连接测试失败、审核提交证据缺失、非SUPER_ADMIN自审、非ACTIVE默认绑定或默认模型禁用冲突时拒绝
   - 停止未提交的后续步骤并按事务策略处理ENT-MODEL-CONFIG
   - 记录失败结果和可恢复入口
 - variant_id: USR-SCN-070-VAR-CONCURRENCY
@@ -9722,10 +9722,10 @@ scenario_variants:
   variant_type: SECURITY
   description: 配置和启用AI模型—SECURITY分支：“配置和启用AI模型”请求包含越权范围、敏感数据访问、无效凭证或不受信系统主体。
   expected_result: 不返回未授权敏感内容，不创建或改变ENT-MODEL-CONFIG；日志和审计不包含Secret明文；拒绝结果可追溯到具体权限/范围控制。
-  security_control: ModelConfig查看、创建、编辑、Connection Test、禁用和默认绑定由MODEL_CONFIGURATION_MANAGE维护；VALIDATING到ACTIVE仅由MODEL_VERSION_REVIEW独立审核。；ModelConfig与AI_EXPLORATION默认绑定均属于平台级范围；模型管理员配置权限不授予项目业务内容访问。
+  security_control: ModelConfig查看、创建、编辑、Connection Test、禁用和默认绑定由MODEL_CONFIGURATION_MANAGE维护；VALIDATING到ACTIVE仅由MODEL_VERSION_REVIEW审核，非SUPER_ADMIN必须职责分离，ROLE-SUPER-ADMIN允许自审。；ModelConfig与AI_EXPLORATION默认绑定均属于平台级范围；模型管理员配置权限不授予项目业务内容访问。
   trigger_condition: “配置和启用AI模型”请求包含越权范围、敏感数据访问、无效凭证或不受信系统主体。
   flow:
-  - 执行安全控制：ModelConfig查看、创建、编辑、Connection Test、禁用和默认绑定由MODEL_CONFIGURATION_MANAGE维护；VALIDATING到ACTIVE仅由MODEL_VERSION_REVIEW独立审核。；ModelConfig与AI_EXPLORATION默认绑定均属于平台级范围；模型管理员配置权限不授予项目业务内容访问。
+  - 执行安全控制：ModelConfig查看、创建、编辑、Connection Test、禁用和默认绑定由MODEL_CONFIGURATION_MANAGE维护；VALIDATING到ACTIVE仅由MODEL_VERSION_REVIEW审核，非SUPER_ADMIN必须职责分离，ROLE-SUPER-ADMIN允许自审。；ModelConfig与AI_EXPLORATION默认绑定均属于平台级范围；模型管理员配置权限不授予项目业务内容访问。
   - 在敏感数据或业务副作用产生前拒绝请求
   - 写入脱敏安全审计并保持ENT-MODEL-CONFIG不变
 - variant_id: USR-SCN-071-VAR-NORMAL
@@ -10427,7 +10427,7 @@ scenario_permissions:
   permission_rule: SYS-ARTIFACT-SERVICE发起“制品保留和清理”前必须具备对应菜单、操作或服务授权；系统主体只按自身服务身份执行；越权时拒绝且不产生业务写入。
 - mapping_id: USR-SCN-070-PERM-0035
   scenario_id: USR-SCN-070
-  permission_rule: ModelConfig查看、创建、编辑、Connection Test、禁用和默认绑定由MODEL_CONFIGURATION_MANAGE维护；VALIDATING到ACTIVE仅由MODEL_VERSION_REVIEW独立审核。
+  permission_rule: ModelConfig查看、创建、编辑、Connection Test、禁用和默认绑定由MODEL_CONFIGURATION_MANAGE维护；VALIDATING到ACTIVE仅由MODEL_VERSION_REVIEW审核，非SUPER_ADMIN必须职责分离，ROLE-SUPER-ADMIN允许自审。
 - mapping_id: USR-SCN-071-PERM-0036
   scenario_id: USR-SCN-071
   permission_rule: SYS-AI-ORCHESTRATOR发起“模型调用失败与降级”前必须具备对应菜单、操作或服务授权；系统主体只按自身服务身份执行；越权时拒绝且不产生业务写入。
@@ -29275,7 +29275,7 @@ traceability_index:
   evidence_ids:
   - ENT-MODEL-CONFIG
   - ENT-AUDIT
-  - ModelConfig查看、创建、编辑、Connection Test、禁用和默认绑定由MODEL_CONFIGURATION_MANAGE维护；VALIDATING到ACTIVE仅由MODEL_VERSION_REVIEW独立审核。
+  - ModelConfig查看、创建、编辑、Connection Test、禁用和默认绑定由MODEL_CONFIGURATION_MANAGE维护；VALIDATING到ACTIVE仅由MODEL_VERSION_REVIEW审核，非SUPER_ADMIN必须职责分离，ROLE-SUPER-ADMIN允许自审。
   source_status: SUPPORTED_BY_MULTIPLE_SOURCES
 - trace_id: TR-USR-SCN-071
   target_type: SCENARIO

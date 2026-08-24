@@ -13808,7 +13808,7 @@ paths:
   /api/v1/model-config/{id}/activate:
     post:
       operationId: activate_model_config
-      summary: 独立审核并激活模型配置
+      summary: 审核并激活模型配置（非SUPER_ADMIN职责分离，SUPER_ADMIN允许自审）
       tags:
       - 模型配置
       parameters:

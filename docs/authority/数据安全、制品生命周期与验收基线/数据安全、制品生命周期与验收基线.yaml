@@ -29257,7 +29257,7 @@ acceptance_items:
   current_scope: IN_SCOPE_MANDATORY
   preconditions:
   - 发起人有模型配置权限
-  - 审核人具有独立模型版本审核角色
+  - 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   test_data:
   - 使用专用测试数据，不粘贴明文秘密
   actor: ROLE-MODEL-ADMIN
@@ -58717,7 +58717,7 @@ acceptance_items:
   current_scope: IN_SCOPE_MANDATORY
   preconditions:
   - 发起人有模型配置权限
-  - 审核人具有独立模型版本审核角色
+  - 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   test_data:
   - 使用专用测试数据，不粘贴明文秘密
   actor: 具备对应权限的验收人员
@@ -58759,7 +58759,7 @@ acceptance_items:
   current_scope: IN_SCOPE_MANDATORY
   preconditions:
   - 发起人有模型配置权限
-  - 审核人具有独立模型版本审核角色
+  - 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   test_data:
   - 使用专用测试数据，不粘贴明文秘密
   actor: 具备对应权限的验收人员
@@ -58842,7 +58842,7 @@ acceptance_items:
   current_scope: IN_SCOPE_MANDATORY
   preconditions:
   - 发起人有模型配置权限
-  - 审核人具有独立模型版本审核角色
+  - 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   test_data:
   - 使用专用测试数据，不粘贴明文秘密
   actor: 具备对应权限的验收人员
@@ -58883,7 +58883,7 @@ acceptance_items:
   current_scope: IN_SCOPE_MANDATORY
   preconditions:
   - 发起人有模型配置权限
-  - 审核人具有独立模型版本审核角色
+  - 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   test_data:
   - 使用专用测试数据，不粘贴明文秘密
   actor: 具备对应权限的验收人员
@@ -58924,7 +58924,7 @@ acceptance_items:
   current_scope: IN_SCOPE_MANDATORY
   preconditions:
   - 发起人有模型配置权限
-  - 审核人具有独立模型版本审核角色
+  - 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   test_data:
   - 使用专用测试数据，不粘贴明文秘密
   actor: 具备对应权限的验收人员
@@ -58967,7 +58967,7 @@ acceptance_items:
   current_scope: IN_SCOPE_MANDATORY
   preconditions:
   - 发起人有模型配置权限
-  - 审核人具有独立模型版本审核角色
+  - 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   - 平台存储/审计：REQUIRED；predicate=TRUE; 平台存储/审计不可用时不得执行对应业务副作用；进入明确的PRESTART_BLOCKED、WAITING_RESOURCE或场景失败结果，并记录资源原因。
   test_data:
   - 使用专用测试数据，不粘贴明文秘密
@@ -59011,7 +59011,7 @@ acceptance_items:
   current_scope: IN_SCOPE_MANDATORY
   preconditions:
   - 发起人有模型配置权限
-  - 审核人具有独立模型版本审核角色
+  - 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   test_data:
   - 使用专用测试数据，不粘贴明文秘密
   actor: 具备对应权限的验收人员
@@ -59269,7 +59269,7 @@ acceptance_items:
   current_scope: IN_SCOPE_MANDATORY
   preconditions:
   - 发起人有模型配置权限
-  - 审核人具有独立模型版本审核角色
+  - 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   test_data:
   - 使用专用测试数据，不粘贴明文秘密
   actor: 具备对应权限的验收人员
@@ -59314,7 +59314,7 @@ acceptance_items:
   current_scope: IN_SCOPE_MANDATORY
   preconditions:
   - 发起人有模型配置权限
-  - 审核人具有独立模型版本审核角色
+  - 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   test_data:
   - 使用专用测试数据，不粘贴明文秘密
   actor: 具备对应权限的验收人员
@@ -59358,7 +59358,7 @@ acceptance_items:
   current_scope: IN_SCOPE_MANDATORY
   preconditions:
   - 发起人有模型配置权限
-  - 审核人具有独立模型版本审核角色
+  - 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   test_data:
   - 使用专用测试数据，不粘贴明文秘密
   actor: 具备对应权限的验收人员
@@ -59401,7 +59401,7 @@ acceptance_items:
   current_scope: IN_SCOPE_MANDATORY
   preconditions:
   - 发起人有模型配置权限
-  - 审核人具有独立模型版本审核角色
+  - 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   test_data:
   - 使用专用测试数据，不粘贴明文秘密
   actor: 具备对应权限的验收人员
@@ -59484,7 +59484,7 @@ acceptance_items:
   current_scope: IN_SCOPE_MANDATORY
   preconditions:
   - 发起人有模型配置权限
-  - 审核人具有独立模型版本审核角色
+  - 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   test_data:
   - 使用专用测试数据，不粘贴明文秘密
   actor: 具备对应权限的验收人员
@@ -59656,7 +59656,7 @@ acceptance_items:
   current_scope: IN_SCOPE_MANDATORY
   preconditions:
   - 发起人有模型配置权限
-  - 审核人具有独立模型版本审核角色
+  - 审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交
   test_data:
   - 使用专用测试数据，不粘贴明文秘密
   actor: 具备对应权限的验收人员
@@ -74386,7 +74386,7 @@ acceptance_steps:
 - acceptance_step_id: ACC-00121-STEP-04
   acceptance_id: ACC-00121
   sequence: 4
-  action: 独立审核通过后将同一ModelConfig从VALIDATING推进到ACTIVE
+  action: 非SUPER_ADMIN独立审核或ROLE-SUPER-ADMIN自审通过后将同一ModelConfig从VALIDATING推进到ACTIVE
 - acceptance_step_id: ACC-00121-STEP-05
   acceptance_id: ACC-00121
   sequence: 5
@@ -96224,7 +96224,7 @@ acceptance_expected_results:
 - expected_result_id: ACC-00786-EXP-01
   acceptance_id: ACC-00786
   sequence: 1
-  expected_result: ModelConfig查看、创建、编辑、Connection Test、禁用和默认绑定由MODEL_CONFIGURATION_MANAGE维护；VALIDATING到ACTIVE仅由MODEL_VERSION_REVIEW独立审核。
+  expected_result: ModelConfig查看、创建、编辑、Connection Test、禁用和默认绑定由MODEL_CONFIGURATION_MANAGE维护；VALIDATING到ACTIVE仅由MODEL_VERSION_REVIEW审核，非SUPER_ADMIN必须职责分离，ROLE-SUPER-ADMIN允许自审。
 - expected_result_id: ACC-00787-EXP-01
   acceptance_id: ACC-00787
   sequence: 1
@@ -96240,7 +96240,7 @@ acceptance_expected_results:
 - expected_result_id: ACC-00789-EXP-02
   acceptance_id: ACC-00789
   sequence: 2
-  expected_result: 在“配置和启用AI模型”中，前置条件必须满足：审核人具有独立模型版本审核角色。
+  expected_result: 在“配置和启用AI模型”中，前置条件必须满足：审核人具有MODEL_VERSION_REVIEW；非SUPER_ADMIN必须与提交人分离，ROLE-SUPER-ADMIN可审核本人提交。
 - expected_result_id: ACC-00789-EXP-03
   acceptance_id: ACC-00789
   sequence: 3
@@ -96248,7 +96248,7 @@ acceptance_expected_results:
 - expected_result_id: ACC-00790-EXP-01
   acceptance_id: ACC-00790
   sequence: 1
-  expected_result: 在“配置和启用AI模型”中，异常流程必须满足：凭证无效、真实连接测试失败、审核职责冲突、非ACTIVE默认绑定或默认模型禁用冲突时拒绝。
+  expected_result: 在“配置和启用AI模型”中，异常流程必须满足：凭证无效、真实连接测试失败、审核提交证据缺失、非SUPER_ADMIN自审、非ACTIVE默认绑定或默认模型禁用冲突时拒绝。
 - expected_result_id: ACC-00791-EXP-01
   acceptance_id: ACC-00791
   sequence: 1
@@ -96320,7 +96320,7 @@ acceptance_expected_results:
 - expected_result_id: ACC-00797-EXP-02
   acceptance_id: ACC-00797
   sequence: 2
-  expected_result: 动作“独立审核通过后将同一ModelConfig从VALIDATING推进到ACTIVE”完成并形成可追溯结果。
+  expected_result: 动作“非SUPER_ADMIN独立审核或ROLE-SUPER-ADMIN自审通过后将同一ModelConfig从VALIDATING推进到ACTIVE”完成并形成可追溯结果。
 - expected_result_id: ACC-00797-EXP-03
   acceptance_id: ACC-00797
   sequence: 3
