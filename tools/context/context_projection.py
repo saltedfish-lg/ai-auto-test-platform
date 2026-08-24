@@ -71,7 +71,10 @@ def _required_authority_refs(root:Path,refs:list[dict[str,Any]],relationship:dic
 
     required=[_compact_required_ref(root,by_key[key]) for key in sorted(required_keys)]
     coverage={
+        'authority_role_strategy':'ALL_ROUTED_CONSERVATIVE',
         'routed_core_authority_count':len(routed_paths),
+        'routed_supporting_authority_count':0,
+        'routed_supporting_authorities':[],
         'covered_core_authority_count':len(set(routed_paths)-set(missing_core_authorities)),
         'missing_core_authorities':sorted(set(missing_core_authorities)),
         'relationship_required_count':len(relationship_required_keys),
@@ -130,7 +133,7 @@ def enrich_task_context(root:Path,ctx:dict[str,Any])->dict[str,Any]:
     out['authority_index']=index_state; out['authority_refs']=refs
     out['required_authority_refs']=required_refs; out['loaded_authority_refs']=loaded_refs; out['missing_required_authority_refs']=missing_required_refs
     out['required_fact_coverage']=required_fact_coverage
-    out['authority_slice']={**preview,'query_status':query.get('status'),'query_diagnostics':diagnostics,'routed_core_authorities':sorted(set(authorities)),'unrepresented_routed_authorities':unrepresented,'direct_read_required':unavailable_sources}
+    out['authority_slice']={**preview,'query_status':query.get('status'),'query_diagnostics':diagnostics,'authority_role_strategy':'ALL_ROUTED_CONSERVATIVE','routed_core_authorities':sorted(set(authorities)),'routed_supporting_authorities':[],'unrepresented_routed_authorities':unrepresented,'direct_read_required':unavailable_sources}
     out['repo_intelligence']=repo
     expansion_reason=[]
     if relationship_incomplete: expansion_reason.append('UNRESOLVED_AUTHORITY_RELATIONSHIP')

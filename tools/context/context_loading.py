@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +30,10 @@ _DEFAULT: dict[str, Any] = {
         'source_roots':['docs/authority'], 'cache_path':'.runtime/context-index/authority-index.sqlite3',
         'extensions':['.yaml','.yml','.json','.csv'], 'exclude_patterns':[],
         'canonical_identity_keys':['record_id','canonical_id','structural_id','id'],
+        'reference_fields': {
+            'explicit':['reference_id','reference_ids','related_id','related_ids','depends_on','depends_on_ids','parent_id','parent_ids','child_id','child_ids','source_id','target_id'],
+            'suffixes':['_ref','_refs','_reference','_references'],
+        },
         'identity_strategies':{},
     },
     'repo_intelligence': {'provider':'none','authority_role':'forbidden','max_results':20,'include_paths':[],'exclude_paths':['docs/authority/**','.env*']},
@@ -45,12 +50,29 @@ def _merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-def load_context_efficiency_config(root: Path) -> dict[str, Any]:
-    path = root.resolve()/CONFIG_PATH; raw: dict[str, Any] = {}
+@lru_cache(maxsize=64)
+def _load_context_efficiency_config_cached(root_text: str, mtime_ns: int, size: int) -> dict[str, Any]:
+    root = Path(root_text)
+    path = root / CONFIG_PATH
+    raw: dict[str, Any] = {}
     if path.is_file():
         loaded = yaml.safe_load(path.read_text(encoding='utf-8')) or {}
-        if isinstance(loaded, dict): raw = loaded
+        if isinstance(loaded, dict):
+            raw = loaded
     return _merge(_DEFAULT, raw)
+
+
+def clear_context_efficiency_config_cache() -> None:
+    _load_context_efficiency_config_cached.cache_clear()
+
+
+def load_context_efficiency_config(root: Path) -> dict[str, Any]:
+    root = root.resolve()
+    path = root / CONFIG_PATH
+    if path.is_file():
+        stat = path.stat()
+        return _load_context_efficiency_config_cached(str(root), int(stat.st_mtime_ns), int(stat.st_size))
+    return _load_context_efficiency_config_cached(str(root), -1, -1)
 
 
 def serialized_chars(value: Any) -> int:

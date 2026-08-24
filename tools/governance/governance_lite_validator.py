@@ -483,6 +483,32 @@ def _versioned_governance_test_naming_errors(root: Path) -> list[str]:
                 errors.append(f'{path.relative_to(root)}::{name}: versioned governance test function name')
     return errors
 
+
+
+def _skill_markdown_structure_errors(root: Path) -> list[str]:
+    errors: list[str] = []
+    skill_paths = list((root / '.agents/skills').glob('**/SKILL.md')) + list((root / 'agent-governance-lite/skills').glob('**/SKILL.md'))
+    for path in skill_paths:
+        try:
+            text = path.read_text(encoding='utf-8')
+        except Exception as exc:
+            errors.append(f'{path.relative_to(root)}: unreadable markdown {exc}')
+            continue
+        if text.count('```') % 2:
+            errors.append(f'{path.relative_to(root)}: unclosed markdown code fence')
+        numbers = [int(m.group(1)) for m in re.finditer(r'(?m)^(\d+)\\.\\s', text)]
+        if numbers and numbers != list(range(numbers[0], numbers[0] + len(numbers))):
+            errors.append(f'{path.relative_to(root)}: non-monotonic numbered rules')
+        if len(numbers) != len(set(numbers)):
+            errors.append(f'{path.relative_to(root)}: duplicated numbered rules')
+    pairs = [
+        (root/'.agents/skills/context-efficiency/SKILL.md', root/'agent-governance-lite/skills/context-efficiency/SKILL.md')
+    ]
+    for left, right in pairs:
+        if left.is_file() and right.is_file() and left.read_text(encoding='utf-8') != right.read_text(encoding='utf-8'):
+            errors.append(f'{left.relative_to(root)} and {right.relative_to(root)}: skill copies out of sync')
+    return errors
+
 def validate(root: Path) -> dict:
     root = root.resolve(); errors: list[str] = []
     legacy_profile = root / '.agent'
@@ -509,7 +535,7 @@ def validate(root: Path) -> dict:
         head = '\n'.join(sp.read_text(encoding='utf-8').splitlines()[:8])
         if not re.search(rf'(?m)^name:\s*{re.escape(skill)}\s*$', head): errors.append(f'{sp.relative_to(root)}: frontmatter name mismatch')
 
-    errors.extend(_cross_reference_errors(root)); errors.extend(_profile_errors(root)); errors.extend(_hardcode_errors(root)); errors.extend(_versioned_governance_test_naming_errors(root))
+    errors.extend(_cross_reference_errors(root)); errors.extend(_profile_errors(root)); errors.extend(_hardcode_errors(root)); errors.extend(_versioned_governance_test_naming_errors(root)); errors.extend(_skill_markdown_structure_errors(root))
     for rel in GENERIC_ROOTS:
         for f in _text_files(root / rel):
             if f.name == 'governance_lite_validator.py': continue
@@ -552,6 +578,7 @@ def validate(root: Path) -> dict:
         'gate_freshness': 'PASS' if freshness_ok else 'FAIL',
         'product_decision_block': 'PASS' if product_block_ok else 'FAIL',
         'standalone_template': 'PASS' if not standalone_errors else 'FAIL',
+        'skill_markdown_structure': 'PASS' if not _skill_markdown_structure_errors(root) else 'FAIL',
     }
 
 

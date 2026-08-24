@@ -15,3 +15,5 @@ description: Load the minimum relevant context first, then expand precisely unti
 8. `CONTEXT_UNAVAILABLE` means a required fact is genuinely missing/unreadable; stop guessing and report the missing fact.
 9. Repo Intelligence remains code-location assistance only. It cannot read Authority/Secrets or override Governance facts.
 10. Preserve complete raw logs/artifacts outside model context when useful; only the model-facing representation should be projected/deduplicated. Source-code `symbol-first` and test `relevant-first` are Agent/tool guidance in Phase 1; the Runtime does not claim automatic AST/LSP symbol slicing or automatic relevant-test extraction.
+11. `references` are broad search/relevance hints; only structured `reference_ids` may create Authority Relationship Closure edges. Free-text ID mentions never become relationship facts.
+12. Routed Authority role classification is currently conservative when no reliable role metadata exists: `ALL_ROUTED_CONSERVATIVE`; do not claim precise CORE/SUPPORTING separation unless Project routing metadata explicitly supports it.

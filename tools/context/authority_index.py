@@ -13,9 +13,9 @@ from typing import Any, Iterable, Iterator
 
 import yaml
 
-from .context_loading import load_context_efficiency_config
+from .context_loading import clear_context_efficiency_config_cache, load_context_efficiency_config
 
-_ID_VALUE = re.compile(r'\b[A-Z][A-Z0-9_]{1,24}-[A-Z0-9][A-Z0-9._-]*\b')
+_ID_VALUE = re.compile(r'(?<![A-Za-z0-9])(?:[A-Za-z][A-Za-z0-9]{0,31}(?:[-_.:][A-Za-z0-9][A-Za-z0-9_.:-]{0,95})+)(?![A-Za-z0-9])')
 _CJK = re.compile(r'[\u3400-\u9fff]+')
 _WORD = re.compile(r'[A-Za-z0-9_][A-Za-z0-9_.:/{}~-]*')
 _ENDPOINT = re.compile(r'(?<![A-Za-z0-9_])/(?:[A-Za-z0-9._~{}:-]+/)*[A-Za-z0-9._~{}:-]+')
@@ -29,7 +29,7 @@ _STOP = {
     'the','and','for','with','from','into','this','that','task','change','modify','update','fix','add','remove',
     '实现','修改','新增','删除','调整','修复','功能','规则','页面','代码','任务','需要','进行','当前','平台',
 }
-_INDEX_SCHEMA_VERSION = '3'
+_INDEX_SCHEMA_VERSION = '5'
 _MISSING = object()
 
 
@@ -155,16 +155,26 @@ def _ids_in(value: Any, *, max_ids: int = 80) -> list[str]:
 
 
 @lru_cache(maxsize=32)
-def _identity_strategy_map(root_text: str) -> dict[str, Any]:
-    # One index build runs against one immutable Project Profile snapshot. Caching avoids
-    # tens of thousands of repeated YAML loads while the config remains the sole source.
+def _authority_index_config_map(root_text: str) -> dict[str, Any]:
+    # One index build uses one Project Profile snapshot.  Keep parsed YAML out of the
+    # per-record hot path; build/rebuild explicitly clears this cache.
     root = Path(root_text)
-    strategies = load_context_efficiency_config(root).get('authority_index', {}).get('identity_strategies') or {}
-    return dict(strategies) if isinstance(strategies, dict) else {}
+    raw = load_context_efficiency_config(root).get('authority_index', {}) or {}
+    return dict(raw) if isinstance(raw, dict) else {}
+
+
+def _authority_index_config_signature(root: Path) -> str:
+    payload = json.dumps(load_context_efficiency_config(root).get('authority_index', {}) or {}, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
+    return hashlib.sha256(payload.encode('utf-8')).hexdigest()
+
+
+def clear_authority_index_runtime_caches() -> None:
+    clear_context_efficiency_config_cache()
+    _authority_index_config_map.cache_clear()
 
 
 def _identity_strategy(root: Path, path: Path, section: str) -> dict[str, list[str]]:
-    strategies = _identity_strategy_map(str(root))
+    strategies = _authority_index_config_map(str(root)).get('identity_strategies') or {}
     basename = path.name
     if section == 'operations' and basename.lower().startswith('openapi'):
         raw = strategies.get('openapi.operations') or {}
@@ -208,24 +218,21 @@ def _identity_key_affinity(key: str, section: str) -> int:
     return len(key_tokens & section_tokens)
 
 
-def _canonical_identity(root: Path, path: Path, section: str, record: dict[str, Any]) -> tuple[str | None, str | None, list[str]]:
+def _canonical_identity(root: Path, path: Path, section: str, record: dict[str, Any]) -> tuple[str | None, str | None]:
+    """Resolve only the current record identity.
+
+    Identity strategy secondary/composite fields are identity metadata, not relationship
+    evidence.  Relationship edges are extracted independently from declared structured
+    reference fields by ``_structured_reference_ids``.
+    """
     strategy = _identity_strategy(root, path, section)
-    reference_ids: list[str] = []
-    for key in strategy['secondary']:
-        value = _identity_value(record, key)
-        if value and value not in reference_ids:
-            reference_ids.append(value)
     for key in strategy['primary']:
         value = _identity_value(record, key)
         if value:
-            for composite_key in strategy['composite']:
-                composite_value = _identity_value(record, composite_key)
-                if composite_value and composite_value != value and composite_value not in reference_ids:
-                    reference_ids.append(composite_value)
-            return value, key, reference_ids
+            return value, key
     # Generic fallback keys come from Project Profile. Business-specific identity names belong
     # in configuration, never in the Context Efficiency runtime algorithm.
-    configured_keys = load_context_efficiency_config(root).get('authority_index', {}).get('canonical_identity_keys') or []
+    configured_keys = _authority_index_config_map(str(root)).get('canonical_identity_keys') or []
     lowered = {str(key).lower(): (str(key), value) for key, value in record.items()}
     candidates=[]
     for order,configured in enumerate(configured_keys):
@@ -237,8 +244,45 @@ def _canonical_identity(root: Path, path: Path, section: str, record: dict[str, 
             candidates.append((_identity_key_affinity(original_key,section),-order,original_key,str(value).strip()))
     if candidates:
         _,_,original_key,value=max(candidates)
-        return value,original_key,reference_ids
-    return None, None, reference_ids
+        return value,original_key
+    return None, None
+
+
+def _reference_field_config(root: Path) -> tuple[set[str], tuple[str, ...]]:
+    cfg = _authority_index_config_map(str(root)).get('reference_fields') or {}
+    explicit = {str(x).lower() for x in (cfg.get('explicit') or [])}
+    suffixes = tuple(str(x).lower() for x in (cfg.get('suffixes') or []))
+    return explicit, suffixes
+
+
+def _structured_reference_values(value: Any) -> list[str]:
+    out: list[str] = []
+    values = value if isinstance(value, list) else [value]
+    for item in values:
+        if isinstance(item, (str, int)) and str(item).strip():
+            text = str(item).strip()
+            if text not in out:
+                out.append(text)
+    return out
+
+
+def _structured_reference_ids(root: Path, record: dict[str, Any], canonical_key: str | None) -> list[str]:
+    # Relationship edges must only come from declared structured reference fields.
+    # Secondary identities (for example permission_code, role_id, module_id, domain_id)
+    # identify the same record's additional identity dimensions; they do not create
+    # graph edges unless the Authority schema explicitly declares the field as a
+    # relationship field.
+    explicit, suffixes = _reference_field_config(root)
+    refs: list[str] = []
+    for key, value in record.items():
+        key_l = str(key).lower()
+        is_declared_reference = key_l in explicit or any(key_l.endswith(suffix) for suffix in suffixes)
+        if not is_declared_reference:
+            continue
+        for ref in _structured_reference_values(value):
+            if ref not in refs:
+                refs.append(ref)
+    return refs
 
 
 def _title(record: dict[str, Any]) -> str:
@@ -263,13 +307,16 @@ def _record_tuple(
     structural_id: str | None = None,
 ) -> tuple[Any, ...]:
     rel = path.relative_to(root).as_posix()
-    canonical_id, canonical_key, identity_references = _canonical_identity(root, path, section, record)
+    canonical_id, canonical_key = _canonical_identity(root, path, section, record)
     references = _ids_in(record)
-    for value in identity_references:
+    reference_ids = _structured_reference_ids(root, record, canonical_key)
+    for value in reference_ids:
         if value not in references:
             references.append(value)
     if canonical_id and canonical_id in references:
         references.remove(canonical_id)
+    if canonical_id and canonical_id in reference_ids:
+        reference_ids.remove(canonical_id)
     domains: list[str] = []
     for key, value in record.items():
         if 'domain' not in str(key).lower():
@@ -298,7 +345,7 @@ def _record_tuple(
         title,
         json.dumps(domains[:16], ensure_ascii=False),
         json.dumps(references, ensure_ascii=False),
-        json.dumps(references, ensure_ascii=False),
+        json.dumps(reference_ids, ensure_ascii=False),
         search_text,
     )
 
@@ -342,7 +389,7 @@ def _iter_yaml_json_records(root: Path, path: Path, data: Any) -> Iterator[tuple
                             structural_id=f'HTTP:{method_name.upper()} {route_text}',
                         )
             continue
-        canonical_id, _, _ = _canonical_identity(root, path, sec, value)
+        canonical_id, _ = _canonical_identity(root, path, sec, value)
         if canonical_id:
             yield _record_tuple(root=root, path=path, section=sec, selector=_pointer(sec), record=value)
             continue
@@ -433,6 +480,9 @@ def authority_index_status(root: Path) -> dict[str, Any]:
         if meta.get('schema_version') != _INDEX_SCHEMA_VERSION:
             status = 'INVALID'
             index_error = 'INDEX_SCHEMA_VERSION_MISMATCH'
+        elif meta.get('authority_index_config_signature') != _authority_index_config_signature(root):
+            status = 'STALE'
+            index_error = 'AUTHORITY_INDEX_CONFIG_CHANGED'
         elif meta.get('source_signature') != signature:
             status = 'STALE'
         else:
@@ -456,12 +506,12 @@ def authority_index_status(root: Path) -> dict[str, Any]:
 
 def build_authority_index(root: Path, *, force: bool = False) -> dict[str, Any]:
     root = root.resolve()
-    _identity_strategy_map.cache_clear()
+    clear_authority_index_runtime_caches()
     files = _authority_files(root)
     signature, source_rows = _signature(root, files)
     cache = _cache_path(root)
     index_state, meta, _ = _read_index_meta(cache)
-    if not force and index_state == 'OK' and meta.get('source_signature') == signature and meta.get('schema_version') == _INDEX_SCHEMA_VERSION:
+    if not force and index_state == 'OK' and meta.get('source_signature') == signature and meta.get('schema_version') == _INDEX_SCHEMA_VERSION and meta.get('authority_index_config_signature') == _authority_index_config_signature(root):
         parse_errors = json.loads(meta.get('parse_errors', '[]'))
         return {
             'kind': 'DERIVED_AUTHORITY_LOCATOR_INDEX',
@@ -556,6 +606,7 @@ def build_authority_index(root: Path, *, force: bool = False) -> dict[str, Any]:
             'schema_version': _INDEX_SCHEMA_VERSION,
             'kind': 'DERIVED_AUTHORITY_LOCATOR_INDEX',
             'source_signature': signature,
+            'authority_index_config_signature': _authority_index_config_signature(root),
             'record_count': str(record_count),
             'parse_errors': json.dumps(parse_errors, ensure_ascii=False),
             'generated_at': indexed_at,
@@ -1011,7 +1062,7 @@ def query_authority_result(
             score = 0
             reasons: list[str] = []
             endpoint_hits = [value for value in explicit_endpoints if value in identities or value.lower() in search]
-            exact_hits = [value for value in explicit_ids if value in identities or value.lower() in search]
+            exact_hits = [value for value in explicit_ids if value in identities]
             literal_identity_hits = [value for value in identities if _literal_identity_in_request(value, request)]
             if endpoint_hits:
                 score += 1200

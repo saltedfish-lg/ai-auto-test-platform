@@ -38,6 +38,9 @@ authority_index:
   extensions: [.yaml, .yml, .json, .csv]
   exclude_patterns: ['**/.governance-domain.yaml']
   canonical_identity_keys: [record_id, canonical_id, structural_id, id]
+  reference_fields:
+    explicit: [reference_id, reference_ids, related_id, related_ids, depends_on, depends_on_ids, parent_id, parent_ids, child_id, child_ids, source_id, target_id]
+    suffixes: [_ref, _refs, _reference, _references]
   identity_strategies: {}
 
 repo_intelligence:

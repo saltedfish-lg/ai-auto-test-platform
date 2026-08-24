@@ -38,6 +38,12 @@ authority_index:
   cache_path: .runtime/context-index/authority-index.sqlite3
   extensions: [.yaml, .yml, .json, .csv]
   canonical_identity_keys:
+    # Generic baseline (must remain available in production, not only fixtures).
+    - record_id
+    - canonical_id
+    - structural_id
+    - id
+    # Project extensions.
     - rule_id
     - decision_id
     - scenario_id
@@ -66,6 +72,11 @@ authority_index:
     - docs/authority/validation/**
     - '**/.governance-domain.yaml'
     - '**/*.governance-domain.yaml'
+  reference_fields:
+    # Generic references plus project fields that explicitly point to another Authority record.
+    # Identity/classification fields such as domain_id remain identities only and are not edges.
+    explicit: [reference_id, reference_ids, related_id, related_ids, depends_on, depends_on_ids, parent_id, parent_ids, child_id, child_ids, source_id, target_id, object_id, permission_code, permission_id, role_id]
+    suffixes: [_ref, _refs, _reference, _references]
   identity_strategies:
     operation-permission-mapping.csv:
       primary: [operationId]

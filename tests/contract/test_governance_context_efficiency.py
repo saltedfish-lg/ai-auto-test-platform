@@ -5,14 +5,17 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
+import pytest
 import yaml
 
 from tools.context.authority_index import (
     authority_index_status,
     authority_preview,
     build_authority_index,
+    clear_authority_index_runtime_caches,
     expand_authority_refs,
     query_authority_result,
     refs_by_id,
@@ -21,9 +24,11 @@ from tools.context.context_loading import (
     CONTEXT_EXPANSION_REQUIRED,
     CONTEXT_SUFFICIENT,
     CONTEXT_UNAVAILABLE,
+    clear_context_efficiency_config_cache,
     context_decision,
     ensure_context_history,
     history_summary,
+    load_context_efficiency_config,
     project_context,
 )
 from tools.context.context_projection import enrich_task_context
@@ -34,6 +39,16 @@ from tools.governance.task_governance import start
 
 GOVERNANCE_TEST_GROUP = 'routing'
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+
+@pytest.fixture(autouse=True)
+def _isolate_context_efficiency_runtime_state():
+    clear_authority_index_runtime_caches()
+    clear_context_efficiency_config_cache()
+    yield
+    clear_authority_index_runtime_caches()
+    clear_context_efficiency_config_cache()
+
 
 
 def _write_profile(root: Path, *, authorities: dict | None = None, initial_records: int = 8, preview_chars: int = 4000) -> None:
@@ -61,6 +76,10 @@ def _write_profile(root: Path, *, authorities: dict | None = None, initial_recor
                 'acceptance_id','requirement_id','capability_id','data_asset_id','architecture_decision_id',
                 'contract_id','gate_id','policy_id','module_id','menu_id','domain_id','object_id',
             ],
+            'reference_fields': {
+                'explicit':['reference_id','reference_ids','related_id','related_ids','depends_on','depends_on_ids','parent_id','parent_ids','child_id','child_ids','source_id','target_id','object_id','permission_code','permission_id','role_id'],
+                'suffixes':['_ref','_refs','_reference','_references'],
+            },
             'identity_strategies': {
                 'operation-permission-mapping.csv': {'primary':['operationId'],'secondary':['permission_code'],'composite':['operationId','permission_code']},
                 'role-permission-matrix.csv': {'primary':['mapping_id'],'secondary':['role_id','permission_id','permission_code']},
@@ -120,7 +139,7 @@ def test_authority_schema_aware_identity_for_operation_and_role_mapping(tmp_path
     op='docs/authority/operation-permission-mapping.csv'; role='docs/authority/role-permission-matrix.csv'; _write_profile(tmp_path,authorities={'p':{'domains':['RBAC','API_CONTRACT'],'paths':[op,role]}})
     p=tmp_path/op; p.parent.mkdir(parents=True); p.write_text('operationId,method,path,permission_code\nreset_user_credential,POST,/users/{id}/credential,USER_CREATE\n',encoding='utf-8')
     (tmp_path/role).write_text('mapping_id,role_id,permission_id,permission_code\nRPM-R3-0021,ROLE-ADMIN,TERM-PER-021,USER_CREATE\n',encoding='utf-8'); build_authority_index(tmp_path)
-    assert refs_by_id(tmp_path,'reset_user_credential')[0]['canonical_record_id']=='reset_user_credential'; assert refs_by_id(tmp_path,'RPM-R3-0021')[0]['canonical_record_id']=='RPM-R3-0021'; assert len(refs_by_id(tmp_path,'USER_CREATE'))==2
+    assert refs_by_id(tmp_path,'reset_user_credential')[0]['canonical_record_id']=='reset_user_credential'; assert refs_by_id(tmp_path,'RPM-R3-0021')[0]['canonical_record_id']=='RPM-R3-0021'; user_create_refs=refs_by_id(tmp_path,'USER_CREATE'); assert len(user_create_refs)==2; assert {ref['path'] for ref in user_create_refs}=={op,role}
 
 
 def test_routed_authority_file_minimum_recall_preserves_refs(tmp_path: Path) -> None:
@@ -265,7 +284,8 @@ def test_pytest_import_structure_uses_package_module() -> None:
 
 
 def test_context_not_sufficient_when_relationship_chain_unresolved(tmp_path: Path) -> None:
-    routed=_prepare_e2e_root(tmp_path); _write_profile(tmp_path, authorities={
+    routed=_prepare_e2e_root(tmp_path)
+    _write_profile(tmp_path, authorities={
         'auth':{'domains':['AUTHENTICATION','CREDENTIAL','SESSION'],'paths':[routed[0]]},
         'api':{'domains':['API_CONTRACT','AUTHORIZATION'],'paths':[routed[1],routed[2]]},
         'permission':{'domains':['RBAC','AUTHORIZATION'],'paths':[routed[3],routed[4]]},
@@ -277,7 +297,8 @@ def test_context_not_sufficient_when_relationship_chain_unresolved(tmp_path: Pat
 
 
 def test_relationship_closure_same_canonical_id(tmp_path: Path) -> None:
-    routed=_prepare_e2e_root(tmp_path); _write_profile(tmp_path, authorities={
+    routed=_prepare_e2e_root(tmp_path)
+    _write_profile(tmp_path, authorities={
         'all':{'domains':['AUTHENTICATION','CREDENTIAL','RBAC','AUTHORIZATION','API_CONTRACT'],'paths':routed}
     }, initial_records=12); build_authority_index(tmp_path)
     result=query_authority_result(tmp_path,request='重置用户凭据 reset_user_credential',domains=['AUTHENTICATION','CREDENTIAL','RBAC','AUTHORIZATION','API_CONTRACT'],authority_paths=routed)
@@ -290,7 +311,7 @@ def test_relationship_closure_reference_ids(tmp_path: Path) -> None:
     result=query_authority_result(tmp_path,request='重置用户凭据 reset_user_credential',domains=['AUTHENTICATION','CREDENTIAL','RBAC','AUTHORIZATION','API_CONTRACT'],authority_paths=routed)
     assert result['diagnostics']['relationship_closure']['complete'] is True
     assert any(r.get('canonical_record_id')=='USER_CREATE' and r['path']==routed[3] for r in result['refs'])
-    assert any('USER_CREATE' in (r.get('reference_ids') or []) and r['path']==routed[4] for r in result['refs'])
+    assert any(r.get('canonical_record_id')=='USER_CREATE' and r['path']==routed[4] for r in result['refs']) is False
 
 
 def test_operation_permission_role_relationship_closure(tmp_path: Path) -> None:
@@ -614,3 +635,173 @@ def test_context_runtime_contains_no_project_business_value_special_cases() -> N
     forbidden=('USER_CREATE','ROLE-SUPER-ADMIN','reset_user_credential','RBAC','AUTHENTICATION','RUNNER_OFFLINE','TASK_INTERRUPTED')
     for value in forbidden:
         assert value not in runtime
+
+
+def test_free_text_id_mention_does_not_create_relationship_edge(tmp_path: Path) -> None:
+    rel='docs/authority/generic.yaml'
+    _write_profile(tmp_path,authorities={'generic':{'domains':['GENERIC'],'paths':[rel]}})
+    p=tmp_path/rel; p.parent.mkdir(parents=True,exist_ok=True)
+    p.write_text(yaml.safe_dump({'records':[
+        {'record_id':'NODE-A','description':'Historical example mentions NODE-B but this is not a structured relation.'},
+        {'record_id':'NODE-B','description':'Independent record'},
+    ]},sort_keys=False),encoding='utf-8')
+    build_authority_index(tmp_path)
+    node_a=refs_by_id(tmp_path,'NODE-A')[0]
+    assert 'NODE-B' in node_a['references']
+    assert 'NODE-B' not in node_a['reference_ids']
+    result=query_authority_result(tmp_path,request='update NODE-A',domains=['GENERIC'],authority_paths=[rel])
+    closure=result['diagnostics']['relationship_closure']
+    assert not any(edge.get('to')=='NODE-B' for edge in closure['edges'])
+    assert not any(ref.get('canonical_record_id')=='NODE-B' for ref in closure['candidate_refs'])
+
+
+def test_production_config_contains_generic_canonical_identity_baseline() -> None:
+    cfg=load_context_efficiency_config(PROJECT_ROOT)['authority_index']
+    keys={str(value) for value in cfg.get('canonical_identity_keys') or []}
+    assert {'record_id','canonical_id','structural_id','id'}<=keys
+
+
+def test_generic_record_id_and_project_extension_are_canonical_identities(tmp_path: Path) -> None:
+    rel='docs/authority/generic.yaml'
+    _write_profile(tmp_path,authorities={'generic':{'domains':['GENERIC'],'paths':[rel]}})
+    p=tmp_path/rel; p.parent.mkdir(parents=True,exist_ok=True)
+    p.write_text(yaml.safe_dump({'records':[{'record_id':'NODE_A'},{'rule_id':'RULE_A'}]},sort_keys=False),encoding='utf-8')
+    build_authority_index(tmp_path)
+    assert refs_by_id(tmp_path,'NODE_A')[0]['canonical_record_id']=='NODE_A'
+    assert refs_by_id(tmp_path,'RULE_A')[0]['canonical_record_id']=='RULE_A'
+
+
+def test_identity_field_does_not_create_relationship_edge(tmp_path: Path) -> None:
+    rel='docs/authority/generic.yaml'
+    _write_profile(tmp_path,authorities={'generic':{'domains':['GENERIC'],'paths':[rel]}})
+    p=tmp_path/rel; p.parent.mkdir(parents=True,exist_ok=True)
+    p.write_text(yaml.safe_dump({'records':[{'record_id':'NODE_A','domain_id':'NODE_B'},{'record_id':'NODE_B'}]},sort_keys=False),encoding='utf-8')
+    build_authority_index(tmp_path)
+    node_a=refs_by_id(tmp_path,'NODE_A')[0]
+    assert 'NODE_B' not in node_a['reference_ids']
+    closure=query_authority_result(tmp_path,request='update NODE_A',domains=['GENERIC'],authority_paths=[rel])['diagnostics']['relationship_closure']
+    assert not any(ref.get('canonical_record_id')=='NODE_B' for ref in closure['candidate_refs'])
+
+
+def test_structured_reference_field_supports_generic_id_format(tmp_path: Path) -> None:
+    rel='docs/authority/generic.yaml'
+    _write_profile(tmp_path,authorities={'generic':{'domains':['GENERIC'],'paths':[rel]}})
+    p=tmp_path/rel; p.parent.mkdir(parents=True,exist_ok=True)
+    p.write_text(yaml.safe_dump({'records':[
+        {'record_id':'NODE_A','related_id':'NODE_B'},
+        {'record_id':'NODE_B','status':'active'},
+    ]},sort_keys=False),encoding='utf-8')
+    build_authority_index(tmp_path)
+    node_a=refs_by_id(tmp_path,'NODE_A')[0]
+    assert 'NODE_B' in node_a['reference_ids']
+    result=query_authority_result(tmp_path,request='update NODE_A',domains=['GENERIC'],authority_paths=[rel])
+    closure=result['diagnostics']['relationship_closure']
+    assert closure['anchor_mode']=='STRONG_ANCHOR'
+    assert 'NODE_A' in closure['anchor_ids']
+    assert any(ref.get('canonical_record_id')=='NODE_B' for ref in closure['candidate_refs'])
+
+
+def test_relationship_closure_uses_structured_reference_ids_only(tmp_path: Path) -> None:
+    rel='docs/authority/generic.yaml'
+    _write_profile(tmp_path,authorities={'generic':{'domains':['GENERIC'],'paths':[rel]}})
+    p=tmp_path/rel; p.parent.mkdir(parents=True,exist_ok=True)
+    p.write_text(yaml.safe_dump({'records':[
+        {'record_id':'NODE-A','description':'NODE-B is only prose'},
+        {'record_id':'NODE-B'},
+        {'record_id':'NODE-C','related_id':'NODE-B'},
+    ]},sort_keys=False),encoding='utf-8')
+    build_authority_index(tmp_path)
+    prose=refs_by_id(tmp_path,'NODE-A')[0]
+    structured=refs_by_id(tmp_path,'NODE-C')[0]
+    assert 'NODE-B' in prose['references'] and 'NODE-B' not in prose['reference_ids']
+    assert 'NODE-B' in structured['reference_ids']
+    closure_a=query_authority_result(tmp_path,request='update NODE-A',domains=['GENERIC'],authority_paths=[rel])['diagnostics']['relationship_closure']
+    closure_c=query_authority_result(tmp_path,request='update NODE-C',domains=['GENERIC'],authority_paths=[rel])['diagnostics']['relationship_closure']
+    assert not any(ref.get('canonical_record_id')=='NODE-B' for ref in closure_a['candidate_refs'])
+    assert any(ref.get('canonical_record_id')=='NODE-B' for ref in closure_c['candidate_refs'])
+
+
+def test_references_and_reference_ids_have_distinct_semantics(tmp_path: Path) -> None:
+    rel='docs/authority/generic.yaml'
+    _write_profile(tmp_path,authorities={'generic':{'domains':['GENERIC'],'paths':[rel]}})
+    p=tmp_path/rel; p.parent.mkdir(parents=True,exist_ok=True)
+    p.write_text(yaml.safe_dump({'records':[{'record_id':'ROOT_1','description':'mentions TEXT-ONLY','related_ids':['CHILD_1']},{'record_id':'CHILD_1'}]},sort_keys=False),encoding='utf-8')
+    build_authority_index(tmp_path)
+    ref=refs_by_id(tmp_path,'ROOT_1')[0]
+    assert 'TEXT-ONLY' in ref['references']
+    assert 'TEXT-ONLY' not in ref['reference_ids']
+    assert 'CHILD_1' in ref['reference_ids']
+
+
+def test_context_efficiency_config_is_not_reloaded_per_record(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _write_profile(tmp_path)
+    p=tmp_path/'docs/authority/model.yaml'; p.parent.mkdir(parents=True,exist_ok=True)
+    p.write_text(yaml.safe_dump({'records':[{'record_id':f'ITEM_{i}','related_id':f'DEP_{i}'} for i in range(1000)]},sort_keys=False),encoding='utf-8')
+    import tools.context.context_loading as loading_module
+    original=loading_module.yaml.safe_load
+    calls={'config':0}
+    def counting_safe_load(stream):
+        if isinstance(stream,str) and 'context_efficiency:' in stream and 'authority_index:' in stream:
+            calls['config']+=1
+        return original(stream)
+    monkeypatch.setattr(loading_module.yaml,'safe_load',counting_safe_load)
+    clear_authority_index_runtime_caches()
+    result=build_authority_index(tmp_path,force=True)
+    assert result['record_count']==1000
+    assert calls['config']<=2
+
+
+def test_context_efficiency_config_cache_invalidates_safely(tmp_path: Path) -> None:
+    _write_profile(tmp_path,preview_chars=4000)
+    first=load_context_efficiency_config(tmp_path)['context_loading']['authority']['preview_chars']
+    config=tmp_path/'.governance/context-efficiency.yaml'
+    text=config.read_text(encoding='utf-8').replace('preview_chars: 4000','preview_chars: 4001')
+    time.sleep(0.002)
+    config.write_text(text,encoding='utf-8')
+    second=load_context_efficiency_config(tmp_path)['context_loading']['authority']['preview_chars']
+    assert first==4000
+    assert second==4001
+
+
+def test_context_test_state_does_not_leak_between_cases(tmp_path: Path) -> None:
+    left=tmp_path/'left'; right=tmp_path/'right'
+    _write_profile(left,preview_chars=1111); _write_profile(right,preview_chars=2222)
+    assert load_context_efficiency_config(left)['context_loading']['authority']['preview_chars']==1111
+    assert load_context_efficiency_config(right)['context_loading']['authority']['preview_chars']==2222
+    clear_authority_index_runtime_caches()
+    assert load_context_efficiency_config(left)['context_loading']['authority']['preview_chars']==1111
+
+
+def test_full_context_efficiency_contract_suite_is_isolated(tmp_path: Path) -> None:
+    _write_profile(tmp_path,preview_chars=3000)
+    assert load_context_efficiency_config(tmp_path)['context_loading']['authority']['preview_chars']==3000
+    clear_context_efficiency_config_cache()
+    config=tmp_path/'.governance/context-efficiency.yaml'
+    config.write_text(config.read_text(encoding='utf-8').replace('preview_chars: 3000','preview_chars: 3002'),encoding='utf-8')
+    clear_authority_index_runtime_caches()
+    assert load_context_efficiency_config(tmp_path)['context_loading']['authority']['preview_chars']==3002
+
+
+def test_authority_index_marks_stale_when_context_config_changes(tmp_path: Path) -> None:
+    _write_profile(tmp_path)
+    _write_authority(tmp_path)
+    build_authority_index(tmp_path)
+    assert authority_index_status(tmp_path)['status']=='READY'
+    config=tmp_path/'.governance/context-efficiency.yaml'
+    payload=yaml.safe_load(config.read_text(encoding='utf-8'))
+    payload.setdefault('authority_index',{})['reference_fields']={'explicit':['related_id'],'suffixes':['_ref']}
+    time.sleep(0.002)
+    config.write_text(yaml.safe_dump(payload,allow_unicode=True,sort_keys=False),encoding='utf-8')
+    assert authority_index_status(tmp_path)['status']=='STALE'
+    rebuilt=build_authority_index(tmp_path)
+    assert rebuilt['status']=='READY'
+
+
+def test_routed_authority_role_strategy_is_explicitly_conservative(tmp_path: Path) -> None:
+    paths=_write_generic_relationship_fixture(tmp_path)
+    build_authority_index(tmp_path)
+    ctx=enrich_task_context(tmp_path,{'request':'adjust alpha beta gamma coordination policy','domains':['ALPHA','BETA','GAMMA'],'authorities':paths,'affected_files':[]})
+    coverage=ctx['required_fact_coverage']
+    assert coverage['authority_role_strategy']=='ALL_ROUTED_CONSERVATIVE'
+    assert coverage['routed_supporting_authority_count']==0
+    assert ctx['authority_slice']['authority_role_strategy']=='ALL_ROUTED_CONSERVATIVE'
