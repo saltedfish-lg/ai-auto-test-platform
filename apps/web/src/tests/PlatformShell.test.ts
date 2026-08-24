@@ -33,6 +33,11 @@ async function renderShell(permissions = ["PROJECT_VIEW", "PROJECT_CREATE"]): Pr
             name: "projects.list",
             component: { template: "<div>projects</div>" },
           },
+          {
+            path: "ai-settings/model-configurations",
+            name: "models.configurations",
+            component: { template: "<div>models</div>" },
+          },
         ],
       },
       {
@@ -47,10 +52,7 @@ async function renderShell(permissions = ["PROJECT_VIEW", "PROJECT_CREATE"]): Pr
   });
   await router.push("/");
   await router.isReady();
-  render(
-    { template: "<RouterView />" },
-    { global: { plugins: [pinia, ElementPlus, router] } },
-  );
+  render({ template: "<RouterView />" }, { global: { plugins: [pinia, ElementPlus, router] } });
   return router;
 }
 
@@ -73,6 +75,13 @@ describe("身份工作台（组件测试，API 为 mock）", () => {
     expect(
       screen.getByText("当前身份不能创建新项目；可见项目仍由服务端实时权限与范围决定。"),
     ).toBeTruthy();
+  });
+
+  it("routes model managers and independent reviewers to AI model configuration", async () => {
+    await renderShell(["MODEL_VERSION_REVIEW"]);
+    expect(screen.getByText("AI 设置")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "模型配置" })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "项目管理" })).toBeNull();
   });
 
   it("reloads current-user data and clears local state on logout", async () => {

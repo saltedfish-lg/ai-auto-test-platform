@@ -3920,39 +3920,39 @@ business_scenarios:
   - ROLE-MODEL-REVIEWER
   - SYS-AI-ORCHESTRATOR
   - EXT-MODEL-PROVIDER
-  business_goal: 受控接入供应商、模型、路由、Prompt和凭证，并经独立审核启用版本
+  business_goal: 受控创建单一ModelConfig、安全保存Secret、真实测试连接、独立审核启用并绑定AI_EXPLORATION平台默认模型
   trigger: 发起配置和启用AI模型
   preconditions:
   - 发起人有模型配置权限
   - 审核人具有独立模型版本审核角色
   input: []
   main_flow:
-  - 在平台级范围创建供应商、模型、路由、Prompt和凭证草稿
-  - 执行供应商健康、凭证和技术权限检查
-  - 使用MODEL_VERSION_REVIEW提交并完成独立模型版本审核
-  - 发布平台模型配置版本
-  - 获授权项目维护项目模型偏好，路由服务按项目偏好和平台规则选择模型
-  - 记录调用、费用和配置/项目范围审计
+  - 在平台级范围创建单一ModelConfig，选择固定白名单Provider、填写Provider原生model_name并加密保存Secret
+  - 经ModelGateway和LiteLLM Proxy执行真实Connection Test并返回结构化结果，不改变生命周期
+  - 使用MODEL_VERSION_REVIEW审核VALIDATING的同一ModelConfig并进入ACTIVE，不创建ModelConfigVersion
+  - 独立审核通过后将同一ModelConfig从VALIDATING推进到ACTIVE
+  - 将一个ACTIVE ModelConfig设置为AI_EXPLORATION唯一平台级effective default
+  - 记录创建、修改、Secret更新、启用、禁用、默认绑定和Connection Test不可变审计，且不记录Secret
   alternative_flows:
-  - 项目可配置偏好，但不得覆盖安全禁止和平台路由边界
+  - 当前不提供项目偏好、继承或fallback
   exception_flows:
-  - 凭证无效、健康失败、审核职责冲突或越权项目内容访问时拒绝
+  - 凭证无效、真实连接测试失败、审核职责冲突、非ACTIVE默认绑定或默认模型禁用冲突时拒绝
   involved_entities:
   - ENT-MODEL-CONFIG
   - ENT-AUDIT
   involved_modules:
-  - 模型中心—模型供应商
-  - 模型中心—模型配置
-  - 模型中心—API凭证
-  - 模型中心—模型路由
-  - 模型中心—Prompt模板
-  - 模型中心—模型版本审核
+  - AI设置—模型配置
+  - AI设置—模型配置详情
+  - AI设置—Secret重设
+  - AI设置—Capability默认绑定
+  - AI设置—Connection Test
+  - AI设置—模型审核启用
   permission_checks:
-  - 平台级供应商、模型、路由、Prompt和凭证由MODEL_CONFIGURATION_MANAGE维护；正式版本由MODEL_VERSION_REVIEW独立审核；项目偏好仅由获授权项目主体维护。
+  - ModelConfig查看、创建、编辑、Connection Test、禁用和默认绑定由MODEL_CONFIGURATION_MANAGE维护；VALIDATING到ACTIVE仅由MODEL_VERSION_REVIEW独立审核。
   data_scope_checks:
-  - 平台模型技术对象属于平台级模型配置范围；项目模型偏好只作用于明确授权项目。模型管理员的平台配置权限不自动授予项目业务内容访问。
+  - ModelConfig与AI_EXPLORATION默认绑定均属于平台级范围；模型管理员配置权限不授予项目业务内容访问。
   concurrency_checks:
-  - 模型版本与路由指针CAS；调用固化配置快照
+  - ModelConfig使用row_version CAS；Capability默认绑定以capability_code唯一约束；消费者固化配置快照
   resource_checks:
   - 平台存储/审计：REQUIRED；predicate=TRUE; 平台存储/审计不可用时不得执行对应业务副作用；进入明确的PRESTART_BLOCKED、WAITING_RESOURCE或场景失败结果，并记录资源原因。
   - Runner节点：NOT_APPLICABLE；predicate=FALSE_FOR_THIS_SCENARIO; 本场景不读取、不分配且不参与门禁。
@@ -3960,9 +3960,9 @@ business_scenarios:
   - 被测环境：NOT_APPLICABLE；predicate=FALSE_FOR_THIS_SCENARIO; 本场景不读取、不分配且不参与门禁。
   - 外部组件：NOT_APPLICABLE；predicate=FALSE_FOR_THIS_SCENARIO; 本场景不读取、不分配且不参与门禁。
   state_transitions:
-  - '模型版本: DRAFT→PENDING_REVIEW→PUBLISHED→DISABLED/ARCHIVED'
+  - 'ModelConfig: CREATED→CONFIGURING→VALIDATING→ACTIVE→DISABLED/ARCHIVED'
   data_changes:
-  - '仅对ENT-MODEL-CONFIG、ENT-AUDIT执行本场景定义的数据写入；状态变化为“模型版本: DRAFT→PENDING_REVIEW→PUBLISHED→DISABLED/ARCHIVED”；同步形成不可变事件和审计，不改写历史快照。'
+  - '仅对ENT-MODEL-CONFIG、Capability默认绑定和ENT-AUDIT执行本场景定义的数据写入；状态变化遵循LC-058；同步形成不可变审计且不得记录Secret。'
   output:
   - 配置和启用AI模型的可追溯结果
   artifacts:
@@ -3971,13 +3971,13 @@ business_scenarios:
   - 记录“配置和启用AI模型”的发起主体、参与主体、对象ID、权限与数据范围判定、状态前后值、结果/原因码和时间。
   - 本地状态变化、不可变事件和审计在同一原子提交边界内完成；提交前审计失败则不提交或回滚本地变化。
   success_criteria:
-  - 只有已发布版本可被AI任务引用，业务数据访问经过项目范围校验
+  - 只有ACTIVE ModelConfig可被Capability绑定；AI_EXPLORATION在平台级最多一个effective default
   failure_criteria:
   - 任一前置、权限、数据范围、并发或明确资源条件不满足，或未进入声明状态、产生越权/重复副作用、证据未密封、审计缺失时失败。
   - 事务/补偿策略：LOCAL_TRANSACTION。
   recovery:
   - 修复前置原因后使用幂等命令重试；不得改写已提交历史。
-  - 修复草稿并重新审核发布
+  - 修复ModelConfig后重新进入VALIDATING并由MODEL_VERSION_REVIEW审核激活
   fact_classification: DIRECTLY_SUPPORTED
   readiness_assessment: SCENARIO_SPECIFIC_ACCEPTANCE_COMPLETE
   transaction_policy: LOCAL_TRANSACTION
@@ -6979,74 +6979,74 @@ scenario_steps:
   scenario_id: USR-SCN-070
   sequence: 1
   actor: ROLE-MODEL-ADMIN
-  action: 在平台级范围创建供应商、模型、路由、Prompt和凭证草稿
-  expected_result: “在平台级范围创建供应商、模型、路由、Prompt和凭证草稿”对应的目标对象或关系已创建并取得唯一标识；尚未执行后续绑定、发布或终态推进。 仅校验本动作明确涉及的对象/关系/技术投影；未在动作中出现的后续状态不得提前出现。
+  action: 在平台级范围创建单一ModelConfig，选择固定白名单Provider、填写Provider原生model_name并加密保存Secret
+  expected_result: “在平台级范围创建单一ModelConfig，选择固定白名单Provider、填写Provider原生model_name并加密保存Secret”对应的目标对象或关系已创建并取得唯一标识；尚未执行后续绑定、发布或终态推进。 仅校验本动作明确涉及的对象/关系/技术投影；未在动作中出现的后续状态不得提前出现。
     权限、数据范围、资源或并发前置不满足时，业务副作用必须为零；重复命令按场景幂等规则返回既有结果。 本步骤记录关联trace/事件；最终业务审计只在场景明确的审计提交步骤完成。
-  immediate_result: “在平台级范围创建供应商、模型、路由、Prompt和凭证草稿”对应的目标对象或关系已创建并取得唯一标识；尚未执行后续绑定、发布或终态推进。
+  immediate_result: “在平台级范围创建单一ModelConfig，选择固定白名单Provider、填写Provider原生model_name并加密保存Secret”对应的目标对象或关系已创建并取得唯一标识；尚未执行后续绑定、发布或终态推进。
   state_assertion: 仅校验本动作明确涉及的对象/关系/技术投影；未在动作中出现的后续状态不得提前出现。
   side_effect_guard: 权限、数据范围、资源或并发前置不满足时，业务副作用必须为零；重复命令按场景幂等规则返回既有结果。
   audit_commit: 本步骤记录关联trace/事件；最终业务审计只在场景明确的审计提交步骤完成。
-  failure_result: 动作“在平台级范围创建供应商、模型、路由、Prompt和凭证草稿”失败时保留该动作前的稳定状态，返回该场景已声明的权限、范围、资源、并发或外部失败原因；不得推测新原因码。
+  failure_result: 动作“在平台级范围创建单一ModelConfig，选择固定白名单Provider、填写Provider原生model_name并加密保存Secret”失败时保留该动作前的稳定状态，返回该场景已声明的权限、范围、资源、并发或外部失败原因；不得推测新原因码。
 - step_id: USR-SCN-070-STEP-02
   scenario_id: USR-SCN-070
   sequence: 2
   actor: SYS-PLATFORM-SERVICE
-  action: 执行供应商健康、凭证和技术权限检查
-  expected_result: 形成“执行供应商健康、凭证和技术权限检查”的确定性判定结果；该判定步骤本身不提前改变后续业务状态。 仅校验本动作明确涉及的对象/关系/技术投影；未在动作中出现的后续状态不得提前出现。 权限、数据范围、资源或并发前置不满足时，业务副作用必须为零；重复命令按场景幂等规则返回既有结果。
+  action: 经ModelGateway和LiteLLM Proxy执行真实Connection Test并返回结构化结果，不改变生命周期
+  expected_result: 形成“经ModelGateway和LiteLLM Proxy执行真实Connection Test并返回结构化结果，不改变生命周期”的确定性判定结果；该判定步骤本身不提前改变后续业务状态。 仅校验本动作明确涉及的对象/关系/技术投影；未在动作中出现的后续状态不得提前出现。 权限、数据范围、资源或并发前置不满足时，业务副作用必须为零；重复命令按场景幂等规则返回既有结果。
     本步骤记录关联trace/事件；最终业务审计只在场景明确的审计提交步骤完成。
-  immediate_result: 形成“执行供应商健康、凭证和技术权限检查”的确定性判定结果；该判定步骤本身不提前改变后续业务状态。
+  immediate_result: 形成“经ModelGateway和LiteLLM Proxy执行真实Connection Test并返回结构化结果，不改变生命周期”的确定性判定结果；该判定步骤本身不提前改变后续业务状态。
   state_assertion: 仅校验本动作明确涉及的对象/关系/技术投影；未在动作中出现的后续状态不得提前出现。
   side_effect_guard: 权限、数据范围、资源或并发前置不满足时，业务副作用必须为零；重复命令按场景幂等规则返回既有结果。
   audit_commit: 本步骤记录关联trace/事件；最终业务审计只在场景明确的审计提交步骤完成。
-  failure_result: 动作“执行供应商健康、凭证和技术权限检查”失败时保留该动作前的稳定状态，返回该场景已声明的权限、范围、资源、并发或外部失败原因；不得推测新原因码。
+  failure_result: 动作“经ModelGateway和LiteLLM Proxy执行真实Connection Test并返回结构化结果，不改变生命周期”失败时保留该动作前的稳定状态，返回该场景已声明的权限、范围、资源、并发或外部失败原因；不得推测新原因码。
 - step_id: USR-SCN-070-STEP-03
   scenario_id: USR-SCN-070
   sequence: 3
   actor: SYS-PLATFORM-SERVICE
-  action: 使用MODEL_VERSION_REVIEW提交并完成独立模型版本审核
-  expected_result: “使用MODEL_VERSION_REVIEW提交并完成独立模型版本审核”对应的对象进入该动作明确声明的发布、启用、提交或密封结果；历史修订不可变。 仅校验本动作明确涉及的对象/关系/技术投影；未在动作中出现的后续状态不得提前出现。
+  action: 使用MODEL_VERSION_REVIEW审核VALIDATING的同一ModelConfig并进入ACTIVE，不创建ModelConfigVersion
+  expected_result: “使用MODEL_VERSION_REVIEW审核VALIDATING的同一ModelConfig并进入ACTIVE，不创建ModelConfigVersion”对应的对象进入该动作明确声明的发布、启用、提交或密封结果；历史修订不可变。 仅校验本动作明确涉及的对象/关系/技术投影；未在动作中出现的后续状态不得提前出现。
     权限、数据范围、资源或并发前置不满足时，业务副作用必须为零；重复命令按场景幂等规则返回既有结果。 本步骤记录关联trace/事件；最终业务审计只在场景明确的审计提交步骤完成。
-  immediate_result: “使用MODEL_VERSION_REVIEW提交并完成独立模型版本审核”对应的对象进入该动作明确声明的发布、启用、提交或密封结果；历史修订不可变。
+  immediate_result: “使用MODEL_VERSION_REVIEW审核VALIDATING的同一ModelConfig并进入ACTIVE，不创建ModelConfigVersion”对应的对象进入该动作明确声明的发布、启用、提交或密封结果；历史修订不可变。
   state_assertion: 仅校验本动作明确涉及的对象/关系/技术投影；未在动作中出现的后续状态不得提前出现。
   side_effect_guard: 权限、数据范围、资源或并发前置不满足时，业务副作用必须为零；重复命令按场景幂等规则返回既有结果。
   audit_commit: 本步骤记录关联trace/事件；最终业务审计只在场景明确的审计提交步骤完成。
-  failure_result: 动作“使用MODEL_VERSION_REVIEW提交并完成独立模型版本审核”失败时保留该动作前的稳定状态，返回该场景已声明的权限、范围、资源、并发或外部失败原因；不得推测新原因码。
+  failure_result: 动作“使用MODEL_VERSION_REVIEW审核VALIDATING的同一ModelConfig并进入ACTIVE，不创建ModelConfigVersion”失败时保留该动作前的稳定状态，返回该场景已声明的权限、范围、资源、并发或外部失败原因；不得推测新原因码。
 - step_id: USR-SCN-070-STEP-04
   scenario_id: USR-SCN-070
   sequence: 4
   actor: SYS-PLATFORM-SERVICE
-  action: 发布平台模型配置版本
-  expected_result: “发布平台模型配置版本”对应的数据或配置已在当前步骤的提交边界内保存；未涉及字段和对象保持不变。 仅校验本动作明确涉及的对象/关系/技术投影；未在动作中出现的后续状态不得提前出现。 权限、数据范围、资源或并发前置不满足时，业务副作用必须为零；重复命令按场景幂等规则返回既有结果。
+  action: 独立审核通过后将同一ModelConfig从VALIDATING推进到ACTIVE
+  expected_result: “独立审核通过后将同一ModelConfig从VALIDATING推进到ACTIVE”对应的数据或配置已在当前步骤的提交边界内保存；未涉及字段和对象保持不变。 仅校验本动作明确涉及的对象/关系/技术投影；未在动作中出现的后续状态不得提前出现。 权限、数据范围、资源或并发前置不满足时，业务副作用必须为零；重复命令按场景幂等规则返回既有结果。
     本步骤记录关联trace/事件；最终业务审计只在场景明确的审计提交步骤完成。
-  immediate_result: “发布平台模型配置版本”对应的数据或配置已在当前步骤的提交边界内保存；未涉及字段和对象保持不变。
+  immediate_result: “独立审核通过后将同一ModelConfig从VALIDATING推进到ACTIVE”对应的数据或配置已在当前步骤的提交边界内保存；未涉及字段和对象保持不变。
   state_assertion: 仅校验本动作明确涉及的对象/关系/技术投影；未在动作中出现的后续状态不得提前出现。
   side_effect_guard: 权限、数据范围、资源或并发前置不满足时，业务副作用必须为零；重复命令按场景幂等规则返回既有结果。
   audit_commit: 本步骤记录关联trace/事件；最终业务审计只在场景明确的审计提交步骤完成。
-  failure_result: 动作“发布平台模型配置版本”失败时保留该动作前的稳定状态，返回该场景已声明的权限、范围、资源、并发或外部失败原因；不得推测新原因码。
+  failure_result: 动作“独立审核通过后将同一ModelConfig从VALIDATING推进到ACTIVE”失败时保留该动作前的稳定状态，返回该场景已声明的权限、范围、资源、并发或外部失败原因；不得推测新原因码。
 - step_id: USR-SCN-070-STEP-05
   scenario_id: USR-SCN-070
   sequence: 5
   actor: SYS-PLATFORM-SERVICE
-  action: 获授权项目维护项目模型偏好，路由服务按项目偏好和平台规则选择模型
-  expected_result: “获授权项目维护项目模型偏好，路由服务按项目偏好和平台规则选择模型”形成唯一调度/选择/分配决定；尚未提前宣称执行步骤成功。 仅校验本动作明确涉及的对象/关系/技术投影；未在动作中出现的后续状态不得提前出现。
+  action: 将一个ACTIVE ModelConfig设置为AI_EXPLORATION唯一平台级effective default
+  expected_result: “将一个ACTIVE ModelConfig设置为AI_EXPLORATION唯一平台级effective default”形成唯一调度/选择/分配决定；尚未提前宣称执行步骤成功。 仅校验本动作明确涉及的对象/关系/技术投影；未在动作中出现的后续状态不得提前出现。
     权限、数据范围、资源或并发前置不满足时，业务副作用必须为零；重复命令按场景幂等规则返回既有结果。 本步骤记录关联trace/事件；最终业务审计只在场景明确的审计提交步骤完成。
-  immediate_result: “获授权项目维护项目模型偏好，路由服务按项目偏好和平台规则选择模型”形成唯一调度/选择/分配决定；尚未提前宣称执行步骤成功。
+  immediate_result: “将一个ACTIVE ModelConfig设置为AI_EXPLORATION唯一平台级effective default”形成唯一调度/选择/分配决定；尚未提前宣称执行步骤成功。
   state_assertion: 仅校验本动作明确涉及的对象/关系/技术投影；未在动作中出现的后续状态不得提前出现。
   side_effect_guard: 权限、数据范围、资源或并发前置不满足时，业务副作用必须为零；重复命令按场景幂等规则返回既有结果。
   audit_commit: 本步骤记录关联trace/事件；最终业务审计只在场景明确的审计提交步骤完成。
-  failure_result: 动作“获授权项目维护项目模型偏好，路由服务按项目偏好和平台规则选择模型”失败时保留该动作前的稳定状态，返回该场景已声明的权限、范围、资源、并发或外部失败原因；不得推测新原因码。
+  failure_result: 动作“将一个ACTIVE ModelConfig设置为AI_EXPLORATION唯一平台级effective default”失败时保留该动作前的稳定状态，返回该场景已声明的权限、范围、资源、并发或外部失败原因；不得推测新原因码。
 - step_id: USR-SCN-070-STEP-06
   scenario_id: USR-SCN-070
   sequence: 6
   actor: SYS-PLATFORM-SERVICE
-  action: 记录调用、费用和配置/项目范围审计
-  expected_result: “记录调用、费用和配置/项目范围审计”对应的数据或配置已在当前步骤的提交边界内保存；未涉及字段和对象保持不变。 仅校验本动作明确涉及的对象/关系/技术投影；未在动作中出现的后续状态不得提前出现。 权限、数据范围、资源或并发前置不满足时，业务副作用必须为零；重复命令按场景幂等规则返回既有结果。
+  action: 记录创建、修改、Secret更新、启用、禁用、默认绑定和Connection Test不可变审计，且不记录Secret
+  expected_result: “记录创建、修改、Secret更新、启用、禁用、默认绑定和Connection Test不可变审计，且不记录Secret”对应的数据或配置已在当前步骤的提交边界内保存；未涉及字段和对象保持不变。 仅校验本动作明确涉及的对象/关系/技术投影；未在动作中出现的后续状态不得提前出现。 权限、数据范围、资源或并发前置不满足时，业务副作用必须为零；重复命令按场景幂等规则返回既有结果。
     本步骤提交不可变审计。
-  immediate_result: “记录调用、费用和配置/项目范围审计”对应的数据或配置已在当前步骤的提交边界内保存；未涉及字段和对象保持不变。
+  immediate_result: “记录创建、修改、Secret更新、启用、禁用、默认绑定和Connection Test不可变审计，且不记录Secret”对应的数据或配置已在当前步骤的提交边界内保存；未涉及字段和对象保持不变。
   state_assertion: 仅校验本动作明确涉及的对象/关系/技术投影；未在动作中出现的后续状态不得提前出现。
   side_effect_guard: 权限、数据范围、资源或并发前置不满足时，业务副作用必须为零；重复命令按场景幂等规则返回既有结果。
   audit_commit: 本步骤提交不可变审计。
-  failure_result: 动作“记录调用、费用和配置/项目范围审计”失败时保留该动作前的稳定状态，返回该场景已声明的权限、范围、资源、并发或外部失败原因；不得推测新原因码。
+  failure_result: 动作“记录创建、修改、Secret更新、启用、禁用、默认绑定和Connection Test不可变审计，且不记录Secret”失败时保留该动作前的稳定状态，返回该场景已声明的权限、范围、资源、并发或外部失败原因；不得推测新原因码。
 - step_id: USR-SCN-071-STEP-01
   scenario_id: USR-SCN-071
   sequence: 1
@@ -9661,15 +9661,15 @@ scenario_variants:
   scenario_id: USR-SCN-070
   variant_type: NORMAL
   description: 配置和启用AI模型—NORMAL分支：全部前置条件成立，所需权限/范围/资源/并发门禁通过。
-  expected_result: 只有已发布版本可被AI任务引用，业务数据访问经过项目范围校验
+  expected_result: 只有ACTIVE ModelConfig可被Capability绑定；AI_EXPLORATION在平台级最多一个effective default
   trigger_condition: 全部前置条件成立，所需权限/范围/资源/并发门禁通过。
   flow:
-  - 在平台级范围创建供应商、模型、路由、Prompt和凭证草稿
-  - 执行供应商健康、凭证和技术权限检查
-  - 使用MODEL_VERSION_REVIEW提交并完成独立模型版本审核
-  - 发布平台模型配置版本
-  - 获授权项目维护项目模型偏好，路由服务按项目偏好和平台规则选择模型
-  - 记录调用、费用和配置/项目范围审计
+  - 在平台级范围创建单一ModelConfig，选择固定白名单Provider、填写Provider原生model_name并加密保存Secret
+  - 经ModelGateway和LiteLLM Proxy执行真实Connection Test并返回结构化结果，不改变生命周期
+  - 使用MODEL_VERSION_REVIEW审核VALIDATING的同一ModelConfig并进入ACTIVE，不创建ModelConfigVersion
+  - 独立审核通过后将同一ModelConfig从VALIDATING推进到ACTIVE
+  - 将一个ACTIVE ModelConfig设置为AI_EXPLORATION唯一平台级effective default
+  - 记录创建、修改、Secret更新、启用、禁用、默认绑定和Connection Test不可变审计，且不记录Secret
 - variant_id: USR-SCN-070-VAR-PERMISSION
   scenario_id: USR-SCN-070
   variant_type: PERMISSION
@@ -9685,24 +9685,24 @@ scenario_variants:
 - variant_id: USR-SCN-070-VAR-EXCEPTION
   scenario_id: USR-SCN-070
   variant_type: EXCEPTION
-  description: 配置和启用AI模型—EXCEPTION分支：凭证无效、健康失败、审核职责冲突或越权项目内容访问时拒绝
+  description: 配置和启用AI模型—EXCEPTION分支：凭证无效、真实连接测试失败、审核职责冲突、非ACTIVE默认绑定或默认模型禁用冲突时拒绝
   expected_result: ENT-MODEL-CONFIG保持异常发生前最后稳定状态或进入场景明确失败状态；不宣称后续步骤成功；按“修复前置原因后使用幂等命令重试；不得改写已提交历史。”提供恢复。
-  trigger_condition: 凭证无效、健康失败、审核职责冲突或越权项目内容访问时拒绝
+  trigger_condition: 凭证无效、真实连接测试失败、审核职责冲突、非ACTIVE默认绑定或默认模型禁用冲突时拒绝
   flow:
-  - 检测“配置和启用AI模型”异常：凭证无效、健康失败、审核职责冲突或越权项目内容访问时拒绝
+  - 检测“配置和启用AI模型”异常：凭证无效、真实连接测试失败、审核职责冲突、非ACTIVE默认绑定或默认模型禁用冲突时拒绝
   - 停止未提交的后续步骤并按事务策略处理ENT-MODEL-CONFIG
   - 记录失败结果和可恢复入口
 - variant_id: USR-SCN-070-VAR-CONCURRENCY
   scenario_id: USR-SCN-070
   variant_type: CONCURRENCY
-  description: 配置和启用AI模型—CONCURRENCY分支：两个或更多命令同时竞争配置和启用AI模型中的ENT-MODEL-CONFIG，并命中“模型版本与路由指针CAS；调用固化配置快照”。
+  description: 配置和启用AI模型—CONCURRENCY分支：两个或更多命令同时竞争配置和启用AI模型中的ENT-MODEL-CONFIG，并命中“ModelConfig使用row_version CAS；Capability默认绑定以capability_code唯一约束；消费者固化配置快照”。
   expected_result: winner完成当前原子动作并提交版本/租约令牌。 loser不改变ENT-MODEL-CONFIG，返回冲突、陈旧版本或资源占用结果；不得覆盖winner。
   concurrency_object: ENT-MODEL-CONFIG
-  concurrency_rule: 模型版本与路由指针CAS；调用固化配置快照
-  trigger_condition: 两个或更多命令同时竞争配置和启用AI模型中的ENT-MODEL-CONFIG，并命中“模型版本与路由指针CAS；调用固化配置快照”。
+  concurrency_rule: ModelConfig使用row_version CAS；Capability默认绑定以capability_code唯一约束；消费者固化配置快照
+  trigger_condition: 两个或更多命令同时竞争配置和启用AI模型中的ENT-MODEL-CONFIG，并命中“ModelConfig使用row_version CAS；Capability默认绑定以capability_code唯一约束；消费者固化配置快照”。
   flow:
   - 以ENT-MODEL-CONFIG及场景声明范围计算竞争键
-  - 按“模型版本与路由指针CAS；调用固化配置快照”取得唯一winner或有效租约持有者
+  - 按“ModelConfig使用row_version CAS；Capability默认绑定以capability_code唯一约束；消费者固化配置快照”取得唯一winner或有效租约持有者
   - loser不执行业务副作用并获得可重试/冲突结果
   winner_result: winner完成当前原子动作并提交版本/租约令牌。
   loser_result: loser不改变ENT-MODEL-CONFIG，返回冲突、陈旧版本或资源占用结果；不得覆盖winner。
@@ -9722,10 +9722,10 @@ scenario_variants:
   variant_type: SECURITY
   description: 配置和启用AI模型—SECURITY分支：“配置和启用AI模型”请求包含越权范围、敏感数据访问、无效凭证或不受信系统主体。
   expected_result: 不返回未授权敏感内容，不创建或改变ENT-MODEL-CONFIG；日志和审计不包含Secret明文；拒绝结果可追溯到具体权限/范围控制。
-  security_control: 平台级供应商、模型、路由、Prompt和凭证由MODEL_CONFIGURATION_MANAGE维护；正式版本由MODEL_VERSION_REVIEW独立审核；项目偏好仅由获授权项目主体维护。；平台模型技术对象属于平台级模型配置范围；项目模型偏好只作用于明确授权项目。模型管理员的平台配置权限不自动授予项目业务内容访问。
+  security_control: ModelConfig查看、创建、编辑、Connection Test、禁用和默认绑定由MODEL_CONFIGURATION_MANAGE维护；VALIDATING到ACTIVE仅由MODEL_VERSION_REVIEW独立审核。；ModelConfig与AI_EXPLORATION默认绑定均属于平台级范围；模型管理员配置权限不授予项目业务内容访问。
   trigger_condition: “配置和启用AI模型”请求包含越权范围、敏感数据访问、无效凭证或不受信系统主体。
   flow:
-  - 执行安全控制：平台级供应商、模型、路由、Prompt和凭证由MODEL_CONFIGURATION_MANAGE维护；正式版本由MODEL_VERSION_REVIEW独立审核；项目偏好仅由获授权项目主体维护。；平台模型技术对象属于平台级模型配置范围；项目模型偏好只作用于明确授权项目。模型管理员的平台配置权限不自动授予项目业务内容访问。
+  - 执行安全控制：ModelConfig查看、创建、编辑、Connection Test、禁用和默认绑定由MODEL_CONFIGURATION_MANAGE维护；VALIDATING到ACTIVE仅由MODEL_VERSION_REVIEW独立审核。；ModelConfig与AI_EXPLORATION默认绑定均属于平台级范围；模型管理员配置权限不授予项目业务内容访问。
   - 在敏感数据或业务副作用产生前拒绝请求
   - 写入脱敏安全审计并保持ENT-MODEL-CONFIG不变
 - variant_id: USR-SCN-071-VAR-NORMAL
@@ -10427,7 +10427,7 @@ scenario_permissions:
   permission_rule: SYS-ARTIFACT-SERVICE发起“制品保留和清理”前必须具备对应菜单、操作或服务授权；系统主体只按自身服务身份执行；越权时拒绝且不产生业务写入。
 - mapping_id: USR-SCN-070-PERM-0035
   scenario_id: USR-SCN-070
-  permission_rule: 平台级供应商、模型、路由、Prompt和凭证由MODEL_CONFIGURATION_MANAGE维护；正式版本由MODEL_VERSION_REVIEW独立审核；项目偏好仅由获授权项目主体维护。
+  permission_rule: ModelConfig查看、创建、编辑、Connection Test、禁用和默认绑定由MODEL_CONFIGURATION_MANAGE维护；VALIDATING到ACTIVE仅由MODEL_VERSION_REVIEW独立审核。
 - mapping_id: USR-SCN-071-PERM-0036
   scenario_id: USR-SCN-071
   permission_rule: SYS-AI-ORCHESTRATOR发起“模型调用失败与降级”前必须具备对应菜单、操作或服务授权；系统主体只按自身服务身份执行；越权时拒绝且不产生业务写入。
@@ -10658,7 +10658,7 @@ scenario_state_changes:
   owner_rule: 由对应主对象Owner服务在同一事务写事件、更新当前修订指针并递增并发版本标识；终态不回退
 - mapping_id: USR-SCN-070-STATE-0050
   scenario_id: USR-SCN-070
-  transition: '模型版本: DRAFT→PENDING_REVIEW→PUBLISHED→DISABLED/ARCHIVED'
+  transition: 'ModelConfig: CREATED→CONFIGURING→VALIDATING→ACTIVE→DISABLED/ARCHIVED'
   owner_rule: 由对应主对象Owner服务在同一事务写事件、更新当前修订指针并递增并发版本标识；终态不回退
 - mapping_id: USR-SCN-071-STATE-0051
   scenario_id: USR-SCN-071
@@ -10802,7 +10802,7 @@ scenario_concurrency_rules:
   rule: 清理使用并发版本标识并与Hold/延期CAS竞争
 - mapping_id: USR-SCN-070-CONC-0034
   scenario_id: USR-SCN-070
-  rule: 模型版本与路由指针CAS；调用固化配置快照
+  rule: ModelConfig使用row_version CAS；Capability默认绑定以capability_code唯一约束；消费者固化配置快照
 - mapping_id: USR-SCN-071-CONC-0035
   scenario_id: USR-SCN-071
   rule: 调用attempt、candidate版本和任务取消CAS
@@ -11359,7 +11359,6 @@ modules:
   managed_objects:
   - OBJ-057
   - OBJ-058
-  - OBJ-059
   - OBJ-060
   - OBJ-070
   - OBJ-071
@@ -12098,8 +12097,10 @@ menus:
   - VIEW
   - CREATE
   - EDIT
-  - VALIDATE
-  - ENABLE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
+  - ACTIVATE
+  - SET_CAPABILITY_DEFAULT
   - DISABLE
   - ARCHIVE
   prohibited_operations:
@@ -12145,8 +12146,10 @@ menus:
   - VIEW
   - CREATE
   - EDIT
-  - VALIDATE
-  - ENABLE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
+  - ACTIVATE
+  - SET_CAPABILITY_DEFAULT
   - DISABLE
   - ARCHIVE
   prohibited_operations:
@@ -12195,8 +12198,10 @@ menus:
   - CREATE
   - EDIT
   - ROTATE_CREDENTIAL
-  - VALIDATE
-  - ENABLE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
+  - ACTIVATE
+  - SET_CAPABILITY_DEFAULT
   - DISABLE
   - ARCHIVE
   - VIEW_SECRET
@@ -12439,7 +12444,8 @@ menus:
   - EDIT
   - ADD_VERSION
   - REORDER
-  - ENABLE
+  - ACTIVATE
+  - SET_CAPABILITY_DEFAULT
   - DISABLE
   - ARCHIVE
   prohibited_operations:
@@ -12767,8 +12773,10 @@ menus:
   - VIEW
   - CREATE
   - EDIT
-  - VALIDATE
-  - ENABLE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
+  - ACTIVATE
+  - SET_CAPABILITY_DEFAULT
   - PAUSE
   - DISABLE
   - ARCHIVE
@@ -12926,7 +12934,8 @@ menus:
   supported_operations:
   - VIEW
   - EDIT
-  - ENABLE
+  - ACTIVATE
+  - SET_CAPABILITY_DEFAULT
   - DISABLE
   - REMOTE_COMMAND
   - ARCHIVE
@@ -13059,7 +13068,8 @@ menus:
   supported_operations:
   - VIEW
   - REFRESH
-  - VALIDATE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
   - DISABLE_CAPABILITY
   prohibited_operations:
   - 不得绕过对象Owner、权限、数据范围和状态门禁
@@ -13292,18 +13302,19 @@ menus:
   menu_level: 2
   menu_name: AI模型管理
   route_name: models.configurations
-  positioning: 模型供应商、模型配置和Prompt修订主入口
-  user_goal: 维护模型供应商、配置、Prompt和启停状态
+  positioning: AI设置中的模型配置、安全凭证、连接测试和Capability默认绑定主入口
+  user_goal: 维护固定白名单Provider模型配置、Secret、审核启停和AI_EXPLORATION默认模型
   managed_objects:
   - OBJ-057
   - OBJ-058
-  - OBJ-059
   supported_operations:
   - VIEW
   - CREATE
   - EDIT
-  - VALIDATE
-  - ENABLE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
+  - ACTIVATE
+  - SET_CAPABILITY_DEFAULT
   - DISABLE
   - ARCHIVE
   prohibited_operations:
@@ -13320,11 +13331,11 @@ menus:
   - 菜单可见权限
   - 具体操作权限
   - 数据范围权限
-  data_scope: 平台模型配置范围；项目内容另行授权
+  data_scope: 平台ModelConfig和平台Capability默认绑定范围；不包含项目级偏好
   preconditions:
   - 具备模型配置权限
   state_constraints:
-  - 模型输出不是正式事实；配置版本化
+  - 单一ModelConfig遵循LC-058；VALIDATING经MODEL_VERSION_REVIEW后才可ACTIVE；不建立独立版本对象
   entry_type: MAIN_MENU
   related_menus:
   - MENU-09-002
@@ -13349,8 +13360,10 @@ menus:
   - VIEW
   - CREATE
   - EDIT
-  - VALIDATE
-  - ENABLE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
+  - ACTIVATE
+  - SET_CAPABILITY_DEFAULT
   - DISABLE
   prohibited_operations:
   - 不得绕过对象Owner、权限、数据范围和状态门禁
@@ -13388,7 +13401,6 @@ menus:
   user_goal: 审核、驳回、发布、停用和归档模型相关版本
   managed_objects:
   - OBJ-058
-  - OBJ-059
   supported_operations:
   - VIEW
   - REVIEW
@@ -13478,8 +13490,10 @@ menus:
   - VIEW
   - CREATE
   - EDIT
-  - VALIDATE
-  - ENABLE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
+  - ACTIVATE
+  - SET_CAPABILITY_DEFAULT
   - DISABLE
   - PUBLISH_ENDPOINT
   prohibited_operations:
@@ -13610,7 +13624,8 @@ menus:
   supported_operations:
   - VIEW
   - EXPORT
-  - VALIDATE_REFERENCES
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW_REFERENCES
   prohibited_operations:
   - 不得绕过对象Owner、权限、数据范围和状态门禁
   primary_scenarios:
@@ -13698,7 +13713,8 @@ menus:
   supported_operations:
   - VIEW
   - EDIT
-  - VALIDATE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
   - PUBLISH
   - ROLLBACK
   prohibited_operations:
@@ -13738,7 +13754,8 @@ menus:
   - VIEW
   - EDIT_PLATFORM_DEFAULT
   - EDIT_PROJECT_RANGE
-  - VALIDATE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
   - PUBLISH
   prohibited_operations:
   - 不得绕过对象Owner、权限、数据范围和状态门禁
@@ -13780,7 +13797,8 @@ menus:
   supported_operations:
   - VIEW
   - EDIT
-  - VALIDATE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
   - PUBLISH
   - ROTATE_SYSTEM_SECRET
   prohibited_operations:
@@ -18339,16 +18357,15 @@ menu_operations:
   target_objects:
   - OBJ-057
   - OBJ-058
-  - OBJ-059
   required_roles:
   - ROLE-SUPER-ADMIN
   - ROLE-PLATFORM-ADMIN
   - ROLE-MODEL-ADMIN
   - ROLE-MODEL-REVIEWER
   permission_expression: 菜单可见 AND 操作权限 AND 数据范围；敏感/高风险另加独立权限
-  data_scope: 平台模型配置范围；项目内容另行授权
+  data_scope: 平台ModelConfig和平台Capability默认绑定范围；不包含项目级偏好
   pre_state:
-  - 模型输出不是正式事实；配置版本化
+  - 单一ModelConfig遵循LC-058；VALIDATING经MODEL_VERSION_REVIEW后才可ACTIVE；不建立独立版本对象
   success_result: VIEW完成并返回对象新状态或确定性只读结果。
   failure_result: 权限、范围、状态、并发或资源门禁不满足时不产生未授权副作用并返回明确原因。
   high_risk: false
@@ -18362,16 +18379,15 @@ menu_operations:
   target_objects:
   - OBJ-057
   - OBJ-058
-  - OBJ-059
   required_roles:
   - ROLE-SUPER-ADMIN
   - ROLE-PLATFORM-ADMIN
   - ROLE-MODEL-ADMIN
   - ROLE-MODEL-REVIEWER
   permission_expression: 菜单可见 AND 操作权限 AND 数据范围；敏感/高风险另加独立权限
-  data_scope: 平台模型配置范围；项目内容另行授权
+  data_scope: 平台ModelConfig和平台Capability默认绑定范围；不包含项目级偏好
   pre_state:
-  - 模型输出不是正式事实；配置版本化
+  - 单一ModelConfig遵循LC-058；VALIDATING经MODEL_VERSION_REVIEW后才可ACTIVE；不建立独立版本对象
   success_result: CREATE完成并返回对象新状态或确定性只读结果。
   failure_result: 权限、范围、状态、并发或资源门禁不满足时不产生未授权副作用并返回明确原因。
   high_risk: false
@@ -18385,16 +18401,15 @@ menu_operations:
   target_objects:
   - OBJ-057
   - OBJ-058
-  - OBJ-059
   required_roles:
   - ROLE-SUPER-ADMIN
   - ROLE-PLATFORM-ADMIN
   - ROLE-MODEL-ADMIN
   - ROLE-MODEL-REVIEWER
   permission_expression: 菜单可见 AND 操作权限 AND 数据范围；敏感/高风险另加独立权限
-  data_scope: 平台模型配置范围；项目内容另行授权
+  data_scope: 平台ModelConfig和平台Capability默认绑定范围；不包含项目级偏好
   pre_state:
-  - 模型输出不是正式事实；配置版本化
+  - 单一ModelConfig遵循LC-058；VALIDATING经MODEL_VERSION_REVIEW后才可ACTIVE；不建立独立版本对象
   success_result: EDIT完成并返回对象新状态或确定性只读结果。
   failure_result: 权限、范围、状态、并发或资源门禁不满足时不产生未授权副作用并返回明确原因。
   high_risk: false
@@ -18408,16 +18423,15 @@ menu_operations:
   target_objects:
   - OBJ-057
   - OBJ-058
-  - OBJ-059
   required_roles:
   - ROLE-SUPER-ADMIN
   - ROLE-PLATFORM-ADMIN
   - ROLE-MODEL-ADMIN
   - ROLE-MODEL-REVIEWER
   permission_expression: 菜单可见 AND 操作权限 AND 数据范围；敏感/高风险另加独立权限
-  data_scope: 平台模型配置范围；项目内容另行授权
+  data_scope: 平台ModelConfig和平台Capability默认绑定范围；不包含项目级偏好
   pre_state:
-  - 模型输出不是正式事实；配置版本化
+  - 单一ModelConfig遵循LC-058；VALIDATING经MODEL_VERSION_REVIEW后才可ACTIVE；不建立独立版本对象
   success_result: VALIDATE完成并返回对象新状态或确定性只读结果。
   failure_result: 权限、范围、状态、并发或资源门禁不满足时不产生未授权副作用并返回明确原因。
   high_risk: false
@@ -18431,16 +18445,15 @@ menu_operations:
   target_objects:
   - OBJ-057
   - OBJ-058
-  - OBJ-059
   required_roles:
   - ROLE-SUPER-ADMIN
   - ROLE-PLATFORM-ADMIN
   - ROLE-MODEL-ADMIN
   - ROLE-MODEL-REVIEWER
   permission_expression: 菜单可见 AND 操作权限 AND 数据范围；敏感/高风险另加独立权限
-  data_scope: 平台模型配置范围；项目内容另行授权
+  data_scope: 平台ModelConfig和平台Capability默认绑定范围；不包含项目级偏好
   pre_state:
-  - 模型输出不是正式事实；配置版本化
+  - 单一ModelConfig遵循LC-058；VALIDATING经MODEL_VERSION_REVIEW后才可ACTIVE；不建立独立版本对象
   success_result: ENABLE完成并返回对象新状态或确定性只读结果。
   failure_result: 权限、范围、状态、并发或资源门禁不满足时不产生未授权副作用并返回明确原因。
   high_risk: false
@@ -18454,16 +18467,15 @@ menu_operations:
   target_objects:
   - OBJ-057
   - OBJ-058
-  - OBJ-059
   required_roles:
   - ROLE-SUPER-ADMIN
   - ROLE-PLATFORM-ADMIN
   - ROLE-MODEL-ADMIN
   - ROLE-MODEL-REVIEWER
   permission_expression: 菜单可见 AND 操作权限 AND 数据范围；敏感/高风险另加独立权限
-  data_scope: 平台模型配置范围；项目内容另行授权
+  data_scope: 平台ModelConfig和平台Capability默认绑定范围；不包含项目级偏好
   pre_state:
-  - 模型输出不是正式事实；配置版本化
+  - 单一ModelConfig遵循LC-058；VALIDATING经MODEL_VERSION_REVIEW后才可ACTIVE；不建立独立版本对象
   success_result: DISABLE完成并返回对象新状态或确定性只读结果。
   failure_result: 权限、范围、状态、并发或资源门禁不满足时不产生未授权副作用并返回明确原因。
   high_risk: false
@@ -18477,16 +18489,15 @@ menu_operations:
   target_objects:
   - OBJ-057
   - OBJ-058
-  - OBJ-059
   required_roles:
   - ROLE-SUPER-ADMIN
   - ROLE-PLATFORM-ADMIN
   - ROLE-MODEL-ADMIN
   - ROLE-MODEL-REVIEWER
   permission_expression: 菜单可见 AND 操作权限 AND 数据范围；敏感/高风险另加独立权限
-  data_scope: 平台模型配置范围；项目内容另行授权
+  data_scope: 平台ModelConfig和平台Capability默认绑定范围；不包含项目级偏好
   pre_state:
-  - 模型输出不是正式事实；配置版本化
+  - 单一ModelConfig遵循LC-058；VALIDATING经MODEL_VERSION_REVIEW后才可ACTIVE；不建立独立版本对象
   success_result: ARCHIVE完成并返回对象新状态或确定性只读结果。
   failure_result: 权限、范围、状态、并发或资源门禁不满足时不产生未授权副作用并返回明确原因。
   high_risk: false
@@ -18631,7 +18642,6 @@ menu_operations:
   operation_name: VIEW
   target_objects:
   - OBJ-058
-  - OBJ-059
   required_roles:
   - ROLE-SUPER-ADMIN
   - ROLE-MODEL-REVIEWER
@@ -18651,7 +18661,6 @@ menu_operations:
   operation_name: REVIEW
   target_objects:
   - OBJ-058
-  - OBJ-059
   required_roles:
   - ROLE-SUPER-ADMIN
   - ROLE-MODEL-REVIEWER
@@ -18671,7 +18680,6 @@ menu_operations:
   operation_name: REJECT
   target_objects:
   - OBJ-058
-  - OBJ-059
   required_roles:
   - ROLE-SUPER-ADMIN
   - ROLE-MODEL-REVIEWER
@@ -18691,7 +18699,6 @@ menu_operations:
   operation_name: PUBLISH
   target_objects:
   - OBJ-058
-  - OBJ-059
   required_roles:
   - ROLE-SUPER-ADMIN
   - ROLE-MODEL-REVIEWER
@@ -18711,7 +18718,6 @@ menu_operations:
   operation_name: DISABLE
   target_objects:
   - OBJ-058
-  - OBJ-059
   required_roles:
   - ROLE-SUPER-ADMIN
   - ROLE-MODEL-REVIEWER
@@ -18731,7 +18737,6 @@ menu_operations:
   operation_name: ARCHIVE
   target_objects:
   - OBJ-058
-  - OBJ-059
   required_roles:
   - ROLE-SUPER-ADMIN
   - ROLE-MODEL-REVIEWER
@@ -22366,8 +22371,10 @@ role_menu_mappings:
   - VIEW
   - CREATE
   - EDIT
-  - VALIDATE
-  - ENABLE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
+  - ACTIVATE
+  - SET_CAPABILITY_DEFAULT
   - DISABLE
   - ARCHIVE
   data_scope: 平台全部active数据和依法保留的history数据；高风险操作仍必须审计。
@@ -22384,8 +22391,10 @@ role_menu_mappings:
   - VIEW
   - CREATE
   - EDIT
-  - VALIDATE
-  - ENABLE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
+  - ACTIVATE
+  - SET_CAPABILITY_DEFAULT
   - DISABLE
   - ARCHIVE
   data_scope: 平台技术数据；项目业务数据按明确项目ID或附加CROSS_PROJECT_AUTHORIZATION_GRANT_ALL权限获得
@@ -22403,8 +22412,10 @@ role_menu_mappings:
   - VIEW
   - CREATE
   - EDIT
-  - VALIDATE
-  - ENABLE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
+  - ACTIVATE
+  - SET_CAPABILITY_DEFAULT
   - DISABLE
   - ARCHIVE
   data_scope: 指定项目及七个项目数据子范围的active/history范围
@@ -22422,8 +22433,10 @@ role_menu_mappings:
   - VIEW
   - CREATE
   - EDIT
-  - VALIDATE
-  - ENABLE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
+  - ACTIVATE
+  - SET_CAPABILITY_DEFAULT
   - DISABLE
   - ARCHIVE
   data_scope: 授权项目的测试资产、执行和报告范围
@@ -22440,8 +22453,10 @@ role_menu_mappings:
   - VIEW
   - CREATE
   - EDIT
-  - VALIDATE
-  - ENABLE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
+  - ACTIVATE
+  - SET_CAPABILITY_DEFAULT
   - DISABLE
   - ARCHIVE
   data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
@@ -22459,8 +22474,10 @@ role_menu_mappings:
   - VIEW
   - CREATE
   - EDIT
-  - VALIDATE
-  - ENABLE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
+  - ACTIVATE
+  - SET_CAPABILITY_DEFAULT
   - DISABLE
   - ARCHIVE
   data_scope: 平台全部active数据和依法保留的history数据；高风险操作仍必须审计。
@@ -22477,8 +22494,10 @@ role_menu_mappings:
   - VIEW
   - CREATE
   - EDIT
-  - VALIDATE
-  - ENABLE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
+  - ACTIVATE
+  - SET_CAPABILITY_DEFAULT
   - DISABLE
   - ARCHIVE
   data_scope: 平台技术数据；项目业务数据按明确项目ID或附加CROSS_PROJECT_AUTHORIZATION_GRANT_ALL权限获得
@@ -22496,8 +22515,10 @@ role_menu_mappings:
   - VIEW
   - CREATE
   - EDIT
-  - VALIDATE
-  - ENABLE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
+  - ACTIVATE
+  - SET_CAPABILITY_DEFAULT
   - DISABLE
   - ARCHIVE
   data_scope: 指定项目及七个项目数据子范围的active/history范围
@@ -22515,8 +22536,10 @@ role_menu_mappings:
   - VIEW
   - CREATE
   - EDIT
-  - VALIDATE
-  - ENABLE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
+  - ACTIVATE
+  - SET_CAPABILITY_DEFAULT
   - DISABLE
   - ARCHIVE
   data_scope: 授权项目的测试资产、执行和报告范围
@@ -22533,8 +22556,10 @@ role_menu_mappings:
   - VIEW
   - CREATE
   - EDIT
-  - VALIDATE
-  - ENABLE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
+  - ACTIVATE
+  - SET_CAPABILITY_DEFAULT
   - DISABLE
   - ARCHIVE
   data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
@@ -22553,8 +22578,10 @@ role_menu_mappings:
   - CREATE
   - EDIT
   - ROTATE_CREDENTIAL
-  - VALIDATE
-  - ENABLE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
+  - ACTIVATE
+  - SET_CAPABILITY_DEFAULT
   - DISABLE
   - ARCHIVE
   - VIEW_SECRET
@@ -22573,8 +22600,10 @@ role_menu_mappings:
   - CREATE
   - EDIT
   - ROTATE_CREDENTIAL
-  - VALIDATE
-  - ENABLE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
+  - ACTIVATE
+  - SET_CAPABILITY_DEFAULT
   - DISABLE
   - ARCHIVE
   - VIEW_SECRET
@@ -22594,8 +22623,10 @@ role_menu_mappings:
   - CREATE
   - EDIT
   - ROTATE_CREDENTIAL
-  - VALIDATE
-  - ENABLE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
+  - ACTIVATE
+  - SET_CAPABILITY_DEFAULT
   - DISABLE
   - ARCHIVE
   - VIEW_SECRET
@@ -22614,8 +22645,10 @@ role_menu_mappings:
   - CREATE
   - EDIT
   - ROTATE_CREDENTIAL
-  - VALIDATE
-  - ENABLE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
+  - ACTIVATE
+  - SET_CAPABILITY_DEFAULT
   - DISABLE
   - ARCHIVE
   - VIEW_SECRET
@@ -23043,7 +23076,8 @@ role_menu_mappings:
   - EDIT
   - ADD_VERSION
   - REORDER
-  - ENABLE
+  - ACTIVATE
+  - SET_CAPABILITY_DEFAULT
   - DISABLE
   - ARCHIVE
   data_scope: 平台全部active数据和依法保留的history数据；高风险操作仍必须审计。
@@ -23062,7 +23096,8 @@ role_menu_mappings:
   - EDIT
   - ADD_VERSION
   - REORDER
-  - ENABLE
+  - ACTIVATE
+  - SET_CAPABILITY_DEFAULT
   - DISABLE
   - ARCHIVE
   data_scope: 指定项目及七个项目数据子范围的active/history范围
@@ -23082,7 +23117,8 @@ role_menu_mappings:
   - EDIT
   - ADD_VERSION
   - REORDER
-  - ENABLE
+  - ACTIVATE
+  - SET_CAPABILITY_DEFAULT
   - DISABLE
   - ARCHIVE
   data_scope: 授权项目的测试资产、执行和报告范围
@@ -23101,7 +23137,8 @@ role_menu_mappings:
   - EDIT
   - ADD_VERSION
   - REORDER
-  - ENABLE
+  - ACTIVATE
+  - SET_CAPABILITY_DEFAULT
   - DISABLE
   - ARCHIVE
   data_scope: 授权项目的用例、AI任务、录制和相关资产范围
@@ -23136,7 +23173,8 @@ role_menu_mappings:
   - EDIT
   - ADD_VERSION
   - REORDER
-  - ENABLE
+  - ACTIVATE
+  - SET_CAPABILITY_DEFAULT
   - DISABLE
   - ARCHIVE
   data_scope: 授权项目、用例/套件、计划、账号映射和结果范围
@@ -23156,7 +23194,8 @@ role_menu_mappings:
   - EDIT
   - ADD_VERSION
   - REORDER
-  - ENABLE
+  - ACTIVATE
+  - SET_CAPABILITY_DEFAULT
   - DISABLE
   - ARCHIVE
   data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
@@ -23535,8 +23574,10 @@ role_menu_mappings:
   - VIEW
   - CREATE
   - EDIT
-  - VALIDATE
-  - ENABLE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
+  - ACTIVATE
+  - SET_CAPABILITY_DEFAULT
   - PAUSE
   - DISABLE
   - ARCHIVE
@@ -23555,8 +23596,10 @@ role_menu_mappings:
   - VIEW
   - CREATE
   - EDIT
-  - VALIDATE
-  - ENABLE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
+  - ACTIVATE
+  - SET_CAPABILITY_DEFAULT
   - PAUSE
   - DISABLE
   - ARCHIVE
@@ -23576,8 +23619,10 @@ role_menu_mappings:
   - VIEW
   - CREATE
   - EDIT
-  - VALIDATE
-  - ENABLE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
+  - ACTIVATE
+  - SET_CAPABILITY_DEFAULT
   - PAUSE
   - DISABLE
   - ARCHIVE
@@ -23596,8 +23641,10 @@ role_menu_mappings:
   - VIEW
   - CREATE
   - EDIT
-  - VALIDATE
-  - ENABLE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
+  - ACTIVATE
+  - SET_CAPABILITY_DEFAULT
   - PAUSE
   - DISABLE
   - ARCHIVE
@@ -23772,7 +23819,8 @@ role_menu_mappings:
   allowed_operations:
   - VIEW
   - EDIT
-  - ENABLE
+  - ACTIVATE
+  - SET_CAPABILITY_DEFAULT
   - DISABLE
   - REMOTE_COMMAND
   - ARCHIVE
@@ -23789,7 +23837,8 @@ role_menu_mappings:
   allowed_operations:
   - VIEW
   - EDIT
-  - ENABLE
+  - ACTIVATE
+  - SET_CAPABILITY_DEFAULT
   - DISABLE
   - REMOTE_COMMAND
   - ARCHIVE
@@ -23807,7 +23856,8 @@ role_menu_mappings:
   allowed_operations:
   - VIEW
   - EDIT
-  - ENABLE
+  - ACTIVATE
+  - SET_CAPABILITY_DEFAULT
   - DISABLE
   - REMOTE_COMMAND
   - ARCHIVE
@@ -23824,7 +23874,8 @@ role_menu_mappings:
   allowed_operations:
   - VIEW
   - EDIT
-  - ENABLE
+  - ACTIVATE
+  - SET_CAPABILITY_DEFAULT
   - DISABLE
   - REMOTE_COMMAND
   - ARCHIVE
@@ -23842,7 +23893,8 @@ role_menu_mappings:
   allowed_operations:
   - VIEW
   - EDIT
-  - ENABLE
+  - ACTIVATE
+  - SET_CAPABILITY_DEFAULT
   - DISABLE
   - REMOTE_COMMAND
   - ARCHIVE
@@ -23859,7 +23911,8 @@ role_menu_mappings:
   allowed_operations:
   - VIEW
   - EDIT
-  - ENABLE
+  - ACTIVATE
+  - SET_CAPABILITY_DEFAULT
   - DISABLE
   - REMOTE_COMMAND
   - ARCHIVE
@@ -23988,7 +24041,8 @@ role_menu_mappings:
   allowed_operations:
   - VIEW
   - REFRESH
-  - VALIDATE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
   - DISABLE_CAPABILITY
   data_scope: 平台全部active数据和依法保留的history数据；高风险操作仍必须审计。
   limitations:
@@ -24003,7 +24057,8 @@ role_menu_mappings:
   allowed_operations:
   - VIEW
   - REFRESH
-  - VALIDATE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
   - DISABLE_CAPABILITY
   data_scope: 平台技术数据；项目业务数据按明确项目ID或附加CROSS_PROJECT_AUTHORIZATION_GRANT_ALL权限获得
   limitations:
@@ -24019,7 +24074,8 @@ role_menu_mappings:
   allowed_operations:
   - VIEW
   - REFRESH
-  - VALIDATE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
   - DISABLE_CAPABILITY
   data_scope: Runner技术数据；项目业务数据须另有项目成员权限
   limitations:
@@ -24034,7 +24090,8 @@ role_menu_mappings:
   allowed_operations:
   - VIEW
   - REFRESH
-  - VALIDATE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
   - DISABLE_CAPABILITY
   data_scope: 指定项目及七个项目数据子范围的active/history范围
   limitations:
@@ -24050,7 +24107,8 @@ role_menu_mappings:
   allowed_operations:
   - VIEW
   - REFRESH
-  - VALIDATE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
   - DISABLE_CAPABILITY
   data_scope: 授权项目的测试资产、执行和报告范围
   limitations:
@@ -24065,7 +24123,8 @@ role_menu_mappings:
   allowed_operations:
   - VIEW
   - REFRESH
-  - VALIDATE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
   - DISABLE_CAPABILITY
   data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   limitations:
@@ -24538,8 +24597,10 @@ role_menu_mappings:
   - VIEW
   - CREATE
   - EDIT
-  - VALIDATE
-  - ENABLE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
+  - ACTIVATE
+  - SET_CAPABILITY_DEFAULT
   - DISABLE
   - ARCHIVE
   data_scope: 平台全部active数据和依法保留的history数据；高风险操作仍必须审计。
@@ -24556,8 +24617,10 @@ role_menu_mappings:
   - VIEW
   - CREATE
   - EDIT
-  - VALIDATE
-  - ENABLE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
+  - ACTIVATE
+  - SET_CAPABILITY_DEFAULT
   - DISABLE
   - ARCHIVE
   data_scope: 平台技术数据；项目业务数据按明确项目ID或附加CROSS_PROJECT_AUTHORIZATION_GRANT_ALL权限获得
@@ -24575,8 +24638,10 @@ role_menu_mappings:
   - VIEW
   - CREATE
   - EDIT
-  - VALIDATE
-  - ENABLE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
+  - ACTIVATE
+  - SET_CAPABILITY_DEFAULT
   - DISABLE
   - ARCHIVE
   data_scope: 平台模型技术数据；项目业务内容按项目成员与范围校验
@@ -24608,8 +24673,10 @@ role_menu_mappings:
   - VIEW
   - CREATE
   - EDIT
-  - VALIDATE
-  - ENABLE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
+  - ACTIVATE
+  - SET_CAPABILITY_DEFAULT
   - DISABLE
   data_scope: 平台全部active数据和依法保留的history数据；高风险操作仍必须审计。
   limitations:
@@ -24625,8 +24692,10 @@ role_menu_mappings:
   - VIEW
   - CREATE
   - EDIT
-  - VALIDATE
-  - ENABLE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
+  - ACTIVATE
+  - SET_CAPABILITY_DEFAULT
   - DISABLE
   data_scope: 平台技术数据；项目业务数据按明确项目ID或附加CROSS_PROJECT_AUTHORIZATION_GRANT_ALL权限获得
   limitations:
@@ -24643,8 +24712,10 @@ role_menu_mappings:
   - VIEW
   - CREATE
   - EDIT
-  - VALIDATE
-  - ENABLE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
+  - ACTIVATE
+  - SET_CAPABILITY_DEFAULT
   - DISABLE
   data_scope: 平台模型技术数据；项目业务内容按项目成员与范围校验
   limitations:
@@ -24755,8 +24826,10 @@ role_menu_mappings:
   - VIEW
   - CREATE
   - EDIT
-  - VALIDATE
-  - ENABLE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
+  - ACTIVATE
+  - SET_CAPABILITY_DEFAULT
   - DISABLE
   - PUBLISH_ENDPOINT
   data_scope: 平台全部active数据和依法保留的history数据；高风险操作仍必须审计。
@@ -24773,8 +24846,10 @@ role_menu_mappings:
   - VIEW
   - CREATE
   - EDIT
-  - VALIDATE
-  - ENABLE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
+  - ACTIVATE
+  - SET_CAPABILITY_DEFAULT
   - DISABLE
   - PUBLISH_ENDPOINT
   data_scope: 平台技术数据；项目业务数据按明确项目ID或附加CROSS_PROJECT_AUTHORIZATION_GRANT_ALL权限获得
@@ -24792,8 +24867,10 @@ role_menu_mappings:
   - VIEW
   - CREATE
   - EDIT
-  - VALIDATE
-  - ENABLE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
+  - ACTIVATE
+  - SET_CAPABILITY_DEFAULT
   - DISABLE
   - PUBLISH_ENDPOINT
   data_scope: 平台模型技术数据；项目业务内容按项目成员与范围校验
@@ -24878,7 +24955,8 @@ role_menu_mappings:
   allowed_operations:
   - VIEW
   - EXPORT
-  - VALIDATE_REFERENCES
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW_REFERENCES
   data_scope: 平台全部active数据和依法保留的history数据；高风险操作仍必须审计。
   limitations:
   - 不得删除、停用、归档admin或移除其SUPER_ADMIN绑定
@@ -24892,7 +24970,8 @@ role_menu_mappings:
   allowed_operations:
   - VIEW
   - EXPORT
-  - VALIDATE_REFERENCES
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW_REFERENCES
   data_scope: 平台技术数据；项目业务数据按明确项目ID或附加CROSS_PROJECT_AUTHORIZATION_GRANT_ALL权限获得
   limitations:
   - 不得默认授予动态全部项目范围
@@ -24963,7 +25042,8 @@ role_menu_mappings:
   allowed_operations:
   - VIEW
   - EDIT
-  - VALIDATE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
   - PUBLISH
   - ROLLBACK
   data_scope: 平台全部active数据和依法保留的history数据；高风险操作仍必须审计。
@@ -24979,7 +25059,8 @@ role_menu_mappings:
   allowed_operations:
   - VIEW
   - EDIT
-  - VALIDATE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
   - PUBLISH
   - ROLLBACK
   data_scope: 平台技术数据；项目业务数据按明确项目ID或附加CROSS_PROJECT_AUTHORIZATION_GRANT_ALL权限获得
@@ -24997,7 +25078,8 @@ role_menu_mappings:
   - VIEW
   - EDIT_PLATFORM_DEFAULT
   - EDIT_PROJECT_RANGE
-  - VALIDATE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
   - PUBLISH
   data_scope: 平台全部active数据和依法保留的history数据；高风险操作仍必须审计。
   limitations:
@@ -25013,7 +25095,8 @@ role_menu_mappings:
   - VIEW
   - EDIT_PLATFORM_DEFAULT
   - EDIT_PROJECT_RANGE
-  - VALIDATE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
   - PUBLISH
   data_scope: 平台技术数据；项目业务数据按明确项目ID或附加CROSS_PROJECT_AUTHORIZATION_GRANT_ALL权限获得
   limitations:
@@ -25029,7 +25112,8 @@ role_menu_mappings:
   allowed_operations:
   - VIEW
   - EDIT_PROJECT_RANGE
-  - VALIDATE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
   - PUBLISH
   data_scope: ACTIVE ProjectMember与ROLE-PROJECT-OWNER-DUTY动态派生当前project_id边界内Owner ALL；不持久化Owner专属DataScopeGrant
   limitations:
@@ -25045,7 +25129,8 @@ role_menu_mappings:
   allowed_operations:
   - VIEW
   - EDIT
-  - VALIDATE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
   - PUBLISH
   - ROTATE_SYSTEM_SECRET
   data_scope: 平台全部active数据和依法保留的history数据；高风险操作仍必须审计。
@@ -25061,7 +25146,8 @@ role_menu_mappings:
   allowed_operations:
   - VIEW
   - EDIT
-  - VALIDATE
+  - CONNECTION_TEST
+  - SUBMIT_REVIEW
   - PUBLISH
   - ROTATE_SYSTEM_SECRET
   data_scope: 平台技术数据；项目业务数据按明确项目ID或附加CROSS_PROJECT_AUTHORIZATION_GRANT_ALL权限获得
@@ -29189,7 +29275,7 @@ traceability_index:
   evidence_ids:
   - ENT-MODEL-CONFIG
   - ENT-AUDIT
-  - 平台级供应商、模型、路由、Prompt和凭证由MODEL_CONFIGURATION_MANAGE维护；正式版本由MODEL_VERSION_REVIEW独立审核；项目偏好仅由获授权项目主体维护。
+  - ModelConfig查看、创建、编辑、Connection Test、禁用和默认绑定由MODEL_CONFIGURATION_MANAGE维护；VALIDATING到ACTIVE仅由MODEL_VERSION_REVIEW独立审核。
   source_status: SUPPORTED_BY_MULTIPLE_SOURCES
 - trace_id: TR-USR-SCN-071
   target_type: SCENARIO
@@ -29437,7 +29523,6 @@ traceability_index:
   - USR-SCN-072
   - OBJ-057
   - OBJ-058
-  - OBJ-059
   - OBJ-060
   - OBJ-070
   - OBJ-071
@@ -29838,7 +29923,6 @@ traceability_index:
   - USR-SCN-071
   - OBJ-057
   - OBJ-058
-  - OBJ-059
   source_status: SUPPORTED_BY_MULTIPLE_SOURCES
 - trace_id: TR-MENU-09-002
   target_type: MENU
@@ -29854,7 +29938,6 @@ traceability_index:
   evidence_ids:
   - USR-SCN-070
   - OBJ-058
-  - OBJ-059
   source_status: SUPPORTED_BY_MULTIPLE_SOURCES
 - trace_id: TR-MENU-09-004
   target_type: MENU

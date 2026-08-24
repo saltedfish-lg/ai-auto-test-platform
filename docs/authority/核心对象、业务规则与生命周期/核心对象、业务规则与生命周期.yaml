@@ -6237,8 +6237,8 @@ objects:
   object_type: EXTERNAL_REFERENCE
   domain: DOM-021
   bounded_context_id: BC-013
-  definition: 提供模型API的外部或内部供应方配置对象。
-  business_purpose: 提供模型API的外部或内部供应方配置对象。
+  definition: 平台固定白名单中的模型供应方定义；当前仅允许OpenAI、Anthropic、DeepSeek、Qwen、Doubao，不提供Custom Provider注册。
+  business_purpose: 为ModelConfig提供受控Provider代码和平台预置端点，避免用户输入任意base_url。
   scope_level: PLATFORM_LEVEL
   aggregate_id: AGG-019
   is_aggregate_root: false
@@ -6336,8 +6336,8 @@ objects:
   object_type: AGGREGATE_ROOT
   domain: DOM-021
   bounded_context_id: BC-013
-  definition: 模型、参数、额度、超时和路由标签的版本化配置。
-  business_purpose: 模型、参数、额度、超时和路由标签的版本化配置。
+  definition: 单一模型配置业务对象，保存固定白名单Provider、Provider原生model_name、超时、加密Secret引用和LC-058生命周期；不建立ModelConfigVersion独立对象。
+  business_purpose: 为平台Capability提供经正式审核、可安全解析并通过ModelGateway调用的模型配置。
   scope_level: PLATFORM_LEVEL
   aggregate_id: AGG-019
   is_aggregate_root: true
@@ -6353,7 +6353,21 @@ objects:
   lifecycle_id: LC-058
   state_dimensions:
   - SD-058-LIFECYCLE
-  versioning_rule: 对象配置变更保留版本号或修订记录；运行中任务继续使用创建时快照。
+  versioning_rule: 不建立ModelConfigVersion独立对象；使用row_version执行乐观锁，正式消费者在任务创建时固化必要配置快照。
+  foundation_contract:
+    provider_whitelist:
+    - OpenAI
+    - Anthropic
+    - DeepSeek
+    - Qwen
+    - Doubao
+    model_name_rule: 使用Provider原生模型标识，不要求平台维护完整模型目录。
+    base_url_rule: 由平台预置且不进入公开写入Contract；禁止用户输入任意URL。
+    activation_rule: 只有MODEL_VERSION_REVIEW审核通过，ModelConfig才可从VALIDATING进入ACTIVE。
+    capability_binding_rule: capability_code=AI_EXPLORATION在平台级最多一个effective default；无项目偏好、继承或fallback。
+    disable_rule: 当前effective default必须先解除绑定或原子切换到其他ACTIVE配置，禁止自动解绑或fallback。
+    connection_test_rule: 即时经ModelGateway和LiteLLM Proxy真实调用，返回结构化结果并写不可变审计；不持久化last_test字段且不改变生命周期。
+    secret_rule: Secret数据库加密保存；API、UI回填、日志、审计和Runtime Evidence均不得包含明文Secret。
   snapshot_rule: 正式任务或受控流程创建时必须固化不可变快照；源对象后续变更不得回写既有快照。
   archive_rule: 归档后禁止新写入，保留历史查询和引用完整性。
   delete_rule: 存在有效引用时禁止物理删除；先停用或归档，清理由受控请求执行。
@@ -24781,16 +24795,15 @@ business_rules:
   subject: ROLE-MODEL-ADMIN
   object_ids:
   - OBJ-058
-  - OBJ-079
   trigger: 发起配置和启用AI模型
   preconditions:
   - 发起人有模型配置权限
   - 审核人具有独立模型版本审核角色
-  rule_statement: 项目可配置偏好，但不得覆盖安全禁止和平台路由边界
-  required_action: 项目可配置偏好，但不得覆盖安全禁止和平台路由边界
+  rule_statement: AI_EXPLORATION只允许一个平台级effective default；不得创建项目偏好、继承或fallback
+  required_action: AI_EXPLORATION只允许一个平台级effective default；不得创建项目偏好、继承或fallback
   prohibited_action: null
   allowed_action: null
-  expected_result: 动作“项目可配置偏好，但不得覆盖安全禁止和平台路由边界”完成并形成可追溯结果。
+  expected_result: 动作“AI_EXPLORATION只允许一个平台级effective default；不得创建项目偏好、继承或fallback”完成并形成可追溯结果。
   failure_result: null
   exception_conditions: []
   exception_behavior: null
@@ -24819,7 +24832,6 @@ business_rules:
   subject: ROLE-MODEL-ADMIN
   object_ids:
   - OBJ-058
-  - OBJ-079
   trigger: 发起配置和启用AI模型
   preconditions:
   - 发起人有模型配置权限
@@ -24860,7 +24872,6 @@ business_rules:
   subject: ROLE-MODEL-ADMIN
   object_ids:
   - OBJ-058
-  - OBJ-079
   trigger: 发起配置和启用AI模型
   preconditions:
   - 发起人有模型配置权限
@@ -24900,7 +24911,6 @@ business_rules:
   subject: ROLE-MODEL-ADMIN
   object_ids:
   - OBJ-058
-  - OBJ-079
   trigger: 发起配置和启用AI模型
   preconditions:
   - 发起人有模型配置权限
@@ -24941,12 +24951,11 @@ business_rules:
   subject: ROLE-MODEL-ADMIN
   object_ids:
   - OBJ-058
-  - OBJ-079
   trigger: 发起配置和启用AI模型
   preconditions:
   - 发起人有模型配置权限
   - 审核人具有独立模型版本审核角色
-  rule_statement: 在“配置和启用AI模型”中，并发校验必须满足：模型版本与路由指针CAS；调用固化配置快照。
+  rule_statement: 在“配置和启用AI模型”中，并发校验必须满足：ModelConfig使用row_version CAS；Capability默认绑定以capability_code唯一约束；消费者固化配置快照。
   required_action: null
   prohibited_action: null
   allowed_action: null
@@ -24961,7 +24970,7 @@ business_rules:
   permission_requirements: []
   state_requirements: []
   concurrency_requirements:
-  - 模型版本与路由指针CAS；调用固化配置快照
+  - ModelConfig使用row_version CAS；Capability默认绑定以capability_code唯一约束；消费者固化配置快照
   audit_requirements: []
   lifecycle_stage: WHEN_TRIGGERED
   related_scenarios:
@@ -24985,12 +24994,11 @@ business_rules:
   subject: ROLE-MODEL-ADMIN
   object_ids:
   - OBJ-058
-  - OBJ-079
   trigger: 发起配置和启用AI模型
   preconditions:
   - 发起人有模型配置权限
   - 审核人具有独立模型版本审核角色
-  rule_statement: 在“配置和启用AI模型”中，数据范围必须满足：平台模型技术对象属于平台级模型配置范围；项目模型偏好只作用于明确授权项目。模型管理员的平台配置权限不自动授予项目业务内容访问。。
+  rule_statement: 在“配置和启用AI模型”中，数据范围必须满足：ModelConfig与AI_EXPLORATION默认绑定均属于平台级范围；模型管理员的配置权限不授予项目业务内容访问。。
   required_action: null
   prohibited_action: null
   allowed_action: null
@@ -25003,7 +25011,7 @@ business_rules:
     rank: 90
     name: 权限与数据范围
   permission_requirements:
-  - 平台模型技术对象属于平台级模型配置范围；项目模型偏好只作用于明确授权项目。模型管理员的平台配置权限不自动授予项目业务内容访问。
+  - ModelConfig与AI_EXPLORATION默认绑定均属于平台级范围；模型管理员的配置权限不授予项目业务内容访问。
   state_requirements: []
   concurrency_requirements: []
   audit_requirements: []
@@ -25026,20 +25034,19 @@ business_rules:
   subject: ROLE-MODEL-ADMIN
   object_ids:
   - OBJ-058
-  - OBJ-079
   trigger: 发起配置和启用AI模型
   preconditions:
   - 发起人有模型配置权限
   - 审核人具有独立模型版本审核角色
-  rule_statement: 在“配置和启用AI模型”中，异常流程必须满足：凭证无效、健康失败、审核职责冲突或越权项目内容访问时拒绝。
+  rule_statement: 在“配置和启用AI模型”中，异常流程必须满足：凭证无效、真实连接测试失败、审核职责冲突、非ACTIVE默认绑定或默认模型禁用冲突时拒绝。
   required_action: null
   prohibited_action: null
   allowed_action: null
   expected_result: null
-  failure_result: 凭证无效、健康失败、审核职责冲突或越权项目内容访问时拒绝
+  failure_result: 凭证无效、真实连接测试失败、审核职责冲突、非ACTIVE默认绑定或默认模型禁用冲突时拒绝
   exception_conditions:
-  - 凭证无效、健康失败、审核职责冲突或越权项目内容访问时拒绝
-  exception_behavior: 凭证无效、健康失败、审核职责冲突或越权项目内容访问时拒绝
+  - 凭证无效、真实连接测试失败、审核职责冲突、非ACTIVE默认绑定或默认模型禁用冲突时拒绝
+  exception_behavior: 凭证无效、真实连接测试失败、审核职责冲突、非ACTIVE默认绑定或默认模型禁用冲突时拒绝
   priority:
     level: P6
     rank: 50
@@ -25068,7 +25075,6 @@ business_rules:
   subject: ROLE-MODEL-ADMIN
   object_ids:
   - OBJ-058
-  - OBJ-079
   trigger: 发起配置和启用AI模型
   preconditions:
   - 发起人有模型配置权限
@@ -25107,7 +25113,6 @@ business_rules:
   subject: ROLE-MODEL-ADMIN
   object_ids:
   - OBJ-058
-  - OBJ-079
   trigger: 发起配置和启用AI模型
   preconditions:
   - 发起人有模型配置权限
@@ -25146,16 +25151,15 @@ business_rules:
   subject: ROLE-MODEL-ADMIN
   object_ids:
   - OBJ-058
-  - OBJ-079
   trigger: 发起配置和启用AI模型
   preconditions:
   - 发起人有模型配置权限
   - 审核人具有独立模型版本审核角色
-  rule_statement: 在平台级范围创建供应商、模型、路由、Prompt和凭证草稿
-  required_action: 在平台级范围创建供应商、模型、路由、Prompt和凭证草稿
+  rule_statement: 在平台级范围创建单一ModelConfig，选择固定白名单Provider、填写Provider原生model_name并加密保存Secret
+  required_action: 在平台级范围创建单一ModelConfig，选择固定白名单Provider、填写Provider原生model_name并加密保存Secret
   prohibited_action: null
   allowed_action: null
-  expected_result: 动作“在平台级范围创建供应商、模型、路由、Prompt和凭证草稿”完成并形成可追溯结果。
+  expected_result: 动作“在平台级范围创建单一ModelConfig，选择固定白名单Provider、填写Provider原生model_name并加密保存Secret”完成并形成可追溯结果。
   failure_result: null
   exception_conditions: []
   exception_behavior: null
@@ -25194,16 +25198,15 @@ business_rules:
   subject: ROLE-MODEL-ADMIN
   object_ids:
   - OBJ-058
-  - OBJ-079
   trigger: 发起配置和启用AI模型
   preconditions:
   - 发起人有模型配置权限
   - 审核人具有独立模型版本审核角色
-  rule_statement: 执行供应商健康、凭证和技术权限检查
-  required_action: 执行供应商健康、凭证和技术权限检查
+  rule_statement: 经ModelGateway和LiteLLM Proxy执行真实Connection Test，返回结构化结果并写不可变审计，不改变生命周期
+  required_action: 经ModelGateway和LiteLLM Proxy执行真实Connection Test，返回结构化结果并写不可变审计，不改变生命周期
   prohibited_action: null
   allowed_action: null
-  expected_result: 动作“执行供应商健康、凭证和技术权限检查”完成并形成可追溯结果。
+  expected_result: 动作“经ModelGateway和LiteLLM Proxy执行真实Connection Test，返回结构化结果并写不可变审计，不改变生命周期”完成并形成可追溯结果。
   failure_result: null
   exception_conditions: []
   exception_behavior: null
@@ -25242,16 +25245,15 @@ business_rules:
   subject: ROLE-MODEL-ADMIN
   object_ids:
   - OBJ-058
-  - OBJ-079
   trigger: 发起配置和启用AI模型
   preconditions:
   - 发起人有模型配置权限
   - 审核人具有独立模型版本审核角色
-  rule_statement: 使用MODEL_VERSION_REVIEW提交并完成独立模型版本审核
-  required_action: 使用MODEL_VERSION_REVIEW提交并完成独立模型版本审核
+  rule_statement: 使用MODEL_VERSION_REVIEW审核VALIDATING的同一ModelConfig并进入ACTIVE，不创建ModelConfigVersion
+  required_action: 使用MODEL_VERSION_REVIEW审核VALIDATING的同一ModelConfig并进入ACTIVE，不创建ModelConfigVersion
   prohibited_action: null
   allowed_action: null
-  expected_result: 动作“使用MODEL_VERSION_REVIEW提交并完成独立模型版本审核”完成并形成可追溯结果。
+  expected_result: 动作“使用MODEL_VERSION_REVIEW审核VALIDATING的同一ModelConfig并进入ACTIVE，不创建ModelConfigVersion”完成并形成可追溯结果。
   failure_result: null
   exception_conditions: []
   exception_behavior: null
@@ -25289,16 +25291,15 @@ business_rules:
   subject: ROLE-MODEL-ADMIN
   object_ids:
   - OBJ-058
-  - OBJ-079
   trigger: 发起配置和启用AI模型
   preconditions:
   - 发起人有模型配置权限
   - 审核人具有独立模型版本审核角色
-  rule_statement: 发布平台模型配置版本
-  required_action: 发布平台模型配置版本
+  rule_statement: 独立审核通过后将同一ModelConfig从VALIDATING推进到ACTIVE，不创建独立版本对象
+  required_action: 独立审核通过后将同一ModelConfig从VALIDATING推进到ACTIVE，不创建独立版本对象
   prohibited_action: null
   allowed_action: null
-  expected_result: 动作“发布平台模型配置版本”完成并形成可追溯结果。
+  expected_result: 动作“独立审核通过后将同一ModelConfig从VALIDATING推进到ACTIVE，不创建独立版本对象”完成并形成可追溯结果。
   failure_result: null
   exception_conditions: []
   exception_behavior: null
@@ -25337,16 +25338,15 @@ business_rules:
   subject: ROLE-MODEL-ADMIN
   object_ids:
   - OBJ-058
-  - OBJ-079
   trigger: 发起配置和启用AI模型
   preconditions:
   - 发起人有模型配置权限
   - 审核人具有独立模型版本审核角色
-  rule_statement: 在“配置和启用AI模型”中，主流程必须满足：获授权项目维护项目模型偏好，路由服务按项目偏好和平台规则选择模型。
-  required_action: 获授权项目维护项目模型偏好，路由服务按项目偏好和平台规则选择模型
+  rule_statement: 在“配置和启用AI模型”中，主流程必须满足：将一个ACTIVE ModelConfig设置为AI_EXPLORATION平台级effective default，并保证唯一性。
+  required_action: 将一个ACTIVE ModelConfig设置为AI_EXPLORATION平台级effective default，并保证唯一性
   prohibited_action: null
   allowed_action: null
-  expected_result: 动作“获授权项目维护项目模型偏好，路由服务按项目偏好和平台规则选择模型”完成并形成可追溯结果。
+  expected_result: 动作“将一个ACTIVE ModelConfig设置为AI_EXPLORATION平台级effective default，并保证唯一性”完成并形成可追溯结果。
   failure_result: null
   exception_conditions: []
   exception_behavior: null
@@ -25385,16 +25385,15 @@ business_rules:
   subject: ROLE-MODEL-ADMIN
   object_ids:
   - OBJ-058
-  - OBJ-079
   trigger: 发起配置和启用AI模型
   preconditions:
   - 发起人有模型配置权限
   - 审核人具有独立模型版本审核角色
-  rule_statement: 记录调用、费用和配置/项目范围审计
-  required_action: 记录调用、费用和配置/项目范围审计
+  rule_statement: 记录创建、修改、Secret更新、审核启用、禁用、默认绑定和Connection Test不可变审计，且不记录Secret
+  required_action: 记录创建、修改、Secret更新、审核启用、禁用、默认绑定和Connection Test不可变审计，且不记录Secret
   prohibited_action: null
   allowed_action: null
-  expected_result: 动作“记录调用、费用和配置/项目范围审计”完成并形成可追溯结果。
+  expected_result: 动作“记录创建、修改、Secret更新、审核启用、禁用、默认绑定和Connection Test不可变审计，且不记录Secret”完成并形成可追溯结果。
   failure_result: null
   exception_conditions: []
   exception_behavior: null
@@ -25433,12 +25432,11 @@ business_rules:
   subject: ROLE-MODEL-ADMIN
   object_ids:
   - OBJ-058
-  - OBJ-079
   trigger: 发起配置和启用AI模型
   preconditions:
   - 发起人有模型配置权限
   - 审核人具有独立模型版本审核角色
-  rule_statement: 平台级供应商、模型、路由、Prompt和凭证由MODEL_CONFIGURATION_MANAGE维护；正式版本由MODEL_VERSION_REVIEW独立审核；项目偏好仅由获授权项目主体维护。
+  rule_statement: ModelConfig查看、创建、编辑、Connection Test、禁用和默认绑定由MODEL_CONFIGURATION_MANAGE维护；VALIDATING到ACTIVE仅由MODEL_VERSION_REVIEW独立审核。
   required_action: null
   prohibited_action: null
   allowed_action: null
@@ -25451,7 +25449,7 @@ business_rules:
     rank: 90
     name: 权限与数据范围
   permission_requirements:
-  - 平台级供应商、模型、路由、Prompt和凭证由MODEL_CONFIGURATION_MANAGE维护；正式版本由MODEL_VERSION_REVIEW独立审核；项目偏好仅由获授权项目主体维护。
+  - ModelConfig查看、创建、编辑、Connection Test、禁用和默认绑定由MODEL_CONFIGURATION_MANAGE维护；VALIDATING到ACTIVE仅由MODEL_VERSION_REVIEW独立审核。
   state_requirements: []
   concurrency_requirements: []
   audit_requirements: []
@@ -25475,7 +25473,6 @@ business_rules:
   subject: ROLE-MODEL-ADMIN
   object_ids:
   - OBJ-058
-  - OBJ-079
   trigger: 发起配置和启用AI模型
   preconditions:
   - 发起人有模型配置权限
@@ -25513,7 +25510,6 @@ business_rules:
   subject: ROLE-MODEL-ADMIN
   object_ids:
   - OBJ-058
-  - OBJ-079
   trigger: 发起配置和启用AI模型
   preconditions:
   - 审核人具有独立模型版本审核角色
@@ -25550,7 +25546,6 @@ business_rules:
   subject: ROLE-MODEL-ADMIN
   object_ids:
   - OBJ-058
-  - OBJ-079
   trigger: 发起配置和启用AI模型
   preconditions:
   - 发起人有模型配置权限
@@ -25597,20 +25592,19 @@ business_rules:
   subject: ROLE-MODEL-ADMIN
   object_ids:
   - OBJ-058
-  - OBJ-079
   trigger: 发起配置和启用AI模型
   preconditions:
   - 发起人有模型配置权限
   - 审核人具有独立模型版本审核角色
-  rule_statement: 修复草稿并重新审核发布
-  required_action: 修复草稿并重新审核发布
+  rule_statement: 修复ModelConfig后重新进入VALIDATING并由MODEL_VERSION_REVIEW审核激活
+  required_action: 修复ModelConfig后重新进入VALIDATING并由MODEL_VERSION_REVIEW审核激活
   prohibited_action: null
   allowed_action: null
   expected_result: null
   failure_result: null
   exception_conditions:
   - 场景失败或中断
-  exception_behavior: 修复草稿并重新审核发布
+  exception_behavior: 修复ModelConfig后重新进入VALIDATING并由MODEL_VERSION_REVIEW审核激活
   priority:
     level: P6
     rank: 50
@@ -25642,7 +25636,6 @@ business_rules:
   subject: 调度或场景编排服务
   object_ids:
   - OBJ-058
-  - OBJ-079
   trigger: null
   preconditions:
   - 平台存储/审计：REQUIRED；predicate=TRUE; 平台存储/审计不可用时不得执行对应业务副作用；进入明确的PRESTART_BLOCKED、WAITING_RESOURCE或场景失败结果，并记录资源原因。
@@ -25683,7 +25676,6 @@ business_rules:
   subject: 调度或场景编排服务
   object_ids:
   - OBJ-058
-  - OBJ-079
   trigger: null
   preconditions:
   - AI模型：REQUIRED；predicate=TRUE; AI模型不可用时不得执行对应业务副作用；进入明确的PRESTART_BLOCKED、WAITING_RESOURCE或场景失败结果，并记录资源原因。
@@ -25724,16 +25716,15 @@ business_rules:
   subject: ROLE-MODEL-ADMIN
   object_ids:
   - OBJ-058
-  - OBJ-079
   trigger: 发起配置和启用AI模型
   preconditions:
   - 发起人有模型配置权限
   - 审核人具有独立模型版本审核角色
-  rule_statement: '在“配置和启用AI模型”中，状态流转必须满足：模型版本: DRAFT→PENDING_REVIEW→PUBLISHED→DISABLED/ARCHIVED。'
+  rule_statement: '在“配置和启用AI模型”中，状态流转必须满足：ModelConfig: CREATED→CONFIGURING→VALIDATING→ACTIVE→DISABLED/ARCHIVED。'
   required_action: null
   prohibited_action: null
   allowed_action: null
-  expected_result: '模型版本: DRAFT→PENDING_REVIEW→PUBLISHED→DISABLED/ARCHIVED'
+  expected_result: 'ModelConfig: CREATED→CONFIGURING→VALIDATING→ACTIVE→DISABLED/ARCHIVED'
   failure_result: null
   exception_conditions: []
   exception_behavior: null
@@ -25767,16 +25758,15 @@ business_rules:
   subject: ROLE-MODEL-ADMIN
   object_ids:
   - OBJ-058
-  - OBJ-079
   trigger: 发起配置和启用AI模型
   preconditions:
   - 发起人有模型配置权限
   - 审核人具有独立模型版本审核角色
-  rule_statement: 只有已发布版本可被AI任务引用，业务数据访问经过项目范围校验
+  rule_statement: 只有ACTIVE ModelConfig可被Capability绑定；AI_EXPLORATION在平台级最多一个effective default
   required_action: null
   prohibited_action: null
   allowed_action: null
-  expected_result: 只有已发布版本可被AI任务引用，业务数据访问经过项目范围校验
+  expected_result: 只有ACTIVE ModelConfig可被Capability绑定；AI_EXPLORATION在平台级最多一个effective default
   failure_result: null
   exception_conditions: []
   exception_behavior: null
@@ -25806,7 +25796,6 @@ business_rules:
   subject: ROLE-MODEL-ADMIN
   object_ids:
   - OBJ-058
-  - OBJ-079
   trigger: 发起配置和启用AI模型
   preconditions:
   - 发起人有模型配置权限
@@ -100414,7 +100403,7 @@ rule_conditions:
 - condition_id: COND-000179
   rule_id: BR-AI-0009
   condition_type: CONDITION_EXPRESSION
-  expression: 模型版本与路由指针CAS；调用固化配置快照
+  expression: ModelConfig使用row_version CAS；Capability默认绑定以capability_code唯一约束；消费者固化配置快照
   evaluation_order: 179
 - condition_id: COND-000180
   rule_id: BR-AI-0010
@@ -100434,7 +100423,7 @@ rule_conditions:
 - condition_id: COND-000183
   rule_id: BR-AI-0010
   condition_type: CONDITION_EXPRESSION
-  expression: 平台模型技术对象属于平台级模型配置范围；项目模型偏好只作用于明确授权项目。模型管理员的平台配置权限不自动授予项目业务内容访问。
+  expression: ModelConfig与AI_EXPLORATION默认绑定均属于平台级范围；模型管理员的配置权限不授予项目业务内容访问。
   evaluation_order: 183
 - condition_id: COND-000184
   rule_id: BR-AI-0011
@@ -100599,7 +100588,7 @@ rule_conditions:
 - condition_id: COND-000216
   rule_id: BR-AI-0020
   condition_type: CONDITION_EXPRESSION
-  expression: 平台级供应商、模型、路由、Prompt和凭证由MODEL_CONFIGURATION_MANAGE维护；正式版本由MODEL_VERSION_REVIEW独立审核；项目偏好仅由获授权项目主体维护。
+  expression: ModelConfig查看、创建、编辑、Connection Test、禁用和默认绑定由MODEL_CONFIGURATION_MANAGE维护；VALIDATING到ACTIVE仅由MODEL_VERSION_REVIEW独立审核。
   evaluation_order: 216
 - condition_id: COND-000217
   rule_id: BR-AI-0021
@@ -100714,7 +100703,7 @@ rule_conditions:
 - condition_id: COND-000239
   rule_id: BR-AI-0028
   condition_type: CONDITION_EXPRESSION
-  expression: 只有已发布版本可被AI任务引用，业务数据访问经过项目范围校验
+  expression: 只有ACTIVE ModelConfig可被Capability绑定；AI_EXPLORATION在平台级最多一个effective default
   evaluation_order: 239
 - condition_id: COND-000240
   rule_id: BR-AI-0029
@@ -116184,8 +116173,8 @@ rule_exceptions:
   priority_over_base_rule: true
 - exception_id: EXC-000007
   rule_id: BR-AI-0011
-  condition: 凭证无效、健康失败、审核职责冲突或越权项目内容访问时拒绝
-  behavior: 凭证无效、健康失败、审核职责冲突或越权项目内容访问时拒绝
+  condition: 凭证无效、真实连接测试失败、审核职责冲突、非ACTIVE默认绑定或默认模型禁用冲突时拒绝
+  behavior: 凭证无效、真实连接测试失败、审核职责冲突、非ACTIVE默认绑定或默认模型禁用冲突时拒绝
   priority_over_base_rule: true
 - exception_id: EXC-000008
   rule_id: BR-AI-0023
@@ -116195,7 +116184,7 @@ rule_exceptions:
 - exception_id: EXC-000009
   rule_id: BR-AI-0024
   condition: 场景失败或中断
-  behavior: 修复草稿并重新审核发布
+  behavior: 修复ModelConfig后重新进入VALIDATING并由MODEL_VERSION_REVIEW审核激活
   priority_over_base_rule: true
 - exception_id: EXC-000010
   rule_id: BR-AI-0034
@@ -197687,7 +197676,7 @@ decisions:
 - decision_id: ADR-021
   title: 模型供应商白名单与默认模型
   status: ACCEPTED
-  final_decision: "V1支持OpenAI兼容协议和一个默认实现；业务仅依赖ModelGateway，不直连供应商SDK；模型、Prompt版本、费用与调用事实全量审计。"
+  final_decision: "V1固定支持OpenAI、Anthropic、DeepSeek、Qwen、Doubao；model_name使用Provider原生标识；base_url平台预置且不可由用户编辑；业务统一经ModelGateway和LiteLLM Proxy调用；AI_EXPLORATION仅有一个平台级effective default且无项目偏好/fallback；Secret加密保存且永不返回；Connection Test只返回即时结构化结果并写不可变审计。"
   authority_basis:
   - 当前Living Authority ADR-register
   - 产品总体需求与系统边界

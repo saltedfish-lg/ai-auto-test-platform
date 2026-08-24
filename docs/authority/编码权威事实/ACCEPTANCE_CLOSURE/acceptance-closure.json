@@ -3399,10 +3399,10 @@
         "发起人有模型配置权限",
         "审核人具有独立模型版本审核角色"
       ],
-      "action": "项目可配置偏好，但不得覆盖安全禁止和平台路由边界",
+      "action": "AI_EXPLORATION只允许一个平台级effective default；不得创建项目偏好、继承或fallback",
       "expected_response": {
         "outcome": "SUCCESS_OR_RULE_DEFINED_REJECTION",
-        "description": "动作“项目可配置偏好，但不得覆盖安全禁止和平台路由边界”完成并形成可追溯结果。",
+        "description": "动作“AI_EXPLORATION只允许一个平台级effective default；不得创建项目偏好、继承或fallback”完成并形成可追溯结果。",
         "failure_description": "返回明确失败原因且不部分提交"
       },
       "expected_state": [
@@ -3654,7 +3654,7 @@
       "action": "发起配置和启用AI模型",
       "expected_response": {
         "outcome": "SUCCESS_OR_RULE_DEFINED_REJECTION",
-        "description": "在“配置和启用AI模型”中，并发校验必须满足：模型版本与路由指针CAS；调用固化配置快照。",
+        "description": "在“配置和启用AI模型”中，并发校验必须满足：ModelConfig使用row_version CAS；Capability默认绑定以capability_code唯一约束；消费者固化配置快照。",
         "failure_description": "并发门禁不通过时按规则等待、拒绝或返回既有幂等结果。"
       },
       "expected_state": [
@@ -3717,7 +3717,7 @@
       "action": "发起配置和启用AI模型",
       "expected_response": {
         "outcome": "SUCCESS_OR_RULE_DEFINED_REJECTION",
-        "description": "在“配置和启用AI模型”中，数据范围必须满足：平台模型技术对象属于平台级模型配置范围；项目模型偏好只作用于明确授权项目。模型管理员的平台配置权限不自动授予项目业务内容访问。。",
+        "description": "在“配置和启用AI模型”中，数据范围必须满足：ModelConfig与AI_EXPLORATION默认绑定均属于平台级范围；模型管理员配置权限不授予项目业务内容访问。。",
         "failure_description": "超出数据范围时拒绝操作并记录审计。"
       },
       "expected_state": [
@@ -3734,7 +3734,7 @@
         "重复投递由event_id幂等处理"
       ],
       "permission_assertions": [
-        "平台模型技术对象属于平台级模型配置范围；项目模型偏好只作用于明确授权项目。模型管理员的平台配置权限不自动授予项目业务内容访问。"
+        "ModelConfig与AI_EXPLORATION默认绑定均属于平台级范围；模型管理员配置权限不授予项目业务内容访问。"
       ],
       "idempotency_assertions": [
         "同一Idempotency-Key和请求哈希返回同一结果",
@@ -3780,8 +3780,8 @@
       "action": "发起配置和启用AI模型",
       "expected_response": {
         "outcome": "SUCCESS_OR_RULE_DEFINED_REJECTION",
-        "description": "在“配置和启用AI模型”中，异常流程必须满足：凭证无效、健康失败、审核职责冲突或越权项目内容访问时拒绝。",
-        "failure_description": "凭证无效、健康失败、审核职责冲突或越权项目内容访问时拒绝"
+        "description": "在“配置和启用AI模型”中，异常流程必须满足：凭证无效、真实连接测试失败、审核职责冲突、非ACTIVE默认绑定或默认模型禁用冲突时拒绝。",
+        "failure_description": "凭证无效、真实连接测试失败、审核职责冲突、非ACTIVE默认绑定或默认模型禁用冲突时拒绝"
       },
       "expected_state": [
         "仅发生规则允许的状态变化；拒绝路径保持原状态"
@@ -3966,10 +3966,10 @@
         "发起人有模型配置权限",
         "审核人具有独立模型版本审核角色"
       ],
-      "action": "在平台级范围创建供应商、模型、路由、Prompt和凭证草稿",
+      "action": "在平台级范围创建单一ModelConfig，选择固定白名单Provider、填写Provider原生model_name并加密保存Secret",
       "expected_response": {
         "outcome": "SUCCESS_OR_RULE_DEFINED_REJECTION",
-        "description": "动作“在平台级范围创建供应商、模型、路由、Prompt和凭证草稿”完成并形成可追溯结果。",
+        "description": "动作“在平台级范围创建单一ModelConfig，选择固定白名单Provider、填写Provider原生model_name并加密保存Secret”完成并形成可追溯结果。",
         "failure_description": "返回明确失败原因且不部分提交"
       },
       "expected_state": [
@@ -4029,10 +4029,10 @@
         "发起人有模型配置权限",
         "审核人具有独立模型版本审核角色"
       ],
-      "action": "执行供应商健康、凭证和技术权限检查",
+      "action": "经ModelGateway和LiteLLM Proxy执行真实Connection Test并返回结构化结果，不改变生命周期",
       "expected_response": {
         "outcome": "SUCCESS_OR_RULE_DEFINED_REJECTION",
-        "description": "动作“执行供应商健康、凭证和技术权限检查”完成并形成可追溯结果。",
+        "description": "动作“经ModelGateway和LiteLLM Proxy执行真实Connection Test并返回结构化结果，不改变生命周期”完成并形成可追溯结果。",
         "failure_description": "返回明确失败原因且不部分提交"
       },
       "expected_state": [
@@ -4092,10 +4092,10 @@
         "发起人有模型配置权限",
         "审核人具有独立模型版本审核角色"
       ],
-      "action": "使用MODEL_VERSION_REVIEW提交并完成独立模型版本审核",
+      "action": "使用MODEL_VERSION_REVIEW审核VALIDATING的同一ModelConfig并进入ACTIVE，不创建ModelConfigVersion",
       "expected_response": {
         "outcome": "SUCCESS_OR_RULE_DEFINED_REJECTION",
-        "description": "动作“使用MODEL_VERSION_REVIEW提交并完成独立模型版本审核”完成并形成可追溯结果。",
+        "description": "动作“使用MODEL_VERSION_REVIEW审核VALIDATING的同一ModelConfig并进入ACTIVE，不创建ModelConfigVersion”完成并形成可追溯结果。",
         "failure_description": "返回明确失败原因且不部分提交"
       },
       "expected_state": [
@@ -4155,10 +4155,10 @@
         "发起人有模型配置权限",
         "审核人具有独立模型版本审核角色"
       ],
-      "action": "发布平台模型配置版本",
+      "action": "独立审核通过后将同一ModelConfig从VALIDATING推进到ACTIVE",
       "expected_response": {
         "outcome": "SUCCESS_OR_RULE_DEFINED_REJECTION",
-        "description": "动作“发布平台模型配置版本”完成并形成可追溯结果。",
+        "description": "动作“独立审核通过后将同一ModelConfig从VALIDATING推进到ACTIVE”完成并形成可追溯结果。",
         "failure_description": "返回明确失败原因且不部分提交"
       },
       "expected_state": [
@@ -4218,10 +4218,10 @@
         "发起人有模型配置权限",
         "审核人具有独立模型版本审核角色"
       ],
-      "action": "获授权项目维护项目模型偏好，路由服务按项目偏好和平台规则选择模型",
+      "action": "将一个ACTIVE ModelConfig设置为AI_EXPLORATION唯一平台级effective default",
       "expected_response": {
         "outcome": "SUCCESS_OR_RULE_DEFINED_REJECTION",
-        "description": "动作“获授权项目维护项目模型偏好，路由服务按项目偏好和平台规则选择模型”完成并形成可追溯结果。",
+        "description": "动作“将一个ACTIVE ModelConfig设置为AI_EXPLORATION唯一平台级effective default”完成并形成可追溯结果。",
         "failure_description": "返回明确失败原因且不部分提交"
       },
       "expected_state": [
@@ -4281,10 +4281,10 @@
         "发起人有模型配置权限",
         "审核人具有独立模型版本审核角色"
       ],
-      "action": "记录调用、费用和配置/项目范围审计",
+      "action": "记录创建、修改、Secret更新、启用、禁用、默认绑定和Connection Test不可变审计，且不记录Secret",
       "expected_response": {
         "outcome": "SUCCESS_OR_RULE_DEFINED_REJECTION",
-        "description": "动作“记录调用、费用和配置/项目范围审计”完成并形成可追溯结果。",
+        "description": "动作“记录创建、修改、Secret更新、启用、禁用、默认绑定和Connection Test不可变审计，且不记录Secret”完成并形成可追溯结果。",
         "failure_description": "返回明确失败原因且不部分提交"
       },
       "expected_state": [
@@ -4347,7 +4347,7 @@
       "action": "发起配置和启用AI模型",
       "expected_response": {
         "outcome": "SUCCESS_OR_RULE_DEFINED_REJECTION",
-        "description": "平台级供应商、模型、路由、Prompt和凭证由MODEL_CONFIGURATION_MANAGE维护；正式版本由MODEL_VERSION_REVIEW独立审核；项目偏好仅由获授权项目主体维护。",
+        "description": "ModelConfig查看、创建、编辑、Connection Test、禁用和默认绑定由MODEL_CONFIGURATION_MANAGE维护；VALIDATING到ACTIVE仅由MODEL_VERSION_REVIEW独立审核。",
         "failure_description": "返回无权限或超范围结果，业务副作用为零。"
       },
       "expected_state": [
@@ -4364,7 +4364,7 @@
         "重复投递由event_id幂等处理"
       ],
       "permission_assertions": [
-        "平台级供应商、模型、路由、Prompt和凭证由MODEL_CONFIGURATION_MANAGE维护；正式版本由MODEL_VERSION_REVIEW独立审核；项目偏好仅由获授权项目主体维护。"
+        "ModelConfig查看、创建、编辑、Connection Test、禁用和默认绑定由MODEL_CONFIGURATION_MANAGE维护；VALIDATING到ACTIVE仅由MODEL_VERSION_REVIEW独立审核。"
       ],
       "idempotency_assertions": [
         "同一Idempotency-Key和请求哈希返回同一结果",
@@ -4594,10 +4594,10 @@
         "发起人有模型配置权限",
         "审核人具有独立模型版本审核角色"
       ],
-      "action": "修复草稿并重新审核发布",
+      "action": "修复ModelConfig后重新进入VALIDATING并由MODEL_VERSION_REVIEW审核激活",
       "expected_response": {
         "outcome": "SUCCESS_OR_RULE_DEFINED_REJECTION",
-        "description": "修复草稿并重新审核发布",
+        "description": "修复ModelConfig后重新进入VALIDATING并由MODEL_VERSION_REVIEW审核激活",
         "failure_description": "返回明确失败原因且不部分提交"
       },
       "expected_state": [
@@ -4784,7 +4784,7 @@
       "action": "发起配置和启用AI模型",
       "expected_response": {
         "outcome": "SUCCESS_OR_RULE_DEFINED_REJECTION",
-        "description": "模型版本: DRAFT→PENDING_REVIEW→PUBLISHED→DISABLED/ARCHIVED",
+        "description": "ModelConfig: CREATED→CONFIGURING→VALIDATING→ACTIVE→DISABLED/ARCHIVED",
         "failure_description": "返回明确失败原因且不部分提交"
       },
       "expected_state": [
@@ -4847,7 +4847,7 @@
       "action": "发起配置和启用AI模型",
       "expected_response": {
         "outcome": "SUCCESS_OR_RULE_DEFINED_REJECTION",
-        "description": "只有已发布版本可被AI任务引用，业务数据访问经过项目范围校验",
+        "description": "只有ACTIVE ModelConfig可被Capability绑定；AI_EXPLORATION在平台级最多一个effective default",
         "failure_description": "返回明确失败原因且不部分提交"
       },
       "expected_state": [

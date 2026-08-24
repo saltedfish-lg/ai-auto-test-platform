@@ -4568,9 +4568,24 @@ tables:
     default: null
   - name: config_code
     type: VARCHAR(191)
-    nullable: true
+    nullable: false
     primary_key: false
     default: null
+  - name: provider_code
+    type: VARCHAR(32)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: model_name
+    type: VARCHAR(191)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: request_timeout_seconds
+    type: INT
+    nullable: false
+    primary_key: false
+    default: '30'
   - name: lifecycle_status
     type: VARCHAR(11)
     nullable: false
@@ -4618,20 +4633,251 @@ tables:
     columns:
     - config_code
   check_constraints:
+  - name: ck_atp_model_config_provider_code
+    expression: (provider_code IN ('OPENAI', 'ANTHROPIC', 'DEEPSEEK', 'QWEN', 'DOUBAO'))
+  - name: ck_atp_model_config_timeout
+    expression: (request_timeout_seconds BETWEEN 1 AND 300)
   - name: ck_atp_model_config_lifecycle_status
     expression: (lifecycle_status IN ('CREATED', 'CONFIGURING', 'VALIDATING', 'ACTIVE', 'DEGRADED', 'UNAVAILABLE', 'DISABLED',
       'RECOVERING', 'ARCHIVED'))
   foreign_keys: []
-  indexes: []
+  indexes:
+  - name: ix_atp_model_config_provider_status
+    columns:
+    - provider_code
+    - lifecycle_status
   delete_behavior: DECLARED_PER_FOREIGN_KEY
   data_owner: DOMAIN_OR_TECHNICAL_OWNER
-  idempotency_and_audit: ROW_VERSION_OR_TECHNICAL_TABLE_RULE
+  idempotency_and_audit: ROW_VERSION_AND_IMMUTABLE_AUDIT
   object_id: OBJ-058
   business_unique_key: config_code
   state_fields:
   - lifecycle_status
   relationship_fields: []
   extension_json_rule: NON_CONTRACT_EXTENSIONS_ONLY
+- table_name: atp_model_config_secret
+  columns:
+  - name: model_config_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: true
+    default: null
+  - name: encrypted_secret
+    type: VARBINARY(16412)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: key_id
+    type: VARCHAR(64)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: created_at
+    type: DATETIME(6)
+    nullable: false
+    primary_key: false
+    default: CURRENT_TIMESTAMP(6)
+  - name: updated_at
+    type: DATETIME(6)
+    nullable: false
+    primary_key: false
+    default: CURRENT_TIMESTAMP(6)
+  primary_key:
+  - model_config_id
+  unique_keys: []
+  check_constraints: []
+  foreign_keys:
+  - name: fk_atp_model_config_secret_model_config_id
+    column: model_config_id
+    referenced_table: atp_model_config
+    referenced_column: model_config_id
+    on_delete: CASCADE
+    on_update: RESTRICT
+  indexes: []
+  delete_behavior: CASCADE_WITH_MODEL_CONFIG
+  data_owner: MODEL_CONFIGURATION_SECRET_STORE
+  idempotency_and_audit: SECRET_NEVER_EXPOSED_OR_AUDITED
+  object_id: OBJ-074
+  business_unique_key: model_config_id
+  state_fields: []
+  relationship_fields:
+  - model_config_id
+  extension_json_rule: FORBIDDEN
+- table_name: atp_model_capability_default
+  columns:
+  - name: capability_code
+    type: VARCHAR(64)
+    nullable: false
+    primary_key: true
+    default: null
+  - name: model_config_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: row_version
+    type: BIGINT
+    nullable: false
+    primary_key: false
+    default: '0'
+  - name: created_at
+    type: DATETIME(6)
+    nullable: false
+    primary_key: false
+    default: CURRENT_TIMESTAMP(6)
+  - name: updated_at
+    type: DATETIME(6)
+    nullable: false
+    primary_key: false
+    default: CURRENT_TIMESTAMP(6)
+  - name: created_by
+    type: VARCHAR(26)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: updated_by
+    type: VARCHAR(26)
+    nullable: true
+    primary_key: false
+    default: null
+  primary_key:
+  - capability_code
+  unique_keys:
+  - name: uq_atp_model_capability_default_model_config
+    columns:
+    - model_config_id
+  check_constraints:
+  - name: ck_atp_model_capability_default_capability
+    expression: (capability_code IN ('AI_EXPLORATION'))
+  foreign_keys:
+  - name: fk_atp_model_capability_default_model_config_id
+    column: model_config_id
+    referenced_table: atp_model_config
+    referenced_column: model_config_id
+    on_delete: RESTRICT
+    on_update: RESTRICT
+  indexes: []
+  delete_behavior: EXPLICIT_UNBIND_REQUIRED
+  data_owner: MODEL_CONFIGURATION_DOMAIN
+  idempotency_and_audit: ROW_VERSION_AND_IMMUTABLE_AUDIT
+  object_id: OBJ-058
+  business_unique_key: capability_code
+  state_fields: []
+  relationship_fields:
+  - model_config_id
+  extension_json_rule: FORBIDDEN
+- table_name: atp_model_config_audit
+  columns:
+  - name: audit_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: true
+    default: null
+  - name: model_config_id
+    type: VARCHAR(26)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: config_code
+    type: VARCHAR(191)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: operation_id
+    type: VARCHAR(128)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: action
+    type: VARCHAR(64)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: actor_user_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: required_permission
+    type: VARCHAR(128)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: previous_status
+    type: VARCHAR(11)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: new_status
+    type: VARCHAR(11)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: result_code
+    type: VARCHAR(64)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: reason
+    type: VARCHAR(1000)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: correlation_id
+    type: VARCHAR(128)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: occurred_at
+    type: DATETIME(6)
+    nullable: false
+    primary_key: false
+    default: CURRENT_TIMESTAMP(6)
+  - name: source_context_hash
+    type: BINARY(32)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: details_json
+    type: JSON
+    nullable: true
+    primary_key: false
+    default: null
+  primary_key:
+  - audit_id
+  unique_keys: []
+  check_constraints: []
+  foreign_keys:
+  - name: fk_atp_model_config_audit_actor_user_id
+    column: actor_user_id
+    referenced_table: atp_user
+    referenced_column: user_id
+    on_delete: RESTRICT
+    on_update: RESTRICT
+  indexes:
+  - name: ix_atp_model_config_audit_model_occurred
+    columns:
+    - model_config_id
+    - occurred_at
+  - name: ix_atp_model_config_audit_actor_occurred
+    columns:
+    - actor_user_id
+    - occurred_at
+  - name: ix_atp_model_config_audit_correlation
+    columns:
+    - correlation_id
+  delete_behavior: IMMUTABLE_APPEND_ONLY
+  data_owner: MODEL_CONFIGURATION_DOMAIN
+  idempotency_and_audit: IMMUTABLE_AUDIT_WITH_SECRET_FIELD_DENYLIST
+  object_id: OBJ-058
+  business_unique_key: audit_id
+  state_fields:
+  - previous_status
+  - new_status
+  relationship_fields:
+  - model_config_id
+  - actor_user_id
+  extension_json_rule: AUDIT_METADATA_ALLOWLIST_ONLY
 - table_name: atp_natural_language_case
   columns:
   - name: natural_language_case_id

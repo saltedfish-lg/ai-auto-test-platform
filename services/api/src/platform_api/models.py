@@ -288,6 +288,68 @@ class AuthSourceRateLimit(Base):
     row_version: Mapped[int] = mapped_column(MySQLBigInteger(unsigned=True))
 
 
+class ModelConfiguration(Base):
+    __tablename__ = "atp_model_config"
+    model_config_id: Mapped[str] = mapped_column(String(26), primary_key=True)
+    config_code: Mapped[str] = mapped_column(String(191), unique=True)
+    provider_code: Mapped[str] = mapped_column(String(32))
+    model_name: Mapped[str] = mapped_column(String(191))
+    request_timeout_seconds: Mapped[int] = mapped_column(Integer)
+    lifecycle_status: Mapped[str] = mapped_column(String(11))
+    display_name: Mapped[str | None] = mapped_column(String(255))
+    row_version: Mapped[int] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime] = mapped_column(DateTime)
+    created_by: Mapped[str | None] = mapped_column(String(26))
+    updated_by: Mapped[str | None] = mapped_column(String(26))
+    extension_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+
+
+class ModelConfigurationSecret(Base):
+    __tablename__ = "atp_model_config_secret"
+    model_config_id: Mapped[str] = mapped_column(
+        String(26), ForeignKey("atp_model_config.model_config_id"), primary_key=True
+    )
+    encrypted_secret: Mapped[bytes] = mapped_column(LargeBinary(16412))
+    key_id: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime] = mapped_column(DateTime)
+
+
+class ModelCapabilityDefault(Base):
+    __tablename__ = "atp_model_capability_default"
+    capability_code: Mapped[str] = mapped_column(String(64), primary_key=True)
+    model_config_id: Mapped[str] = mapped_column(
+        String(26), ForeignKey("atp_model_config.model_config_id"), unique=True
+    )
+    row_version: Mapped[int] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime] = mapped_column(DateTime)
+    created_by: Mapped[str | None] = mapped_column(String(26))
+    updated_by: Mapped[str | None] = mapped_column(String(26))
+
+
+class ModelConfigurationAudit(Base):
+    """Append-only model configuration and connection-test evidence."""
+
+    __tablename__ = "atp_model_config_audit"
+    audit_id: Mapped[str] = mapped_column(String(26), primary_key=True)
+    model_config_id: Mapped[str | None] = mapped_column(String(26))
+    config_code: Mapped[str] = mapped_column(String(191))
+    operation_id: Mapped[str] = mapped_column(String(128))
+    action: Mapped[str] = mapped_column(String(64))
+    actor_user_id: Mapped[str] = mapped_column(String(26), ForeignKey("atp_user.user_id"))
+    required_permission: Mapped[str] = mapped_column(String(128))
+    previous_status: Mapped[str | None] = mapped_column(String(11))
+    new_status: Mapped[str | None] = mapped_column(String(11))
+    result_code: Mapped[str] = mapped_column(String(64))
+    reason: Mapped[str | None] = mapped_column(String(1000))
+    correlation_id: Mapped[str] = mapped_column(String(128))
+    occurred_at: Mapped[datetime] = mapped_column(DateTime)
+    source_context_hash: Mapped[bytes] = mapped_column(MySQLBinary(32))
+    details_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+
+
 class OutboxEvent(Base):
     __tablename__ = "atp_outbox_event"
     event_id: Mapped[str] = mapped_column(String(26), primary_key=True)

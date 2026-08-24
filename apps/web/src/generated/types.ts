@@ -645,12 +645,20 @@ export type ContextVariableResource = {
 export type ModelConfigResource = {
   model_config_id: string;
   display_name?: string | null;
+  provider_code: ModelProviderCode;
+  model_name: string;
+  request_timeout_seconds: number;
+  secret_configured: boolean;
+  is_ai_exploration_default: boolean;
+  ai_exploration_default_version: number | null;
   row_version: number;
   created_at: string;
   updated_at: string;
-  config_code?: string | null;
+  config_code: string;
   lifecycle_status: "CREATED" | "CONFIGURING" | "VALIDATING" | "ACTIVE" | "DEGRADED" | "UNAVAILABLE" | "DISABLED" | "RECOVERING" | "ARCHIVED";
 };
+
+export type ModelProviderCode = "OPENAI" | "ANTHROPIC" | "DEEPSEEK" | "QWEN" | "DOUBAO";
 
 export type PromptRevisionResource = {
   prompt_revision_id: string;
@@ -2414,11 +2422,13 @@ export type ListModelConfigResponse = {
 };
 
 export type CreateModelConfigRequest = {
-  expected_version?: number;
   reason?: string | null;
-  model_config_id?: string;
   display_name?: string | null;
-  config_code?: string | null;
+  config_code: string;
+  provider_code: ModelProviderCode;
+  model_name: string;
+  request_timeout_seconds?: number;
+  secret_value: string;
 };
 
 export type CreateModelConfigResponse = {
@@ -2435,11 +2445,70 @@ export type UpdateModelConfigRequest = {
   expected_version: number;
   reason?: string | null;
   display_name?: string | null;
-  config_code?: string | null;
+  provider_code?: ModelProviderCode;
+  model_name?: string | null;
+  request_timeout_seconds?: number | null;
+  secret_value?: string | null;
 };
 
 export type UpdateModelConfigResponse = {
   data: ModelConfigResource;
+  correlation_id: string;
+};
+
+export type ModelConfigLifecycleRequest = {
+  expected_version: number;
+  reason: string;
+};
+
+export type TestModelConfigConnectionRequest = {
+  reason?: string | null;
+};
+
+export type ModelConnectionTestResult = {
+  status: "SUCCESS" | "AUTHENTICATION_FAILED" | "MODEL_NOT_FOUND" | "TIMEOUT" | "RATE_LIMITED" | "PROVIDER_ERROR" | "INVALID_CONFIGURATION";
+  provider_code: ModelProviderCode;
+  model_name: string;
+  latency_ms?: number | null;
+  error_code?: string | null;
+  message?: string | null;
+};
+
+export type TestModelConfigConnectionResponse = {
+  data: ModelConnectionTestResult;
+  correlation_id: string;
+};
+
+export type CapabilityDefaultResource = {
+  capability_code: "AI_EXPLORATION";
+  model_config_id: string;
+  row_version: number;
+  updated_at: string;
+};
+
+export type SetCapabilityDefaultModelRequest = {
+  model_config_id: string;
+  expected_version?: number | null;
+  reason?: string | null;
+};
+
+export type SetCapabilityDefaultModelResponse = {
+  data: CapabilityDefaultResource;
+  correlation_id: string;
+};
+
+export type ClearCapabilityDefaultModelRequest = {
+  expected_version: number;
+  reason?: string | null;
+};
+
+export type ClearCapabilityDefaultResult = {
+  capability_code: "AI_EXPLORATION";
+  cleared: true;
+};
+
+export type ClearCapabilityDefaultModelResponse = {
+  data: ClearCapabilityDefaultResult;
   correlation_id: string;
 };
 

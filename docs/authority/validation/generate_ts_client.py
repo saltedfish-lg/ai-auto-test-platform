@@ -89,6 +89,31 @@ def required_header_names(path_item, operation):
     ]
 
 
+def resolved_parameters(api, path_item, operation):
+    """Resolve local component parameters while preserving path-item/operation order."""
+    resolved = []
+    for parameter in [*path_item.get("parameters", []), *operation.get("parameters", [])]:
+        if not isinstance(parameter, dict):
+            continue
+        ref = parameter.get("$ref")
+        if isinstance(ref, str) and ref.startswith("#/components/parameters/"):
+            parameter = api.get("components", {}).get("parameters", {}).get(
+                ref.split("/")[-1], {}
+            )
+        if isinstance(parameter, dict):
+            resolved.append(parameter)
+    return resolved
+
+
+def query_parameters(api, path_item, operation):
+    """Collect unique query parameters declared by the current OpenAPI operation."""
+    by_name = {}
+    for parameter in resolved_parameters(api, path_item, operation):
+        if parameter.get("in") == "query" and isinstance(parameter.get("name"), str):
+            by_name[parameter["name"]] = parameter
+    return list(by_name.values())
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
@@ -109,9 +134,13 @@ def main():
         "/* Generated from current docs/authority OpenAPI. DO NOT EDIT. */",
         "import type { " + imports + " } from './types.js';",
         "export type RequestOptions = { headers?: Record<string,string>; signal?: AbortSignal };",
+        "export type QueryRequestOptions<Q extends Record<string, unknown>> = "
+        "RequestOptions & { query?: Q };",
         "export type RequiredHeaderOptions<K extends string> = "
         "Omit<RequestOptions, 'headers'> & "
         "{ headers: Record<string,string> & Record<K,string> };",
+        "export type RequiredHeaderQueryOptions<K extends string, Q extends Record<string, unknown>> = "
+        "RequiredHeaderOptions<K> & { query?: Q };",
         "export class ApiClient {",
         "  constructor(private readonly baseUrl: string, "
         "private readonly fetcher: typeof fetch = fetch) {}",
@@ -146,11 +175,25 @@ def main():
                 body_marker = "" if request_body.get("required") is True else "?"
                 argspec.append(f"body{body_marker}: {req}")
             required_headers = required_header_names(item, op)
+            query = query_parameters(api, item, op)
+            query_type = None
+            if query:
+                fields = []
+                for parameter in query:
+                    name = parameter["name"]
+                    safe = name if re.match(r"^[A-Za-z_$][A-Za-z0-9_$]*$", name) else json.dumps(name)
+                    marker = "" if parameter.get("required") is True else "?"
+                    fields.append(f"{safe}{marker}: {ts_type(parameter.get('schema', {}), opid + name.title())}")
+                query_type = "{ " + "; ".join(fields) + " }"
             if required_headers:
                 header_keys = " | ".join(json.dumps(name) for name in required_headers)
-                argspec.append(f"options: RequiredHeaderOptions<{header_keys}>")
+                options_type = f"RequiredHeaderOptions<{header_keys}>"
+                if query_type:
+                    options_type = f"RequiredHeaderQueryOptions<{header_keys}, {query_type}>"
+                argspec.append(f"options: {options_type}")
             else:
-                argspec.append("options: RequestOptions = {}")
+                options_type = f"QueryRequestOptions<{query_type}>" if query_type else "RequestOptions"
+                argspec.append(f"options: {options_type} = {{}}")
             expr = json.dumps(path)
             for p in placeholders:
                 expr = f"{expr}.replace('{{{p}}}', encodeURIComponent({p}))"
@@ -161,7 +204,21 @@ def main():
             else:
                 bodyline = ""
             client.append(f"  async {opid}({', '.join(argspec)}): Promise<{resp}> {{")
-            client.append(f"    const path = {expr};")
+            client.append(f"    let path = {expr};")
+            if query:
+                client.append("    const query = new URLSearchParams();")
+                for parameter in query:
+                    name = parameter["name"]
+                    access = name if re.match(r"^[A-Za-z_$][A-Za-z0-9_$]*$", name) else f"[{json.dumps(name)}]"
+                    if access.startswith("["):
+                        value = f"options.query?.{access}"
+                    else:
+                        value = f"options.query?.{access}"
+                    client.append(
+                        f"    if ({value} !== undefined) query.set({json.dumps(name)}, String({value}));"
+                    )
+                client.append("    const encodedQuery = query.toString();")
+                client.append("    if (encodedQuery) path += `?${encodedQuery}`;")
             client.append(
                 f"    return this.request<{resp}>(path, "
                 f"{{ method: '{method.upper()}', "

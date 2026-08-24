@@ -21,6 +21,28 @@ BEGIN
     WHERE table_schema=DATABASE() AND table_name='atp_auth_source_rate_limit' AND table_type='BASE TABLE'
   ) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='required auth source-rate-limit table missing';
   END IF;
+  IF (SELECT COUNT(*) FROM information_schema.tables
+      WHERE table_schema=DATABASE() AND table_type='BASE TABLE'
+        AND table_name IN ('atp_model_config','atp_model_config_secret',
+                           'atp_model_capability_default','atp_model_config_audit')) <> 4 THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='required AI model configuration tables missing';
+  END IF;
+  IF (SELECT character_maximum_length FROM information_schema.columns
+      WHERE table_schema=DATABASE() AND table_name='atp_model_config_secret'
+        AND column_name='encrypted_secret') <> 16412 THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Model Secret ciphertext capacity mismatch';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints
+    WHERE constraint_schema=DATABASE() AND table_name='atp_model_config'
+      AND constraint_name='ck_atp_model_config_provider_code' AND constraint_type='CHECK'
+  ) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Model Provider whitelist CHECK missing'; END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints
+    WHERE constraint_schema=DATABASE() AND table_name='atp_model_capability_default'
+      AND constraint_name='uq_atp_model_capability_default_model_config'
+      AND constraint_type='UNIQUE'
+  ) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Model capability default uniqueness missing'; END IF;
   IF (SELECT COUNT(*) FROM information_schema.columns
       WHERE table_schema=DATABASE() AND table_name='atp_idempotency_record'
         AND column_name IN ('contract_version','principal_id','completed_at')) <> 3 THEN
@@ -174,6 +196,14 @@ SET @audit_delete_trigger_count := (
   SELECT COUNT(*) FROM information_schema.triggers
   WHERE trigger_schema = DATABASE() AND trigger_name = 'trg_atp_auth_security_audit_no_delete'
 );
+SET @model_audit_update_trigger_count := (
+  SELECT COUNT(*) FROM information_schema.triggers
+  WHERE trigger_schema = DATABASE() AND trigger_name = 'trg_atp_model_config_audit_no_update'
+);
+SET @model_audit_delete_trigger_count := (
+  SELECT COUNT(*) FROM information_schema.triggers
+  WHERE trigger_schema = DATABASE() AND trigger_name = 'trg_atp_model_config_audit_no_delete'
+);
 
 DROP PROCEDURE IF EXISTS assert_auth_audit_triggers;
 DELIMITER $$
@@ -181,6 +211,9 @@ CREATE PROCEDURE assert_auth_audit_triggers()
 BEGIN
   IF @audit_update_trigger_count <> 1 OR @audit_delete_trigger_count <> 1 THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Expected append-only auth audit triggers';
+  END IF;
+  IF @model_audit_update_trigger_count <> 1 OR @model_audit_delete_trigger_count <> 1 THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Expected append-only model audit triggers';
   END IF;
 END$$
 DELIMITER ;

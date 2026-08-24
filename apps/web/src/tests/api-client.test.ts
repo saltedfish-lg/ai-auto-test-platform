@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { bindAuthTransport, createApiClient, createPlatformFetcher } from "../api/client";
-import { ApiRequestError, getAuthenticationErrorMessage } from "../api/errors";
+import {
+  ApiRequestError,
+  getAuthenticationErrorMessage,
+  getModelConfigurationErrorMessage,
+} from "../api/errors";
 import { problemDetails } from "./auth-fixtures";
 
 afterEach(() => {
@@ -19,6 +23,26 @@ describe("change-password business errors", () => {
     expect(
       getAuthenticationErrorMessage(new ApiRequestError(400, problem.title, problem), "fallback"),
     ).toBe(expectedMessage);
+  });
+});
+
+describe("model configuration business errors", () => {
+  it("does not reuse project-specific 404 and 409 messages", () => {
+    const missing = problemDetails(404, "MODEL_CONFIG_NOT_FOUND");
+    const conflict = problemDetails(409, "MODEL_CONFIG_CONCURRENCY_CONFLICT");
+
+    expect(
+      getModelConfigurationErrorMessage(
+        new ApiRequestError(404, missing.title, missing),
+        "fallback",
+      ),
+    ).toBe("模型配置不存在或已不可访问。");
+    expect(
+      getModelConfigurationErrorMessage(
+        new ApiRequestError(409, conflict.title, conflict),
+        "fallback",
+      ),
+    ).toBe("模型配置已被其他操作更新，请刷新后重试。");
   });
 });
 

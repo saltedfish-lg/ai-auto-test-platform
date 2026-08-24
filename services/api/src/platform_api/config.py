@@ -5,9 +5,10 @@ from __future__ import annotations
 from ipaddress import IPv4Address, IPv4Network, IPv6Network, ip_network
 from pathlib import Path
 from typing import Literal
+from urllib.parse import urlsplit
 
 from platform_common.environment import load_project_environment
-from pydantic import AliasChoices, Field, IPvAnyAddress, field_validator
+from pydantic import AliasChoices, Field, IPvAnyAddress, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Local processes always resolve repo/.env from this module location; shell/process env wins.
@@ -48,6 +49,26 @@ class ApiSettings(BaseSettings):
         validation_alias="ATP_BOOTSTRAP_ADMIN_PASSWORD_FILE",
         repr=False,
     )
+    model_secret_key_ring_file: Path | None = Field(
+        default=None,
+        validation_alias="ATP_MODEL_SECRET_KEY_RING_FILE",
+        repr=False,
+    )
+    litellm_proxy_url: str | None = Field(
+        default=None,
+        validation_alias="ATP_LITELLM_PROXY_URL",
+        repr=False,
+    )
+    litellm_proxy_api_key_file: Path | None = Field(
+        default=None,
+        validation_alias="ATP_LITELLM_PROXY_API_KEY_FILE",
+        repr=False,
+    )
+    litellm_dynamic_credentials_enabled: bool = Field(
+        default=False,
+        validation_alias="ATP_LITELLM_DYNAMIC_CREDENTIALS_ENABLED",
+        repr=False,
+    )
 
     @field_validator("database_url")
     @classmethod
@@ -67,6 +88,24 @@ class ApiSettings(BaseSettings):
                 raise ValueError("ATP_TRUSTED_PROXY_CIDRS contains an empty entry")
             ip_network(candidate, strict=True)
         return value
+
+    @model_validator(mode="after")
+    def validate_litellm_proxy_url(self) -> ApiSettings:
+        if self.litellm_proxy_url is None:
+            return self
+        parsed = urlsplit(self.litellm_proxy_url)
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.hostname
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.query
+            or parsed.fragment
+        ):
+            raise ValueError("ATP_LITELLM_PROXY_URL must be a credential-free HTTP(S) base URL")
+        if self.environment in {"staging", "production"} and parsed.scheme != "https":
+            raise ValueError("ATP_LITELLM_PROXY_URL must use HTTPS outside local/test")
+        return self
 
     @property
     def refresh_cookie_secure(self) -> bool:

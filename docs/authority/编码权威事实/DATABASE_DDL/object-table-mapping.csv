@@ -56,7 +56,7 @@ OBJ-054,Runner项目绑定,RELATIONSHIP_ENTITY,AGG-018,TABLE,atp_runner_project_
 OBJ-055,执行槽位,CONFIGURATION_ENTITY,AGG-018,TABLE,atp_execution_slot,execution_slot_id,LC-055,lifecycle_status
 OBJ-056,上下文变量,AGGREGATE_MEMBER,AGG-014,TABLE,atp_context_variable,context_variable_id,LC-056,lifecycle_status
 OBJ-057,模型供应商,EXTERNAL_REFERENCE,AGG-019,SERVICE_OR_EXTERNAL_NOT_PERSISTED,,,LC-057,lifecycle_status
-OBJ-058,模型配置,AGGREGATE_ROOT,AGG-019,TABLE,atp_model_config,model_config_id,LC-058,lifecycle_status
+OBJ-058,模型配置,AGGREGATE_ROOT,AGG-019,TABLE,atp_model_config_audit,audit_id,LC-058,lifecycle_status
 OBJ-059,Prompt修订,VERSION_ENTITY,AGG-019,TABLE,atp_prompt_revision,prompt_revision_id,LC-059,lifecycle_status
 OBJ-060,AI调用,EXECUTION_ENTITY,AGG-020,TABLE,atp_ai_call,ai_call_id,LC-060,lifecycle_status
 OBJ-061,AI任务,AGGREGATE_ROOT,AGG-020,TABLE,atp_ai_task,ai_task_id,LC-061,status|lifecycle_status
@@ -72,7 +72,7 @@ OBJ-070,集成组件,AGGREGATE_ROOT,AGG-023,TABLE,atp_integration_component,inte
 OBJ-071,Adapter,DOMAIN_SERVICE,AGG-023,SERVICE_OR_EXTERNAL_NOT_PERSISTED,,,LC-071,lifecycle_status
 OBJ-072,平台技术事件,DOMAIN_EVENT,AGG-023,SERVICE_OR_EXTERNAL_NOT_PERSISTED,,,LC-072,lifecycle_status
 OBJ-073,异常原因码,VALUE_OBJECT,,EMBEDDED_VALUE,,,LC-073,lifecycle_status
-OBJ-074,Secret,EXTERNAL_REFERENCE,,SERVICE_OR_EXTERNAL_NOT_PERSISTED,,,LC-074,lifecycle_status
+OBJ-074,Secret,EXTERNAL_REFERENCE,,TABLE,atp_model_config_secret,model_config_id,LC-074,lifecycle_status
 OBJ-075,脱敏,DOMAIN_POLICY,,SERVICE_OR_EXTERNAL_NOT_PERSISTED,,,LC-075,lifecycle_status
 OBJ-076,系统参数,AGGREGATE_ROOT,AGG-024,TABLE,atp_system_parameter,system_parameter_id,LC-076,lifecycle_status
 OBJ-077,数据字典,AGGREGATE_ROOT,AGG-025,TABLE,atp_data_dictionary,data_dictionary_id,LC-077,lifecycle_status

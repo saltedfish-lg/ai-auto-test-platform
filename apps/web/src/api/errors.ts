@@ -70,6 +70,26 @@ const projectErrorMessages: Record<string, string> = {
   AUTH_PERMISSION_DENIED: "当前账号没有执行此操作的权限。",
 };
 
+const modelConfigurationErrorMessages: Record<string, string> = {
+  MODEL_CONFIG_NOT_FOUND: "模型配置不存在或已不可访问。",
+  MODEL_CONFIG_CODE_CONFLICT: "模型配置编码已被使用，请更换后重试。",
+  MODEL_CONFIG_CONCURRENCY_CONFLICT: "模型配置已被其他操作更新，请刷新后重试。",
+  MODEL_CONFIG_OPERATION_FORBIDDEN_FOR_STATE: "当前模型配置状态不允许执行此操作。",
+  MODEL_CONFIG_UPDATE_EMPTY: "请至少修改一个可编辑的模型配置字段。",
+  MODEL_CONFIG_SELF_REVIEW_FORBIDDEN: "提交人不能审核并激活自己的模型配置。",
+  MODEL_CONFIG_DEFAULT_DISABLE_CONFLICT: "当前默认模型必须先解除或切换后才能禁用。",
+  MODEL_CONFIG_CONNECTION_TEST_ATTEMPT_STALE: "连接测试已被更新的请求接管，请重新执行。",
+  MODEL_CONFIG_IDEMPOTENCY_REQUEST_INCOMPLETE: "相同模型操作仍在处理中，请稍后重试。",
+  MODEL_CONFIG_IDEMPOTENCY_KEY_CONFLICT: "幂等键已用于不同的模型操作请求。",
+  MODEL_CAPABILITY_DEFAULT_MODEL_NOT_ACTIVE: "只有 ACTIVE 模型配置才能设为能力默认模型。",
+  MODEL_CAPABILITY_DEFAULT_NOT_FOUND: "当前 AI 能力尚未绑定默认模型。",
+  MODEL_CAPABILITY_DEFAULT_UNAVAILABLE: "当前 AI 能力默认模型不可用。",
+  MODEL_CAPABILITY_DEFAULT_CONCURRENCY_CONFLICT: "默认模型绑定已变化，请刷新后重试。",
+  MODEL_CAPABILITY_NOT_FOUND: "请求的 AI 能力不存在。",
+  MODEL_SECRET_STORE_UNAVAILABLE: "模型凭据安全存储当前不可用，请稍后重试。",
+  AUTH_PERMISSION_DENIED: "当前账号没有执行此操作的权限。",
+};
+
 export function getApiErrorMessage(error: unknown, fallback: string): string {
   if (!(error instanceof ApiRequestError)) return fallback;
   const code = error.problem?.code;
@@ -78,6 +98,20 @@ export function getApiErrorMessage(error: unknown, fallback: string): string {
   if (error.status === 403) return "当前账号没有执行此操作的权限。";
   if (error.status === 404) return "请求的项目不存在。";
   if (error.status === 409) return "项目状态或版本已变化，请刷新后重试。";
+  if (error.status === 422) return "提交内容不符合接口要求，请检查表单。";
+  return error.problem?.detail ?? fallback;
+}
+
+export function getModelConfigurationErrorMessage(error: unknown, fallback: string): string {
+  if (!(error instanceof ApiRequestError)) return fallback;
+  const code = error.problem?.code;
+  if (code && modelConfigurationErrorMessages[code]) {
+    return modelConfigurationErrorMessages[code];
+  }
+  if (error.status === 401) return "登录状态已失效，请重新登录。";
+  if (error.status === 403) return "当前账号没有执行此操作的权限。";
+  if (error.status === 404) return "请求的模型配置不存在。";
+  if (error.status === 409) return "模型配置状态或版本已变化，请刷新后重试。";
   if (error.status === 422) return "提交内容不符合接口要求，请检查表单。";
   return error.problem?.detail ?? fallback;
 }

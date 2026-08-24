@@ -29279,7 +29279,7 @@ acceptance_items:
   - 审计日志
   cleanup_requirements:
   - 修复前置原因后使用幂等命令重试；不得改写已提交历史。
-  - 修复草稿并重新审核发布
+  - 修复ModelConfig后重新进入VALIDATING并由MODEL_VERSION_REVIEW审核激活
   pass_criteria: 所有预期结果成立、禁止结果未发生、必需证据完整且可追溯。
   failure_criteria: 任一预期结果不成立、发生禁止结果、证据缺失或出现未获豁免的阻断缺陷。
   blocking_level: P1_CRITICAL
@@ -74374,27 +74374,27 @@ acceptance_steps:
 - acceptance_step_id: ACC-00121-STEP-01
   acceptance_id: ACC-00121
   sequence: 1
-  action: 在平台级范围创建供应商、模型、路由、Prompt和凭证草稿
+  action: 在平台级范围创建单一ModelConfig，选择固定白名单Provider、填写Provider原生model_name并加密保存Secret
 - acceptance_step_id: ACC-00121-STEP-02
   acceptance_id: ACC-00121
   sequence: 2
-  action: 执行供应商健康、凭证和技术权限检查
+  action: 经ModelGateway和LiteLLM Proxy执行真实Connection Test并返回结构化结果，不改变生命周期
 - acceptance_step_id: ACC-00121-STEP-03
   acceptance_id: ACC-00121
   sequence: 3
-  action: 使用MODEL_VERSION_REVIEW提交并完成独立模型版本审核
+  action: 使用MODEL_VERSION_REVIEW审核VALIDATING的同一ModelConfig并进入ACTIVE，不创建ModelConfigVersion
 - acceptance_step_id: ACC-00121-STEP-04
   acceptance_id: ACC-00121
   sequence: 4
-  action: 发布平台模型配置版本
+  action: 独立审核通过后将同一ModelConfig从VALIDATING推进到ACTIVE
 - acceptance_step_id: ACC-00121-STEP-05
   acceptance_id: ACC-00121
   sequence: 5
-  action: 获授权项目维护项目模型偏好，路由服务按项目偏好和平台规则选择模型
+  action: 将一个ACTIVE ModelConfig设置为AI_EXPLORATION唯一平台级effective default
 - acceptance_step_id: ACC-00121-STEP-06
   acceptance_id: ACC-00121
   sequence: 6
-  action: 记录调用、费用和配置/项目范围审计
+  action: 记录创建、修改、Secret更新、启用、禁用、默认绑定和Connection Test不可变审计，且不记录Secret
 - acceptance_step_id: ACC-00122-STEP-01
   acceptance_id: ACC-00122
   sequence: 1
@@ -91128,7 +91128,7 @@ acceptance_expected_results:
 - expected_result_id: ACC-00121-EXP-01
   acceptance_id: ACC-00121
   sequence: 1
-  expected_result: 只有已发布版本可被AI任务引用，业务数据访问经过项目范围校验
+  expected_result: 只有ACTIVE ModelConfig可被Capability绑定；AI_EXPLORATION在平台级最多一个effective default
 - expected_result_id: ACC-00122-EXP-01
   acceptance_id: ACC-00122
   sequence: 1
@@ -96224,15 +96224,15 @@ acceptance_expected_results:
 - expected_result_id: ACC-00786-EXP-01
   acceptance_id: ACC-00786
   sequence: 1
-  expected_result: 平台级供应商、模型、路由、Prompt和凭证由MODEL_CONFIGURATION_MANAGE维护；正式版本由MODEL_VERSION_REVIEW独立审核；项目偏好仅由获授权项目主体维护。
+  expected_result: ModelConfig查看、创建、编辑、Connection Test、禁用和默认绑定由MODEL_CONFIGURATION_MANAGE维护；VALIDATING到ACTIVE仅由MODEL_VERSION_REVIEW独立审核。
 - expected_result_id: ACC-00787-EXP-01
   acceptance_id: ACC-00787
   sequence: 1
-  expected_result: 在“配置和启用AI模型”中，并发校验必须满足：模型版本与路由指针CAS；调用固化配置快照。
+  expected_result: 在“配置和启用AI模型”中，并发校验必须满足：ModelConfig使用row_version CAS；Capability默认绑定以capability_code唯一约束；消费者固化配置快照。
 - expected_result_id: ACC-00788-EXP-01
   acceptance_id: ACC-00788
   sequence: 1
-  expected_result: 在“配置和启用AI模型”中，数据范围必须满足：平台模型技术对象属于平台级模型配置范围；项目模型偏好只作用于明确授权项目。模型管理员的平台配置权限不自动授予项目业务内容访问。。
+  expected_result: 在“配置和启用AI模型”中，数据范围必须满足：ModelConfig与AI_EXPLORATION默认绑定均属于平台级范围；模型管理员配置权限不授予项目业务内容访问。。
 - expected_result_id: ACC-00789-EXP-01
   acceptance_id: ACC-00789
   sequence: 1
@@ -96248,7 +96248,7 @@ acceptance_expected_results:
 - expected_result_id: ACC-00790-EXP-01
   acceptance_id: ACC-00790
   sequence: 1
-  expected_result: 在“配置和启用AI模型”中，异常流程必须满足：凭证无效、健康失败、审核职责冲突或越权项目内容访问时拒绝。
+  expected_result: 在“配置和启用AI模型”中，异常流程必须满足：凭证无效、真实连接测试失败、审核职责冲突、非ACTIVE默认绑定或默认模型禁用冲突时拒绝。
 - expected_result_id: ACC-00791-EXP-01
   acceptance_id: ACC-00791
   sequence: 1
@@ -96304,31 +96304,31 @@ acceptance_expected_results:
 - expected_result_id: ACC-00796-EXP-01
   acceptance_id: ACC-00796
   sequence: 1
-  expected_result: 动作“项目可配置偏好，但不得覆盖安全禁止和平台路由边界”完成并形成可追溯结果。
+  expected_result: 动作“AI_EXPLORATION只允许一个平台级effective default；不得创建项目偏好、继承或fallback”完成并形成可追溯结果。
 - expected_result_id: ACC-00796-EXP-02
   acceptance_id: ACC-00796
   sequence: 2
-  expected_result: 动作“在平台级范围创建供应商、模型、路由、Prompt和凭证草稿”完成并形成可追溯结果。
+  expected_result: 动作“在平台级范围创建单一ModelConfig，选择固定白名单Provider、填写Provider原生model_name并加密保存Secret”完成并形成可追溯结果。
 - expected_result_id: ACC-00796-EXP-03
   acceptance_id: ACC-00796
   sequence: 3
-  expected_result: 动作“执行供应商健康、凭证和技术权限检查”完成并形成可追溯结果。
+  expected_result: 动作“经ModelGateway和LiteLLM Proxy执行真实Connection Test并返回结构化结果，不改变生命周期”完成并形成可追溯结果。
 - expected_result_id: ACC-00797-EXP-01
   acceptance_id: ACC-00797
   sequence: 1
-  expected_result: 动作“使用MODEL_VERSION_REVIEW提交并完成独立模型版本审核”完成并形成可追溯结果。
+  expected_result: 动作“使用MODEL_VERSION_REVIEW审核VALIDATING的同一ModelConfig并进入ACTIVE，不创建ModelConfigVersion”完成并形成可追溯结果。
 - expected_result_id: ACC-00797-EXP-02
   acceptance_id: ACC-00797
   sequence: 2
-  expected_result: 动作“发布平台模型配置版本”完成并形成可追溯结果。
+  expected_result: 动作“独立审核通过后将同一ModelConfig从VALIDATING推进到ACTIVE”完成并形成可追溯结果。
 - expected_result_id: ACC-00797-EXP-03
   acceptance_id: ACC-00797
   sequence: 3
-  expected_result: 动作“获授权项目维护项目模型偏好，路由服务按项目偏好和平台规则选择模型”完成并形成可追溯结果。
+  expected_result: 动作“将一个ACTIVE ModelConfig设置为AI_EXPLORATION唯一平台级effective default”完成并形成可追溯结果。
 - expected_result_id: ACC-00798-EXP-01
   acceptance_id: ACC-00798
   sequence: 1
-  expected_result: 动作“记录调用、费用和配置/项目范围审计”完成并形成可追溯结果。
+  expected_result: 动作“记录创建、修改、Secret更新、启用、禁用、默认绑定和Connection Test不可变审计，且不记录Secret”完成并形成可追溯结果。
 - expected_result_id: ACC-00798-EXP-02
   acceptance_id: ACC-00798
   sequence: 2
@@ -96340,7 +96340,7 @@ acceptance_expected_results:
 - expected_result_id: ACC-00799-EXP-02
   acceptance_id: ACC-00799
   sequence: 2
-  expected_result: 修复草稿并重新审核发布
+  expected_result: 修复ModelConfig后重新进入VALIDATING并由MODEL_VERSION_REVIEW审核激活
 - expected_result_id: ACC-00800-EXP-01
   acceptance_id: ACC-00800
   sequence: 1
@@ -96352,7 +96352,7 @@ acceptance_expected_results:
 - expected_result_id: ACC-00801-EXP-01
   acceptance_id: ACC-00801
   sequence: 1
-  expected_result: '模型版本: DRAFT→PENDING_REVIEW→PUBLISHED→DISABLED/ARCHIVED'
+  expected_result: 'ModelConfig: CREATED→CONFIGURING→VALIDATING→ACTIVE→DISABLED/ARCHIVED'
 - expected_result_id: ACC-00802-EXP-01
   acceptance_id: ACC-00802
   sequence: 1
@@ -96396,7 +96396,7 @@ acceptance_expected_results:
 - expected_result_id: ACC-00805-EXP-03
   acceptance_id: ACC-00805
   sequence: 3
-  expected_result: 只有已发布版本可被AI任务引用，业务数据访问经过项目范围校验
+  expected_result: 只有ACTIVE ModelConfig可被Capability绑定；AI_EXPLORATION在平台级最多一个effective default
 - expected_result_id: ACC-00806-EXP-01
   acceptance_id: ACC-00806
   sequence: 1

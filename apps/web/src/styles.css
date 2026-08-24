@@ -297,6 +297,15 @@ input {
   color: #fff;
 }
 
+.nav-section-label {
+  margin: 24px 14px 8px;
+  color: #7189b9;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
 .sidebar-foot {
   margin-top: auto;
   padding: 18px 12px 0;
@@ -536,6 +545,128 @@ input {
   line-height: 1.65;
 }
 
+.model-configuration-page {
+  display: grid;
+  gap: 22px;
+}
+
+.model-list-card,
+.model-summary-card,
+.model-detail-card {
+  border-color: #e3e9f3;
+  border-radius: 15px;
+}
+
+.model-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.model-summary-card strong,
+.model-summary-card span {
+  display: block;
+}
+
+.model-summary-card strong {
+  margin-top: 8px;
+  font-size: 24px;
+}
+
+.model-summary-card span {
+  color: #7a8498;
+  font-size: 12px;
+}
+
+.model-provider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.provider-mark {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  place-items: center;
+  border-radius: 9px;
+  background: #eef3ff;
+  color: #315fc4;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.model-code {
+  margin-top: 4px;
+  color: #7a8498;
+  font-size: 11px;
+}
+
+.model-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.secret-configured {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #17785a;
+  font-size: 13px;
+}
+
+.secret-configured::before {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #18a56f;
+  content: "";
+}
+
+.secret-empty {
+  color: #c45656;
+  font-size: 13px;
+}
+
+.model-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.75fr);
+  gap: 18px;
+}
+
+.connection-result {
+  margin-top: 18px;
+}
+
+.connection-result dl {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr);
+  gap: 9px 14px;
+  margin: 14px 0 0;
+  font-size: 13px;
+}
+
+.connection-result dt {
+  color: #7a8498;
+}
+
+.connection-result dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.security-form-note {
+  margin: -4px 0 18px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #f3f7ff;
+  color: #31518a;
+  font-size: 12px;
+  line-height: 1.65;
+}
+
 @media (max-width: 900px) {
   .auth-page {
     grid-template-columns: 1fr;
@@ -581,7 +712,9 @@ input {
 
   .workspace-grid,
   .authorization-columns,
-  .project-detail-grid {
+  .project-detail-grid,
+  .model-summary-grid,
+  .model-detail-grid {
     grid-template-columns: 1fr;
   }
 

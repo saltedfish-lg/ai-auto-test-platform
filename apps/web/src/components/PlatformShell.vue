@@ -41,6 +41,27 @@ async function logout(): Promise<void> {
           <span aria-hidden="true">▦</span>
           项目管理
         </RouterLink>
+        <p
+          v-if="
+            session.hasPermission('MODEL_CONFIGURATION_MANAGE') ||
+            session.hasPermission('MODEL_VERSION_REVIEW')
+          "
+          class="nav-section-label"
+        >
+          AI 设置
+        </p>
+        <RouterLink
+          v-if="
+            session.hasPermission('MODEL_CONFIGURATION_MANAGE') ||
+            session.hasPermission('MODEL_VERSION_REVIEW')
+          "
+          class="nav-item"
+          active-class="active"
+          :to="{ name: 'models.configurations' }"
+        >
+          <span aria-hidden="true">◇</span>
+          模型配置
+        </RouterLink>
       </nav>
       <div class="sidebar-foot">权限与项目范围由服务端实时校验</div>
     </aside>

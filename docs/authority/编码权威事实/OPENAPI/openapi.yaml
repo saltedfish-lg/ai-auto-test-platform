@@ -13498,7 +13498,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
-      x-permission-code: PROJECT_VIEW
+      x-permission-code: MODEL_CONFIGURATION_MANAGE
       security:
       - BearerAuth: []
     post:
@@ -13580,7 +13580,7 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateModelConfigRequest'
-      x-permission-code: PROJECT_EDIT
+      x-permission-code: MODEL_CONFIGURATION_MANAGE
       security:
       - BearerAuth: []
   /api/v1/model-config/{id}:
@@ -13658,7 +13658,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
-      x-permission-code: PROJECT_VIEW
+      x-permission-code: MODEL_CONFIGURATION_MANAGE
       security:
       - BearerAuth: []
     patch:
@@ -13746,7 +13746,579 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/UpdateModelConfigRequest'
-      x-permission-code: PROJECT_EDIT
+      x-permission-code: MODEL_CONFIGURATION_MANAGE
+      security:
+      - BearerAuth: []
+  /api/v1/model-config/{id}/submit-review:
+    post:
+      operationId: submit_model_config_review
+      summary: 提交模型配置审核
+      tags:
+      - 模型配置
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 26
+          maxLength: 26
+      - $ref: '#/components/parameters/CorrelationId'
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 191
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelConfigLifecycleRequest'
+      responses:
+        '200':
+          description: ModelConfig进入VALIDATING
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateModelConfigResponse'
+        '400':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '401':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '403':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '404':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '409':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '422':
+          $ref: '#/components/responses/RequestValidationFailed'
+        '429':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '500':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '503':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+      x-permission-code: MODEL_CONFIGURATION_MANAGE
+      security:
+      - BearerAuth: []
+  /api/v1/model-config/{id}/activate:
+    post:
+      operationId: activate_model_config
+      summary: 独立审核并激活模型配置
+      tags:
+      - 模型配置
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 26
+          maxLength: 26
+      - $ref: '#/components/parameters/CorrelationId'
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 191
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelConfigLifecycleRequest'
+      responses:
+        '200':
+          description: ModelConfig进入ACTIVE
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateModelConfigResponse'
+        '400':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '401':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '403':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '404':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '409':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '422':
+          $ref: '#/components/responses/RequestValidationFailed'
+        '429':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '500':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '503':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+      x-permission-code: MODEL_VERSION_REVIEW
+      security:
+      - BearerAuth: []
+  /api/v1/model-config/{id}/return-to-configuring:
+    post:
+      operationId: return_model_config_to_configuring
+      summary: 独立审核退回模型配置以便修复
+      tags:
+      - 模型配置审核
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 26
+          maxLength: 26
+      - $ref: '#/components/parameters/CorrelationId'
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 191
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelConfigLifecycleRequest'
+      responses:
+        '200':
+          description: ModelConfig从VALIDATING退回CONFIGURING
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateModelConfigResponse'
+        '400':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '401':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '403':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '404':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '409':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '422':
+          $ref: '#/components/responses/RequestValidationFailed'
+        '429':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '500':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '503':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+      x-permission-code: MODEL_VERSION_REVIEW
+      security:
+      - BearerAuth: []
+  /api/v1/model-config/{id}/disable:
+    post:
+      operationId: disable_model_config
+      summary: 禁用模型配置
+      tags:
+      - 模型配置
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 26
+          maxLength: 26
+      - $ref: '#/components/parameters/CorrelationId'
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 191
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelConfigLifecycleRequest'
+      responses:
+        '200':
+          description: ModelConfig进入DISABLED；当前默认模型必须先解绑或切换
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateModelConfigResponse'
+        '400':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '401':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '403':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '404':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '409':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '422':
+          $ref: '#/components/responses/RequestValidationFailed'
+        '429':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '500':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '503':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+      x-permission-code: MODEL_CONFIGURATION_MANAGE
+      security:
+      - BearerAuth: []
+  /api/v1/model-config/{id}/recover:
+    post:
+      operationId: recover_model_config
+      summary: 将已禁用或不可用的模型配置置为恢复中
+      tags:
+      - 模型配置
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 26
+          maxLength: 26
+      - $ref: '#/components/parameters/CorrelationId'
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 191
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelConfigLifecycleRequest'
+      responses:
+        '200':
+          description: ModelConfig进入RECOVERING
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateModelConfigResponse'
+        '400':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '401':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '403':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '404':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '409':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '422':
+          $ref: '#/components/responses/RequestValidationFailed'
+        '429':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '500':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '503':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+      x-permission-code: MODEL_CONFIGURATION_MANAGE
+      security:
+      - BearerAuth: []
+  /api/v1/model-config/{id}/archive:
+    post:
+      operationId: archive_model_config
+      summary: 归档已禁用的模型配置
+      tags:
+      - 模型配置
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 26
+          maxLength: 26
+      - $ref: '#/components/parameters/CorrelationId'
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 191
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelConfigLifecycleRequest'
+      responses:
+        '200':
+          description: ModelConfig进入ARCHIVED终态
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateModelConfigResponse'
+        '400':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '401':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '403':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '404':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '409':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '422':
+          $ref: '#/components/responses/RequestValidationFailed'
+        '429':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '500':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '503':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+      x-permission-code: MODEL_CONFIGURATION_MANAGE
+      security:
+      - BearerAuth: []
+  /api/v1/model-config/{id}/connection-test:
+    post:
+      operationId: test_model_config_connection
+      summary: 经ModelGateway和LiteLLM Proxy真实测试模型连接
+      tags:
+      - 模型配置
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 26
+          maxLength: 26
+      - $ref: '#/components/parameters/CorrelationId'
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 191
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TestModelConfigConnectionRequest'
+      responses:
+        '200':
+          description: 即时结构化诊断结果；不持久化last_test字段且不改变生命周期
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestModelConfigConnectionResponse'
+        '400':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '401':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '403':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '404':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '409':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '422':
+          $ref: '#/components/responses/RequestValidationFailed'
+        '429':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '500':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '503':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+      x-permission-code: MODEL_CONFIGURATION_MANAGE
+      security:
+      - BearerAuth: []
+  /api/v1/model-config-review:
+    get:
+      operationId: list_model_config_reviews
+      summary: 查询待独立审核的模型配置
+      tags:
+      - 模型配置审核
+      parameters:
+      - $ref: '#/components/parameters/CorrelationId'
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 50
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListModelConfigResponse'
+        '422':
+          $ref: '#/components/responses/RequestValidationFailed'
+        '401':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '403':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '500':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+      x-permission-code: MODEL_VERSION_REVIEW
+      security:
+      - BearerAuth: []
+  /api/v1/model-config-review/{id}:
+    get:
+      operationId: get_model_config_review
+      summary: 查看待独立审核的模型配置
+      tags:
+      - 模型配置审核
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 26
+          maxLength: 26
+      - $ref: '#/components/parameters/CorrelationId'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetModelConfigResponse'
+        '401':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '403':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '404':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '422':
+          $ref: '#/components/responses/RequestValidationFailed'
+        '500':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+      x-permission-code: MODEL_VERSION_REVIEW
+      security:
+      - BearerAuth: []
+  /api/v1/model-capability-default/{capability_code}:
+    put:
+      operationId: set_capability_default_model
+      summary: 设置或切换平台Capability默认模型
+      tags:
+      - 模型配置
+      parameters:
+      - name: capability_code
+        in: path
+        required: true
+        schema:
+          type: string
+          enum:
+          - AI_EXPLORATION
+      - $ref: '#/components/parameters/CorrelationId'
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 191
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetCapabilityDefaultModelRequest'
+      responses:
+        '200':
+          description: AI_EXPLORATION平台级唯一effective default已设置
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SetCapabilityDefaultModelResponse'
+        '400':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '401':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '403':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '404':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '409':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '422':
+          $ref: '#/components/responses/RequestValidationFailed'
+        '500':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+      x-permission-code: MODEL_CONFIGURATION_MANAGE
+      security:
+      - BearerAuth: []
+  /api/v1/model-capability-default/{capability_code}/clear:
+    post:
+      operationId: clear_capability_default_model
+      summary: 解除平台Capability默认模型绑定
+      tags:
+      - 模型配置
+      parameters:
+      - name: capability_code
+        in: path
+        required: true
+        schema:
+          type: string
+          enum:
+          - AI_EXPLORATION
+      - $ref: '#/components/parameters/CorrelationId'
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 191
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClearCapabilityDefaultModelRequest'
+      responses:
+        '200':
+          description: Capability默认绑定已解除
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClearCapabilityDefaultModelResponse'
+        '400':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '401':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '403':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '404':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '409':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+        '422':
+          $ref: '#/components/responses/RequestValidationFailed'
+        '500':
+          $ref: '#/components/responses/ModelConfigurationProblem'
+      x-permission-code: MODEL_CONFIGURATION_MANAGE
       security:
       - BearerAuth: []
   /api/v1/prompt-revision:
@@ -21829,6 +22401,38 @@ paths:
       security:
       - BearerAuth: []
 components:
+  parameters:
+    ModelConfigId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 26
+        maxLength: 26
+    ModelCapabilityCode:
+      name: capability_code
+      in: path
+      required: true
+      schema:
+        type: string
+        enum:
+        - AI_EXPLORATION
+    CorrelationId:
+      name: X-Correlation-Id
+      in: header
+      required: false
+      schema:
+        type: string
+        maxLength: 128
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 191
   schemas:
     LoginRequest:
       type: object
@@ -25189,6 +25793,25 @@ components:
           - string
           - 'null'
           maxLength: 255
+        provider_code:
+          $ref: '#/components/schemas/ModelProviderCode'
+        model_name:
+          type: string
+          minLength: 1
+          maxLength: 191
+        request_timeout_seconds:
+          type: integer
+          minimum: 1
+          maximum: 300
+        secret_configured:
+          type: boolean
+        is_ai_exploration_default:
+          type: boolean
+        ai_exploration_default_version:
+          type:
+          - integer
+          - 'null'
+          minimum: 0
         row_version:
           type: integer
           minimum: 0
@@ -25199,9 +25822,8 @@ components:
           type: string
           format: date-time
         config_code:
-          type:
-          - string
-          - 'null'
+          type: string
+          minLength: 1
           maxLength: 191
         lifecycle_status:
           type: string
@@ -25217,16 +25839,39 @@ components:
           - ARCHIVED
       required:
       - model_config_id
+      - config_code
+      - provider_code
+      - model_name
+      - request_timeout_seconds
+      - secret_configured
+      - is_ai_exploration_default
+      - ai_exploration_default_version
       - row_version
       - created_at
       - updated_at
       - lifecycle_status
       example:
         model_config_id: 01J00000000000000000000000
+        config_code: ai-exploration-primary
+        display_name: AI探索默认模型
+        provider_code: OPENAI
+        model_name: gpt-example
+        request_timeout_seconds: 30
+        secret_configured: true
+        is_ai_exploration_default: false
+        ai_exploration_default_version: null
         row_version: 0
         created_at: '2026-08-06T06:46:00Z'
         updated_at: '2026-08-06T06:46:00Z'
         lifecycle_status: CREATED
+    ModelProviderCode:
+      type: string
+      enum:
+      - OPENAI
+      - ANTHROPIC
+      - DEEPSEEK
+      - QWEN
+      - DOUBAO
     PromptRevisionResource:
       type: object
       additionalProperties: false
@@ -32648,30 +33293,48 @@ components:
       type: object
       additionalProperties: false
       properties:
-        expected_version:
-          type: integer
-          minimum: 0
         reason:
           type:
           - string
           - 'null'
           maxLength: 1000
-        model_config_id:
-          type: string
-          minLength: 26
-          maxLength: 26
         display_name:
           type:
           - string
           - 'null'
           maxLength: 255
         config_code:
-          type:
-          - string
-          - 'null'
+          type: string
+          minLength: 1
           maxLength: 191
-      required: []
-      example: {}
+        provider_code:
+          $ref: '#/components/schemas/ModelProviderCode'
+        model_name:
+          type: string
+          minLength: 1
+          maxLength: 191
+        request_timeout_seconds:
+          type: integer
+          minimum: 1
+          maximum: 300
+          default: 30
+        secret_value:
+          type: string
+          minLength: 1
+          maxLength: 4096
+          writeOnly: true
+      required:
+      - config_code
+      - provider_code
+      - model_name
+      - secret_value
+      example:
+        config_code: ai-exploration-primary
+        display_name: AI探索默认模型
+        provider_code: OPENAI
+        model_name: gpt-example
+        request_timeout_seconds: 30
+        secret_value: write-only-secret
     CreateModelConfigResponse:
       type: object
       additionalProperties: false
@@ -32686,10 +33349,18 @@ components:
       example:
         data:
           model_config_id: 01J00000000000000000000000
+          config_code: ai-exploration-primary
+          display_name: AI探索默认模型
+          provider_code: OPENAI
+          model_name: gpt-example
+          request_timeout_seconds: 30
+          secret_configured: true
+          is_ai_exploration_default: false
+          ai_exploration_default_version: null
           row_version: 0
           created_at: '2026-08-06T06:46:00Z'
           updated_at: '2026-08-06T06:46:00Z'
-          lifecycle_status: CREATED
+          lifecycle_status: CONFIGURING
         correlation_id: example
     GetModelConfigResponse:
       type: object
@@ -32705,10 +33376,18 @@ components:
       example:
         data:
           model_config_id: 01J00000000000000000000000
+          config_code: ai-exploration-primary
+          display_name: AI探索默认模型
+          provider_code: OPENAI
+          model_name: gpt-example
+          request_timeout_seconds: 30
+          secret_configured: true
+          is_ai_exploration_default: false
+          ai_exploration_default_version: null
           row_version: 0
           created_at: '2026-08-06T06:46:00Z'
           updated_at: '2026-08-06T06:46:00Z'
-          lifecycle_status: CREATED
+          lifecycle_status: CONFIGURING
         correlation_id: example
     UpdateModelConfigRequest:
       type: object
@@ -32727,11 +33406,27 @@ components:
           - string
           - 'null'
           maxLength: 255
-        config_code:
+        provider_code:
+          $ref: '#/components/schemas/ModelProviderCode'
+        model_name:
           type:
           - string
           - 'null'
+          minLength: 1
           maxLength: 191
+        request_timeout_seconds:
+          type:
+          - integer
+          - 'null'
+          minimum: 1
+          maximum: 300
+        secret_value:
+          type:
+          - string
+          - 'null'
+          minLength: 1
+          maxLength: 4096
+          writeOnly: true
       required:
       - expected_version
       example:
@@ -32750,11 +33445,183 @@ components:
       example:
         data:
           model_config_id: 01J00000000000000000000000
+          config_code: ai-exploration-primary
+          display_name: AI探索默认模型
+          provider_code: OPENAI
+          model_name: gpt-example
+          request_timeout_seconds: 30
+          secret_configured: true
+          is_ai_exploration_default: false
+          ai_exploration_default_version: null
           row_version: 0
           created_at: '2026-08-06T06:46:00Z'
           updated_at: '2026-08-06T06:46:00Z'
-          lifecycle_status: CREATED
+          lifecycle_status: CONFIGURING
         correlation_id: example
+    ModelConfigLifecycleRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        expected_version:
+          type: integer
+          minimum: 0
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 1000
+      required:
+      - expected_version
+      - reason
+    TestModelConfigConnectionRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 1000
+    ModelConnectionTestResult:
+      type: object
+      additionalProperties: false
+      properties:
+        status:
+          type: string
+          enum:
+          - SUCCESS
+          - AUTHENTICATION_FAILED
+          - MODEL_NOT_FOUND
+          - TIMEOUT
+          - RATE_LIMITED
+          - PROVIDER_ERROR
+          - INVALID_CONFIGURATION
+        provider_code:
+          $ref: '#/components/schemas/ModelProviderCode'
+        model_name:
+          type: string
+        latency_ms:
+          type:
+          - integer
+          - 'null'
+          minimum: 0
+        error_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 128
+        message:
+          type:
+          - string
+          - 'null'
+          maxLength: 1000
+      required:
+      - status
+      - provider_code
+      - model_name
+    TestModelConfigConnectionResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/ModelConnectionTestResult'
+        correlation_id:
+          type: string
+      required:
+      - data
+      - correlation_id
+    CapabilityDefaultResource:
+      type: object
+      additionalProperties: false
+      properties:
+        capability_code:
+          type: string
+          enum:
+          - AI_EXPLORATION
+        model_config_id:
+          type: string
+          minLength: 26
+          maxLength: 26
+        row_version:
+          type: integer
+          minimum: 0
+        updated_at:
+          type: string
+          format: date-time
+      required:
+      - capability_code
+      - model_config_id
+      - row_version
+      - updated_at
+    SetCapabilityDefaultModelRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        model_config_id:
+          type: string
+          minLength: 26
+          maxLength: 26
+        expected_version:
+          type:
+          - integer
+          - 'null'
+          minimum: 0
+        reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 1000
+      required:
+      - model_config_id
+    SetCapabilityDefaultModelResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/CapabilityDefaultResource'
+        correlation_id:
+          type: string
+      required:
+      - data
+      - correlation_id
+    ClearCapabilityDefaultModelRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        expected_version:
+          type: integer
+          minimum: 0
+        reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 1000
+      required:
+      - expected_version
+    ClearCapabilityDefaultResult:
+      type: object
+      additionalProperties: false
+      properties:
+        capability_code:
+          type: string
+          enum:
+          - AI_EXPLORATION
+        cleared:
+          type: boolean
+          const: true
+      required:
+      - capability_code
+      - cleared
+    ClearCapabilityDefaultModelResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        data:
+          $ref: '#/components/schemas/ClearCapabilityDefaultResult'
+        correlation_id:
+          type: string
+      required:
+      - data
+      - correlation_id
     ListPromptRevisionResponse:
       type: object
       additionalProperties: false
@@ -36100,6 +36967,12 @@ components:
       scheme: bearer
       bearerFormat: JWT
   responses:
+    ModelConfigurationProblem:
+      description: Model configuration request failed
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
     RequestValidationFailed:
       description: Request validation failed
       content:

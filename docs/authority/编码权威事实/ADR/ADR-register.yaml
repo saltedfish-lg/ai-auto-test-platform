@@ -49,7 +49,7 @@ adrs:
   decision_id: PEND-R3-004
   title: 模型供应商白名单与默认模型
   status: ACCEPTED
-  decision: V1支持OpenAI兼容协议和一个默认实现；业务仅依赖ModelGateway，不直连供应商SDK；模型、Prompt版本、费用与调用事实全量审计。
+  decision: V1固定支持OpenAI、Anthropic、DeepSeek、Qwen、Doubao；model_name使用Provider原生标识；base_url平台预置且不可由用户编辑；业务统一经ModelGateway和LiteLLM Proxy调用；AI_EXPLORATION仅有一个平台级effective default且无项目偏好/fallback；Secret加密保存且永不返回；Connection Test只返回即时结构化结果并写不可变审计。
   authority: USER_SELECTED_IN_REPAIR_INSTRUCTION
   effective_release_id: PDBR-2026.08.06-R2
   blocks_full_code_ready: false

@@ -82,7 +82,14 @@ def main() -> int:
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(raw, encoding="utf-8")
-    print(raw)
+    # Preserve the UTF-8 machine report while keeping the CLI usable on Windows
+    # consoles whose active encoding cannot represent a validator diagnostic.
+    output_encoding = sys.stdout.encoding or "utf-8"
+    sys.stdout.write(
+        raw.encode(output_encoding, errors="replace").decode(
+            output_encoding, errors="replace"
+        )
+    )
     return 0 if report["status"] == "PASS" else 1
 
 

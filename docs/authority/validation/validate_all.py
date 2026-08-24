@@ -75,6 +75,35 @@ def parse_create_tables(sql: str):
         tables[table]={"columns":columns,"pk":pk,"uniques":uniques,"checks":checks,"constraint_names":constraint_names}
     return tables
 
+def apply_alter_table_columns(sql: str, tables: dict[str, dict[str, Any]]) -> None:
+    """Project ALTER ADD/MODIFY columns into the current static table model."""
+    alter_rx = re.compile(
+        r"ALTER TABLE\s+`?([A-Za-z0-9_]+)`?\s+(.*?);", re.S | re.I
+    )
+    column_rx = re.compile(
+        r"(?:ADD|MODIFY)\s+COLUMN\s+`?([A-Za-z0-9_]+)`?\s+"
+        r"([A-Z]+(?:\([^)]+\))?)(.*)$",
+        re.I,
+    )
+    for table_name, body in alter_rx.findall(sql):
+        table = tables.get(table_name)
+        if table is None:
+            continue
+        for raw in body.splitlines():
+            line = raw.strip().rstrip(",")
+            match = column_rx.match(line)
+            if match is None:
+                continue
+            name, type_name, rest = match.groups()
+            default_match = re.search(
+                r"\bDEFAULT\s+('(?:[^']|'')*'|[A-Za-z0-9_().+-]+)", rest, re.I
+            )
+            table["columns"][name] = {
+                "type": type_name.upper().replace(" ", ""),
+                "nullable": "NOT NULL" not in rest.upper(),
+                "default": default_match.group(1) if default_match else None,
+            }
+
 def parse_fks(sql: str):
     rx=re.compile(
       r"ALTER TABLE\s+`?([A-Za-z0-9_]+)`?\s+ADD CONSTRAINT\s+`?([A-Za-z0-9_]+)`?\s+"
@@ -202,7 +231,7 @@ def main():
     current_facts = derive_current_facts(repo_root)
     migrations = discover_migrations(args.root)
     sql = "\n".join(item["path"].read_text(encoding="utf-8") for item in migrations)
-    tables=parse_create_tables(sql); fks=parse_fks(sql)
+    tables=parse_create_tables(sql); apply_alter_table_columns(sql, tables); fks=parse_fks(sql)
     for dropped in re.findall(r"DROP TABLE(?:\s+IF EXISTS)?\s+`?([A-Za-z0-9_]+)`?", sql, re.I):
         tables.pop(dropped, None)
     fks=[fk for fk in fks if fk["child_table"] in tables and fk["parent_table"] in tables]

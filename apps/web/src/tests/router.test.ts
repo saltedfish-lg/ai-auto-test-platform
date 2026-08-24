@@ -48,4 +48,16 @@ describe("认证路由守卫（组件/路由层测试）", () => {
 
     expect(router.currentRoute.value.name).toBe("change-password");
   });
+
+  it("registers the canonical AI model configuration route", async () => {
+    vi.spyOn(apiClient, "refresh_platform_session").mockResolvedValue(
+      authenticationResponse(currentUser({ permissions: ["MODEL_CONFIGURATION_MANAGE"] })),
+    );
+    const router = createPlatformRouter(createMemoryHistory());
+
+    await router.push("/ai-settings/model-configurations");
+    await router.isReady();
+
+    expect(router.currentRoute.value.name).toBe("models.configurations");
+  });
 });

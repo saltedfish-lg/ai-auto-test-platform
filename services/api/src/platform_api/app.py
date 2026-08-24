@@ -21,9 +21,15 @@ from platform_api.database import create_database_engine, create_session_factory
 from platform_api.errors import PlatformError, ProblemDetails
 from platform_api.idempotency import IdempotencyCoordinator
 from platform_api.middleware import CorrelationIdMiddleware
+from platform_api.model_configuration_router import (
+    router as model_configuration_router,
+)
+from platform_api.model_configuration_service import ModelConfigurationService
+from platform_api.model_gateway import LiteLLMModelGateway
 from platform_api.project_router import router as project_router
 from platform_api.project_service import ProjectService
 from platform_api.rate_limit import AuthenticationRateLimitService
+from platform_api.secret_store import AesGcmSecretProtector, UnavailableSecretProtector
 from platform_api.security import JwtKeyRing, JwtService, PasswordService
 from platform_api.session_service import SessionService
 from platform_api.user_admin_router import router as user_admin_router
@@ -91,10 +97,27 @@ def create_app(settings: ApiSettings) -> FastAPI:
         app.state.auth_service,
         idempotency,
     )
+    secret_protector = (
+        AesGcmSecretProtector.load(settings.model_secret_key_ring_file)
+        if settings.model_secret_key_ring_file is not None
+        else UnavailableSecretProtector()
+    )
+    app.state.model_configuration_service = ModelConfigurationService(
+        app.state.session_factory,
+        app.state.auth_service,
+        idempotency,
+        secret_protector,
+        LiteLLMModelGateway(
+            settings.litellm_proxy_url,
+            settings.litellm_proxy_api_key_file,
+            dynamic_credentials_enabled=settings.litellm_dynamic_credentials_enabled,
+        ),
+    )
     app.add_middleware(CorrelationIdMiddleware)
     app.include_router(auth_router)
     app.include_router(user_admin_router)
     app.include_router(project_router)
+    app.include_router(model_configuration_router)
 
     @app.exception_handler(PlatformError)
     async def handle_platform_error(request: Request, error: PlatformError) -> JSONResponse:
