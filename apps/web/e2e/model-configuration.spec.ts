@@ -86,8 +86,6 @@ test("AI model configuration browser closure", async ({ page }) => {
   const createDialog = page.getByRole("dialog", { name: "新增模型配置" });
   await createDialog.getByLabel("配置编码").fill(configCode);
   await createDialog.getByLabel("显示名称").fill("浏览器验收模型");
-//   await createDialog.getByLabel("Provider").click();
-//   await page.getByRole("option", { name: providerLabel, exact: true }).click();
   await selectProvider(page, createDialog, providerLabel);
 
   await createDialog.getByLabel("Model", { exact: true }).fill(modelName);
@@ -198,8 +196,6 @@ test("SUPER_ADMIN model configuration self-approval", async ({ page }) => {
   const createDialog = page.getByRole("dialog", { name: "新增模型配置" });
   await createDialog.getByLabel("配置编码").fill(configCode);
   await createDialog.getByLabel("显示名称").fill("超级管理员自审模型");
-//   await createDialog.getByLabel("Provider").click();
-//   await page.getByRole("option", { name: providerLabel, exact: true }).click();
   await selectProvider(page, createDialog, providerLabel);
 
   await createDialog.getByLabel("Model", { exact: true }).fill(modelName);
