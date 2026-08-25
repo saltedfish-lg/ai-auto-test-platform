@@ -3,6 +3,7 @@ import { createRouter, createWebHistory, type Router, type RouterHistory } from 
 import PlatformShell from "../components/PlatformShell.vue";
 import { useSessionStore } from "../stores/session";
 import ChangePasswordView from "../views/ChangePasswordView.vue";
+import AIExplorationView from "../views/AIExplorationView.vue";
 import LoginView from "../views/LoginView.vue";
 import ModelConfigurationsView from "../views/ModelConfigurationsView.vue";
 import ProjectDetailView from "../views/ProjectDetailView.vue";
@@ -48,6 +49,11 @@ export function createPlatformRouter(history: RouterHistory = createWebHistory()
             path: "ai-settings/model-configurations",
             name: "models.configurations",
             component: ModelConfigurationsView,
+          },
+          {
+            path: "ai-exploration",
+            name: "ai.exploration",
+            component: AIExplorationView,
           },
         ],
       },

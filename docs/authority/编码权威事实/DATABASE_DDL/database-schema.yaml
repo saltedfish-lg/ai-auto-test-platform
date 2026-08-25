@@ -311,7 +311,7 @@ tables:
     default: null
   - name: prompt_revision_id
     type: VARCHAR(26)
-    nullable: false
+    nullable: true
     primary_key: false
     default: null
   - name: lifecycle_status
@@ -620,7 +620,7 @@ tables:
     default: null
   - name: ai_call_id
     type: VARCHAR(26)
-    nullable: false
+    nullable: true
     primary_key: false
     default: null
   - name: model_config_id
@@ -8619,6 +8619,376 @@ tables:
   - expires_at
   - row_version
   relationship_fields: []
+- table_name: atp_ai_exploration_session
+  columns:
+  - name: session_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: true
+    default: null
+  - name: ai_task_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: ai_call_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: idempotency_key
+    type: VARCHAR(191)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: required_permission
+    type: VARCHAR(128)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: permission_decision
+    type: VARCHAR(64)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: data_scope_decision
+    type: VARCHAR(128)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: project_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: source_case_id
+    type: VARCHAR(26)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: objective
+    type: VARCHAR(4000)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: target_url
+    type: VARCHAR(2048)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: lifecycle_status
+    type: VARCHAR(16)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: resolved_model_config_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: resolved_model_display_name
+    type: VARCHAR(255)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: resolved_provider_code
+    type: VARCHAR(32)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: resolved_model_name
+    type: VARCHAR(191)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: plan
+    type: JSON
+    nullable: true
+    primary_key: false
+    default: null
+  - name: failure_code
+    type: VARCHAR(64)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: failure_message
+    type: VARCHAR(1000)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: planning_started_at
+    type: DATETIME(6)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: planning_deadline_at
+    type: DATETIME(6)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: created_by
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: created_at
+    type: DATETIME(6)
+    nullable: false
+    primary_key: false
+    default: CURRENT_TIMESTAMP(6)
+  - name: updated_at
+    type: DATETIME(6)
+    nullable: false
+    primary_key: false
+    default: CURRENT_TIMESTAMP(6)
+  primary_key:
+  - session_id
+  unique_keys:
+  - name: uq_atp_ai_exploration_session_ai_task
+    columns:
+    - ai_task_id
+  - name: uq_atp_ai_exploration_session_ai_call
+    columns:
+    - ai_call_id
+  - name: uq_atp_ai_exploration_session_idempotency
+    columns:
+    - idempotency_key
+  check_constraints:
+  - name: ck_atp_ai_exploration_session_status
+    expression: lifecycle_status IN ('CREATED', 'PLANNING', 'READY', 'FAILED', 'RUNNING', 'SUCCEEDED')
+  - name: ck_atp_ai_exploration_session_ready
+    expression: lifecycle_status <> 'READY' OR (plan IS NOT NULL AND failure_code IS NULL AND failure_message IS NULL)
+  - name: ck_atp_ai_exploration_session_failed
+    expression: lifecycle_status <> 'FAILED' OR (plan IS NULL AND failure_code IS NOT NULL AND failure_message IS NOT NULL)
+  foreign_keys:
+  - name: fk_atp_ai_exploration_session_ai_task_id
+    column: ai_task_id
+    referenced_table: atp_ai_task
+    referenced_column: ai_task_id
+    on_delete: RESTRICT
+    on_update: RESTRICT
+  - name: fk_atp_ai_exploration_session_ai_call_id
+    column: ai_call_id
+    referenced_table: atp_ai_call
+    referenced_column: ai_call_id
+    on_delete: RESTRICT
+    on_update: RESTRICT
+  - name: fk_atp_ai_exploration_session_idempotency_key
+    column: idempotency_key
+    referenced_table: atp_idempotency_record
+    referenced_column: idempotency_key
+    on_delete: RESTRICT
+    on_update: RESTRICT
+  - name: fk_atp_ai_exploration_session_project_id
+    column: project_id
+    referenced_table: atp_project
+    referenced_column: project_id
+    on_delete: RESTRICT
+    on_update: RESTRICT
+  - name: fk_atp_ai_exploration_session_model_config_id
+    column: resolved_model_config_id
+    referenced_table: atp_model_config
+    referenced_column: model_config_id
+    on_delete: RESTRICT
+    on_update: RESTRICT
+  - name: fk_atp_ai_exploration_session_created_by
+    column: created_by
+    referenced_table: atp_user
+    referenced_column: user_id
+    on_delete: RESTRICT
+    on_update: RESTRICT
+  indexes:
+  - name: ix_atp_ai_exploration_session_project_created
+    columns:
+    - project_id
+    - created_at
+  - name: ix_atp_ai_exploration_session_source_case
+    columns:
+    - source_case_id
+  - name: ix_atp_ai_exploration_session_status_updated
+    columns:
+    - lifecycle_status
+    - updated_at
+  - name: ix_atp_ai_exploration_session_planning_deadline
+    columns:
+    - lifecycle_status
+    - planning_deadline_at
+  delete_behavior: RETAIN_WITH_PROJECT_HISTORY_AND_CONTROLLED_PURGE
+  data_owner: AIExplorationService
+  idempotency_and_audit: CREATE_COMMAND_IDEMPOTENCY_AND_MODEL_SNAPSHOT
+  object_id: AI-EXPLORATION-SESSION
+  business_unique_key: session_id
+  state_fields:
+  - lifecycle_status
+  - plan
+  - failure_code
+  - failure_message
+  relationship_fields:
+  - ai_task_id
+  - ai_call_id
+  - idempotency_key
+  - project_id
+  - source_case_id
+  - resolved_model_config_id
+  - created_by
+- table_name: atp_ai_exploration_audit
+  columns:
+  - name: audit_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: true
+    default: null
+  - name: session_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: ai_task_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: ai_call_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: operation_id
+    type: VARCHAR(128)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: action
+    type: VARCHAR(64)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: actor_user_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: required_permission
+    type: VARCHAR(128)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: permission_decision
+    type: VARCHAR(64)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: data_scope_decision
+    type: VARCHAR(128)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: participant_subjects
+    type: JSON
+    nullable: false
+    primary_key: false
+    default: null
+  - name: model_config_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: provider_code
+    type: VARCHAR(32)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: model_name
+    type: VARCHAR(191)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: previous_status
+    type: VARCHAR(16)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: new_status
+    type: VARCHAR(16)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: result_code
+    type: VARCHAR(64)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: correlation_id
+    type: VARCHAR(128)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: provider_request_id
+    type: VARCHAR(191)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: occurred_at
+    type: DATETIME(6)
+    nullable: false
+    primary_key: false
+    default: CURRENT_TIMESTAMP(6)
+  - name: source_context_hash
+    type: BINARY(32)
+    nullable: false
+    primary_key: false
+    default: null
+  primary_key:
+  - audit_id
+  unique_keys: []
+  check_constraints:
+  - name: ck_atp_ai_exploration_audit_action
+    expression: action IN ('SESSION_CREATED', 'PLANNING_STARTED', 'PLANNING_SUCCEEDED', 'PLANNING_FAILED', 'PLANNING_INTERRUPTED')
+  foreign_keys:
+  - name: fk_atp_ai_exploration_audit_session_id
+    column: session_id
+    referenced_table: atp_ai_exploration_session
+    referenced_column: session_id
+    on_delete: RESTRICT
+    on_update: RESTRICT
+  - name: fk_atp_ai_exploration_audit_actor_user_id
+    column: actor_user_id
+    referenced_table: atp_user
+    referenced_column: user_id
+    on_delete: RESTRICT
+    on_update: RESTRICT
+  - name: fk_atp_ai_exploration_audit_ai_task_id
+    column: ai_task_id
+    referenced_table: atp_ai_task
+    referenced_column: ai_task_id
+    on_delete: RESTRICT
+    on_update: RESTRICT
+  - name: fk_atp_ai_exploration_audit_ai_call_id
+    column: ai_call_id
+    referenced_table: atp_ai_call
+    referenced_column: ai_call_id
+    on_delete: RESTRICT
+    on_update: RESTRICT
+  indexes:
+  - name: ix_atp_ai_exploration_audit_session_occurred
+    columns:
+    - session_id
+    - occurred_at
+  - name: ix_atp_ai_exploration_audit_correlation
+    columns:
+    - correlation_id
+  delete_behavior: APPEND_ONLY_UPDATE_DELETE_FORBIDDEN
+  data_owner: AIExplorationService
+  idempotency_and_audit: IMMUTABLE_AI_EXPLORATION_AUDIT
+  object_id: AI-EXPLORATION-AUDIT
+  business_unique_key: audit_id
+  state_fields: []
+  relationship_fields:
+  - session_id
+  - ai_task_id
+  - ai_call_id
+  - actor_user_id
+  - model_config_id
 rules:
 - 正式关系、状态、权限和唯一约束必须物理化，extension_json仅保存非契约扩展。
 - 对象事实源、对象表映射、DDL、OpenAPI与事件必须使用同一技术身份。

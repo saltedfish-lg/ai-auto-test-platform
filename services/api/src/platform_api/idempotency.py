@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import timedelta
 
 from sqlalchemy import select
@@ -32,6 +33,7 @@ class IdempotencyCoordinator:
         operation_id: str,
         raw_key: str,
         request_payload: bytes,
+        recover_incomplete: Callable[[Session, IdempotencyRecord], bool] | None = None,
     ) -> tuple[IdempotencyRecord, bool]:
         """通用命令通过统一声明路径锁定物理键, 确保多实例竞争只产生一个副作用。"""
         storage_keys = self._keys.hex_digests(
@@ -42,7 +44,15 @@ class IdempotencyCoordinator:
             "idempotency-storage-key",
             framed("request", principal_id, operation_id) + request_payload,
         )
-        return self._claim(db, principal_id, operation_id, raw_key, storage_keys, fingerprints)
+        return self._claim(
+            db,
+            principal_id,
+            operation_id,
+            raw_key,
+            storage_keys,
+            fingerprints,
+            recover_incomplete=recover_incomplete,
+        )
 
     def claim_change_password(
         self,
@@ -82,6 +92,7 @@ class IdempotencyCoordinator:
         fingerprints: tuple[str, ...],
         *,
         terminal_status: int | None = None,
+        recover_incomplete: Callable[[Session, IdempotencyRecord], bool] | None = None,
     ) -> tuple[IdempotencyRecord, bool]:
         """声明、过期复用与终态重放集中在同一锁序, 确保并发请求只产生一次副作用。"""
         now = utc_now()
@@ -144,6 +155,11 @@ class IdempotencyCoordinator:
         if existing is not None and not inserted_new:
             self._validate(existing, principal_id, operation_id, fingerprints)
             if existing.response_status is None or existing.completed_at is None:
+                recovered = recover_incomplete(db, existing) if recover_incomplete else False
+                if recovered:
+                    if existing.response_status is None or existing.completed_at is None:
+                        raise RuntimeError("incomplete recovery did not complete idempotency")
+                    return existing, True
                 raise PlatformError(
                     title="Concurrent idempotent request is incomplete",
                     detail="The idempotent command has not reached a terminal state.",

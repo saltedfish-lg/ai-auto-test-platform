@@ -43,10 +43,7 @@ export function isProblemDetails(value: unknown): value is ProblemDetails {
   );
 }
 
-export function getAuthenticationErrorMessage(
-  error: unknown,
-  fallback: string,
-): string {
+export function getAuthenticationErrorMessage(error: unknown, fallback: string): string {
   // 正式错误码优先于服务端 detail，确保登录防枚举文案与改密业务文案不被后端英文细节覆盖。
   if (!(error instanceof ApiRequestError)) return fallback;
   const code = error.problem?.code as AuthenticationErrorCode | undefined;
@@ -90,6 +87,16 @@ const modelConfigurationErrorMessages: Record<string, string> = {
   AUTH_PERMISSION_DENIED: "当前账号没有执行此操作的权限。",
 };
 
+const aiExplorationErrorMessages: Record<string, string> = {
+  AI_EXPLORATION_MODEL_NOT_CONFIGURED: "尚未配置可用的 AI_EXPLORATION 默认模型。",
+  AI_EXPLORATION_MODEL_UNAVAILABLE: "AI 探索默认模型当前不可用，请稍后重试。",
+  AI_EXPLORATION_MODEL_RESPONSE_INVALID: "模型未返回有效的结构化探索计划。",
+  AI_EXPLORATION_PLANNING_FAILED: "初始探索计划生成失败，请稍后重试。",
+  AI_EXPLORATION_PLANNING_INTERRUPTED: "上次探索规划已中断，请重新发起规划。",
+  AI_EXPLORATION_PROJECT_UNAVAILABLE: "只有 ACTIVE 项目可以创建 AI 探索会话。",
+  AUTH_PERMISSION_DENIED: "当前账号没有执行此操作的权限。",
+};
+
 export function getApiErrorMessage(error: unknown, fallback: string): string {
   if (!(error instanceof ApiRequestError)) return fallback;
   const code = error.problem?.code;
@@ -112,6 +119,18 @@ export function getModelConfigurationErrorMessage(error: unknown, fallback: stri
   if (error.status === 403) return "当前账号没有执行此操作的权限。";
   if (error.status === 404) return "请求的模型配置不存在。";
   if (error.status === 409) return "模型配置状态或版本已变化，请刷新后重试。";
+  if (error.status === 422) return "提交内容不符合接口要求，请检查表单。";
+  return error.problem?.detail ?? fallback;
+}
+
+export function getAIExplorationErrorMessage(error: unknown, fallback: string): string {
+  if (!(error instanceof ApiRequestError)) return fallback;
+  const code = error.problem?.code;
+  if (code && aiExplorationErrorMessages[code]) return aiExplorationErrorMessages[code];
+  if (error.status === 401) return "登录状态已失效，请重新登录。";
+  if (error.status === 403) return "当前账号没有执行此操作的权限。";
+  if (error.status === 404) return "请求的项目不存在。";
+  if (error.status === 409) return "项目状态已变化，请刷新后重试。";
   if (error.status === 422) return "提交内容不符合接口要求，请检查表单。";
   return error.problem?.detail ?? fallback;
 }

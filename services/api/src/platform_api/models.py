@@ -350,6 +350,111 @@ class ModelConfigurationAudit(Base):
     details_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
 
 
+class AITask(Base):
+    """AI Task aggregate root projection used by Foundation planning."""
+
+    __tablename__ = "atp_ai_task"
+    ai_task_id: Mapped[str] = mapped_column(String(26), primary_key=True)
+    project_id: Mapped[str | None] = mapped_column(String(26), ForeignKey("atp_project.project_id"))
+    ai_result_id: Mapped[str | None] = mapped_column(String(26))
+    ai_call_id: Mapped[str | None] = mapped_column(String(26), ForeignKey("atp_ai_call.ai_call_id"))
+    model_config_id: Mapped[str] = mapped_column(
+        String(26), ForeignKey("atp_model_config.model_config_id")
+    )
+    status: Mapped[str] = mapped_column(String(13))
+    lifecycle_status: Mapped[str] = mapped_column(String(17))
+    display_name: Mapped[str | None] = mapped_column(String(255))
+    row_version: Mapped[int] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime] = mapped_column(DateTime)
+    created_by: Mapped[str | None] = mapped_column(String(26))
+    updated_by: Mapped[str | None] = mapped_column(String(26))
+    extension_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+
+
+class AICall(Base):
+    """Model-call member owned by an AI Task aggregate."""
+
+    __tablename__ = "atp_ai_call"
+    ai_call_id: Mapped[str] = mapped_column(String(26), primary_key=True)
+    project_id: Mapped[str | None] = mapped_column(String(26), ForeignKey("atp_project.project_id"))
+    ai_task_id: Mapped[str] = mapped_column(String(26), ForeignKey("atp_ai_task.ai_task_id"))
+    prompt_revision_id: Mapped[str | None] = mapped_column(String(26))
+    lifecycle_status: Mapped[str] = mapped_column(String(10))
+    display_name: Mapped[str | None] = mapped_column(String(255))
+    row_version: Mapped[int] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime] = mapped_column(DateTime)
+    created_by: Mapped[str | None] = mapped_column(String(26))
+    updated_by: Mapped[str | None] = mapped_column(String(26))
+    extension_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+
+
+class AIExplorationSession(Base):
+    __tablename__ = "atp_ai_exploration_session"
+    session_id: Mapped[str] = mapped_column(String(26), primary_key=True)
+    ai_task_id: Mapped[str] = mapped_column(
+        String(26), ForeignKey("atp_ai_task.ai_task_id"), unique=True
+    )
+    ai_call_id: Mapped[str] = mapped_column(
+        String(26), ForeignKey("atp_ai_call.ai_call_id"), unique=True
+    )
+    idempotency_key: Mapped[str] = mapped_column(
+        String(191), ForeignKey("atp_idempotency_record.idempotency_key"), unique=True
+    )
+    required_permission: Mapped[str] = mapped_column(String(128))
+    permission_decision: Mapped[str] = mapped_column(String(64))
+    data_scope_decision: Mapped[str] = mapped_column(String(128))
+    project_id: Mapped[str] = mapped_column(String(26), ForeignKey("atp_project.project_id"))
+    source_case_id: Mapped[str | None] = mapped_column(String(26))
+    objective: Mapped[str] = mapped_column(String(4000))
+    target_url: Mapped[str] = mapped_column(String(2048))
+    lifecycle_status: Mapped[str] = mapped_column(String(16))
+    resolved_model_config_id: Mapped[str] = mapped_column(
+        String(26), ForeignKey("atp_model_config.model_config_id")
+    )
+    resolved_model_display_name: Mapped[str | None] = mapped_column(String(255))
+    resolved_provider_code: Mapped[str] = mapped_column(String(32))
+    resolved_model_name: Mapped[str] = mapped_column(String(191))
+    plan: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    failure_code: Mapped[str | None] = mapped_column(String(64))
+    failure_message: Mapped[str | None] = mapped_column(String(1000))
+    planning_started_at: Mapped[datetime] = mapped_column(DateTime)
+    planning_deadline_at: Mapped[datetime] = mapped_column(DateTime)
+    created_by: Mapped[str] = mapped_column(String(26), ForeignKey("atp_user.user_id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime] = mapped_column(DateTime)
+
+
+class AIExplorationAudit(Base):
+    """Append-only lifecycle and model invocation evidence without credentials."""
+
+    __tablename__ = "atp_ai_exploration_audit"
+    audit_id: Mapped[str] = mapped_column(String(26), primary_key=True)
+    session_id: Mapped[str] = mapped_column(
+        String(26), ForeignKey("atp_ai_exploration_session.session_id")
+    )
+    ai_task_id: Mapped[str] = mapped_column(String(26), ForeignKey("atp_ai_task.ai_task_id"))
+    ai_call_id: Mapped[str] = mapped_column(String(26), ForeignKey("atp_ai_call.ai_call_id"))
+    operation_id: Mapped[str] = mapped_column(String(128))
+    action: Mapped[str] = mapped_column(String(64))
+    actor_user_id: Mapped[str] = mapped_column(String(26), ForeignKey("atp_user.user_id"))
+    required_permission: Mapped[str] = mapped_column(String(128))
+    permission_decision: Mapped[str] = mapped_column(String(64))
+    data_scope_decision: Mapped[str] = mapped_column(String(128))
+    participant_subjects: Mapped[list[str]] = mapped_column(JSON)
+    model_config_id: Mapped[str] = mapped_column(String(26))
+    provider_code: Mapped[str] = mapped_column(String(32))
+    model_name: Mapped[str] = mapped_column(String(191))
+    previous_status: Mapped[str | None] = mapped_column(String(16))
+    new_status: Mapped[str] = mapped_column(String(16))
+    result_code: Mapped[str] = mapped_column(String(64))
+    correlation_id: Mapped[str] = mapped_column(String(128))
+    provider_request_id: Mapped[str | None] = mapped_column(String(191))
+    occurred_at: Mapped[datetime] = mapped_column(DateTime)
+    source_context_hash: Mapped[bytes] = mapped_column(MySQLBinary(32))
+
+
 class OutboxEvent(Base):
     __tablename__ = "atp_outbox_event"
     event_id: Mapped[str] = mapped_column(String(26), primary_key=True)

@@ -11,7 +11,7 @@
 
 - 前端：`Vue 3 + TypeScript`；API：`Python 3.12 + FastAPI`；Runner：`Python 3.12 + Playwright Web`。
 - 状态维度：124。
-- 数据库：89 张表；Migration：`V3__platform_contract_rebuild.sql → V4__rbac_seed_data.sql → V5__platform_authentication_contract.sql → V6__p1_auth_governance_closure.sql → V7__p1_remaining_authentication_closure.sql → V8__retire_platform_design_baseline_release.sql → V9__project_management_foundation.sql → V10__ai_model_configuration_foundation.sql`。
+- 数据库：91 张表；Migration：`V3__platform_contract_rebuild.sql → V4__rbac_seed_data.sql → V5__platform_authentication_contract.sql → V6__p1_auth_governance_closure.sql → V7__p1_remaining_authentication_closure.sql → V8__retire_platform_design_baseline_release.sql → V9__project_management_foundation.sql → V10__ai_model_configuration_foundation.sql → V11__ai_exploration_foundation.sql → V12__ai_exploration_planning_membership.sql`。
 - RBAC：50 个权限点、12 个角色模板、600 条映射。
 - 权限解析：每个受保护请求实时读取关系型RBAC、项目职责和数据范围。
 

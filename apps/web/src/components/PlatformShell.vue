@@ -41,6 +41,15 @@ async function logout(): Promise<void> {
           <span aria-hidden="true">▦</span>
           项目管理
         </RouterLink>
+        <RouterLink
+          v-if="session.hasPermission('AI_TASK_CREATE')"
+          class="nav-item"
+          active-class="active"
+          :to="{ name: 'ai.exploration' }"
+        >
+          <span aria-hidden="true">✦</span>
+          AI 探索
+        </RouterLink>
         <p
           v-if="
             session.hasPermission('MODEL_CONFIGURATION_MANAGE') ||

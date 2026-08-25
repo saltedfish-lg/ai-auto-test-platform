@@ -1,0 +1,88 @@
+authority_kind: SINGLE_LIVING_AUTHORITY_PRODUCT_DECISION
+decision_id: PD-AI-EXPLORATION-FOUNDATION
+decision_status: RESOLVED
+decided_at: '2026-08-25'
+decision_source: USER_CONTROLLED_DECISION
+capability_code: AI_EXPLORATION_FOUNDATION
+scope:
+  operation_id: create_ai_exploration_session
+  public_path: /api/v1/ai-exploration-sessions
+  aggregate_root_object_id: OBJ-061
+  aggregate_root: AI任务
+  planning_member_type: AIExplorationSession
+  required_permission: AI_TASK_CREATE
+  required_data_scope: 授权项目的AI任务及相关资产范围
+product_contract:
+  - AIExplorationSession 是现有AI任务聚合内的规划阶段成员，不是独立聚合根。
+  - 原create_ai_exploration与POST /api/v1/ai-explorations完整Runner探索契约保持不变。
+  - create_ai_exploration_session只生成并持久化结构化初始探索计划，不执行浏览器或Runner动作。
+  - 本规划操作不适用完整探索HRO-014的SUPER_ADMIN二次确认；必须实时校验项目范围AI_TASK_CREATE并写不可变审计。
+inputs:
+  required:
+    - project_id
+    - objective
+    - target_url
+  optional:
+    - source_case_id
+preconditions:
+  - 目标项目必须为ACTIVE。
+  - capability=AI_EXPLORATION必须存在唯一ACTIVE默认Model Configuration；不存在时明确失败，不得fallback。
+aggregate_membership:
+  - 会话必须持久关联同一聚合内的ai_task_id与ai_call_id。
+  - AI调用必须通过AI任务聚合服务边界创建和变更。
+  - 模型配置、Provider与model_name必须在会话创建时固化快照。
+session_lifecycle:
+  allowed_states:
+    - CREATED
+    - PLANNING
+    - READY
+    - FAILED
+    - RUNNING
+    - SUCCEEDED
+  foundation_emitted_states:
+    - CREATED
+    - PLANNING
+    - READY
+    - FAILED
+  transitions:
+    - CREATED_TO_PLANNING
+    - PLANNING_TO_READY
+    - CREATED_OR_PLANNING_TO_FAILED
+  reserved_for_browser_loop:
+    - READY_TO_RUNNING
+    - RUNNING_TO_SUCCEEDED_OR_FAILED
+  aggregate_status_projection:
+    ready_session_parent_ai_task_status: QUEUED
+    failed_session_parent_ai_task_status: FAILED
+recovery:
+  - 会话创建、AI任务、AI调用、幂等绑定、模型快照与规划截止时间必须原子持久化。
+  - 模型调用不做隐式重试。
+  - 进程中断遗留的过期PLANNING由相同幂等请求恢复为FAILED并返回既有会话。
+  - Provider成功但终态未提交时不得盲目再次调用Provider。
+  - 恢复提交后的FAILED为权威终态；迟到的原Provider结果只能重放该终态，不得改写为READY或产生矛盾审计。
+audit_requirements:
+  - 发起主体
+  - 参与主体
+  - project_id
+  - ai_task_id
+  - ai_call_id
+  - session_id
+  - required_permission
+  - permission_and_data_scope_decision
+  - resolved_model_config_id
+  - resolved_provider_code
+  - resolved_model_name
+  - lifecycle_previous_and_new_status
+  - result_or_reason_code
+  - correlation_or_provider_request_identity
+  - occurred_at
+security:
+  - Provider Secret、LiteLLM Key和解密后的凭据不得进入会话、API响应、日志或审计。
+  - 原始模型输出不作为核心业务事实持久化；仅持久化通过严格Schema校验的结构化计划。
+references:
+  - OBJ-061
+  - OBJ-060
+  - AGG-020
+  - HRO-014
+  - PROC-008
+  - AI_TASK_CREATE

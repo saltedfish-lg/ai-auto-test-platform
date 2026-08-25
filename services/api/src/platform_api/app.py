@@ -12,6 +12,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from platform_observability import configure_logging
 
+from platform_api.ai_exploration_router import router as ai_exploration_router
+from platform_api.ai_exploration_service import AIExplorationService
 from platform_api.audit import AuthenticationAuditService
 from platform_api.auth_hmac import AuthHmacKeyRing
 from platform_api.auth_router import router as auth_router
@@ -113,11 +115,18 @@ def create_app(settings: ApiSettings) -> FastAPI:
             dynamic_credentials_enabled=settings.litellm_dynamic_credentials_enabled,
         ),
     )
+    app.state.ai_exploration_service = AIExplorationService(
+        app.state.session_factory,
+        app.state.auth_service,
+        idempotency,
+        app.state.model_configuration_service,
+    )
     app.add_middleware(CorrelationIdMiddleware)
     app.include_router(auth_router)
     app.include_router(user_admin_router)
     app.include_router(project_router)
     app.include_router(model_configuration_router)
+    app.include_router(ai_exploration_router)
 
     @app.exception_handler(PlatformError)
     async def handle_platform_error(request: Request, error: PlatformError) -> JSONResponse:

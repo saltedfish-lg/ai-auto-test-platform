@@ -38,6 +38,11 @@ async function renderShell(permissions = ["PROJECT_VIEW", "PROJECT_CREATE"]): Pr
             name: "models.configurations",
             component: { template: "<div>models</div>" },
           },
+          {
+            path: "ai-exploration",
+            name: "ai.exploration",
+            component: { template: "<div>exploration</div>" },
+          },
         ],
       },
       {
@@ -81,6 +86,12 @@ describe("身份工作台（组件测试，API 为 mock）", () => {
     await renderShell(["MODEL_VERSION_REVIEW"]);
     expect(screen.getByText("AI 设置")).toBeTruthy();
     expect(screen.getByRole("link", { name: "模型配置" })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "项目管理" })).toBeNull();
+  });
+
+  it("shows AI exploration only to identities with AI_TASK_CREATE", async () => {
+    await renderShell(["AI_TASK_CREATE"]);
+    expect(screen.getByRole("link", { name: "AI 探索" })).toBeTruthy();
     expect(screen.queryByRole("link", { name: "项目管理" })).toBeNull();
   });
 

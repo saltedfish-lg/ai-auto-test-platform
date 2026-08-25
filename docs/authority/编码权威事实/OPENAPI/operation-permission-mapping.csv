@@ -254,6 +254,7 @@ report_runner_progress,POST,/api/v1/runners/{id}/progress,REPORT_VIEW,CURRENT_LI
 report_runner_result,POST,/api/v1/runners/{id}/result,REPORT_VIEW,CURRENT_LIVING_AUTHORITY
 convert_natural_language_case,POST,/api/v1/natural-language-cases/{id}/convert,PROJECT_EDIT,CURRENT_LIVING_AUTHORITY
 create_ai_exploration,POST,/api/v1/ai-explorations,AI_TASK_CREATE,CURRENT_LIVING_AUTHORITY
+create_ai_exploration_session,POST,/api/v1/ai-exploration-sessions,AI_TASK_CREATE,CURRENT_LIVING_AUTHORITY
 create_manual_recording,POST,/api/v1/manual-recordings,MANUAL_RECORDING_CREATE,CURRENT_LIVING_AUTHORITY
 save_recording_draft_and_stop,POST,/api/v1/manual-recordings/{id}/save-draft-and-stop,PROJECT_EDIT,CURRENT_LIVING_AUTHORITY
 get_report,GET,/api/v1/reports/{id},REPORT_VIEW,CURRENT_LIVING_AUTHORITY

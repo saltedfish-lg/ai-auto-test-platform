@@ -1,6 +1,7 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 test.setTimeout(180_000);
+test.describe.configure({ mode: "serial" });
 
 function requiredEnvironment(name: string): string {
   const value = process.env[name];
@@ -32,17 +33,11 @@ async function expectSecretNotRendered(page: Page, secret: string): Promise<void
   expect(rendered, "provider secret must never be rendered").toBe(false);
 }
 
-async function selectProvider(
-  page: Page,
-  dialog: Locator,
-  providerLabel: string,
-) {
+async function selectProvider(page: Page, dialog: Locator, providerLabel: string) {
   const providerSelect = dialog.getByLabel("Provider");
   await providerSelect.focus();
   await providerSelect.press("ArrowDown");
-  await page
-    .getByRole("option", { name: providerLabel, exact: true })
-    .click();
+  await page.getByRole("option", { name: providerLabel, exact: true }).click();
 }
 
 test("AI model configuration browser closure", async ({ page }) => {
@@ -99,7 +94,7 @@ test("AI model configuration browser closure", async ({ page }) => {
   expect(created.status()).toBe(201);
   const modelConfigId = (await created.json()).data.model_config_id as string;
 
-  await expect(page.getByText(configCode, { exact: true })).toBeVisible();
+  await expect(page.locator("tbody").getByText(configCode, { exact: true })).toBeVisible();
   await expect(page.getByText("已配置", { exact: true }).first()).toBeVisible();
   await expectSecretNotRendered(page, providerSecret);
   await expect(page.getByRole("heading", { name: "模型配置详情" })).toBeVisible();
@@ -162,7 +157,7 @@ test("AI model configuration browser closure", async ({ page }) => {
   await expect(page.getByText("当前默认", { exact: true })).toBeVisible();
 
   await page.reload();
-  await expect(page.getByText(configCode, { exact: true })).toBeVisible();
+  await expect(page.locator("tbody").getByText(configCode, { exact: true })).toBeVisible();
   await expect(page.getByText("当前默认", { exact: true })).toBeVisible();
   await expectSecretNotRendered(page, providerSecret);
   expect(consoleErrors.length, "browser console must have no unexpected errors").toBe(0);
@@ -208,7 +203,7 @@ test("SUPER_ADMIN model configuration self-approval", async ({ page }) => {
   const created = await createResponse;
   expect(created.status()).toBe(201);
   const modelConfigId = (await created.json()).data.model_config_id as string;
-  await expect(page.getByText(configCode, { exact: true })).toBeVisible();
+  await expect(page.locator("tbody").getByText(configCode, { exact: true })).toBeVisible();
   await expectSecretNotRendered(page, providerSecret);
 
   const connectionResponse = page.waitForResponse(
@@ -251,4 +246,35 @@ test("SUPER_ADMIN model configuration self-approval", async ({ page }) => {
   expect((await activateResponse).status()).toBe(200);
   await expect(page.getByText("ACTIVE", { exact: true }).first()).toBeVisible();
   await expectSecretNotRendered(page, providerSecret);
+});
+
+test("AI exploration planning through browser/API/gateway/MySQL", async ({ page }) => {
+  const username = requiredEnvironment("ATP_MODEL_E2E_SUPER_ADMIN_USERNAME");
+  const password = requiredEnvironment("ATP_MODEL_E2E_SUPER_ADMIN_PASSWORD");
+  const projectId = requiredEnvironment("ATP_MODEL_E2E_EXPLORATION_PROJECT_ID");
+
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/login(?:\?|$)/);
+  expect((await login(page, username, password)).status()).toBe(200);
+  await page.goto(`/ai-exploration?project_id=${projectId}`);
+  await expect(page).toHaveURL(/\/ai-exploration\?project_id=/);
+  await page.getByLabel("测试目标").fill("验证合成用户能够进入合成工作台");
+  await page.getByLabel("目标页面地址").fill("https://example.test/login");
+  const planningResponse = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === "/api/v1/ai-exploration-sessions" &&
+      response.request().method() === "POST",
+  );
+  await page.getByRole("button", { name: "创建并开始规划" }).click();
+  const planning = await planningResponse;
+
+  expect(planning.status()).toBe(201);
+  const payload = await planning.json();
+  expect(payload.data.lifecycle_status).toBe("READY");
+  expect(payload.data.ai_task_id).toBeTruthy();
+  expect(payload.data.plan.steps).toHaveLength(1);
+  await expect(page.getByText("READY", { exact: true })).toBeVisible();
+  await expect(page.getByText("Reach the synthetic dashboard", { exact: true })).toBeVisible();
+  await expect(page.getByText("Open the synthetic login page", { exact: true })).toBeVisible();
+  await expect(page.getByText("OPENAI / browser-runtime-model", { exact: true })).toBeVisible();
 });

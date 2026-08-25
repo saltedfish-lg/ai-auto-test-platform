@@ -12,3 +12,5 @@ capabilities:
     migration_name: V9__project_management_foundation.sql
   AI_MODEL_CONFIGURATION_FOUNDATION_SCHEMA:
     migration_name: V10__ai_model_configuration_foundation.sql
+  AI_EXPLORATION_FOUNDATION_SCHEMA:
+    migration_name: V11__ai_exploration_foundation.sql

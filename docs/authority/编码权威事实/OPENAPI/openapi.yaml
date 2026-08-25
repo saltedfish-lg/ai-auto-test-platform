@@ -21540,6 +21540,91 @@ paths:
       x-permission-code: AI_TASK_CREATE
       security:
       - BearerAuth: []
+  /api/v1/ai-exploration-sessions:
+    post:
+      operationId: create_ai_exploration_session
+      summary: 创建AI探索规划会话并生成初始计划
+      tags:
+      - AI探索规划
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 191
+      responses:
+        '201':
+          description: 探索规划会话已达到READY或FAILED终态
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateAiExplorationSessionResponse'
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthenticated
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: Conflict or in-progress idempotent request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          $ref: '#/components/responses/RequestValidationFailed'
+        '429':
+          description: Rate limited
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '503':
+          description: Service unavailable
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAiExplorationSessionRequest'
+      x-permission-code: AI_TASK_CREATE
+      security:
+      - BearerAuth: []
   /api/v1/manual-recordings:
     post:
       operationId: create_manual_recording
@@ -36645,6 +36730,226 @@ components:
         data:
           operation_id: example
           status: example
+        correlation_id: example
+    AIExplorationPlanStep:
+      type: object
+      additionalProperties: false
+      required:
+      - sequence
+      - intent
+      - expected_observation
+      properties:
+        sequence:
+          type: integer
+          minimum: 1
+        intent:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        expected_observation:
+          type: string
+          minLength: 1
+          maxLength: 1000
+    AIExplorationPlan:
+      type: object
+      additionalProperties: false
+      required:
+      - goal
+      - assumptions
+      - steps
+      properties:
+        goal:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        assumptions:
+          type: array
+          maxItems: 50
+          items:
+            type: string
+            minLength: 1
+            maxLength: 1000
+        steps:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/AIExplorationPlanStep'
+    AIExplorationSessionResource:
+      type: object
+      additionalProperties: false
+      required:
+      - session_id
+      - ai_task_id
+      - project_id
+      - source_case_id
+      - objective
+      - target_url
+      - lifecycle_status
+      - resolved_model_config_id
+      - resolved_model_display_name
+      - resolved_provider_code
+      - resolved_model_name
+      - plan
+      - failure_code
+      - failure_message
+      - created_by
+      - created_at
+      - updated_at
+      properties:
+        session_id:
+          type: string
+          minLength: 26
+          maxLength: 26
+        ai_task_id:
+          type: string
+          minLength: 26
+          maxLength: 26
+        project_id:
+          type: string
+          minLength: 26
+          maxLength: 26
+        source_case_id:
+          type:
+          - string
+          - 'null'
+          minLength: 26
+          maxLength: 26
+        objective:
+          type: string
+          minLength: 1
+          maxLength: 4000
+        target_url:
+          type: string
+          format: uri
+          maxLength: 2048
+        lifecycle_status:
+          type: string
+          enum:
+          - CREATED
+          - PLANNING
+          - READY
+          - FAILED
+          - RUNNING
+          - SUCCEEDED
+        resolved_model_config_id:
+          type: string
+          minLength: 26
+          maxLength: 26
+        resolved_model_display_name:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+        resolved_provider_code:
+          type: string
+          enum:
+          - OPENAI
+          - ANTHROPIC
+          - DEEPSEEK
+          - QWEN
+          - DOUBAO
+        resolved_model_name:
+          type: string
+          minLength: 1
+          maxLength: 191
+        plan:
+          oneOf:
+          - $ref: '#/components/schemas/AIExplorationPlan'
+          - type: 'null'
+        failure_code:
+          type:
+          - string
+          - 'null'
+          enum:
+          - AI_EXPLORATION_MODEL_UNAVAILABLE
+          - AI_EXPLORATION_MODEL_RESPONSE_INVALID
+          - AI_EXPLORATION_PLANNING_FAILED
+          - AI_EXPLORATION_PLANNING_INTERRUPTED
+          - null
+        failure_message:
+          type:
+          - string
+          - 'null'
+          maxLength: 1000
+        created_by:
+          type: string
+          minLength: 26
+          maxLength: 26
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    CreateAiExplorationSessionRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - project_id
+      - objective
+      - target_url
+      properties:
+        project_id:
+          type: string
+          minLength: 26
+          maxLength: 26
+        source_case_id:
+          type:
+          - string
+          - 'null'
+          minLength: 26
+          maxLength: 26
+        objective:
+          type: string
+          minLength: 1
+          maxLength: 4000
+        target_url:
+          type: string
+          format: uri
+          maxLength: 2048
+      example:
+        project_id: 01J00000000000000000000000
+        source_case_id: null
+        objective: 验证有效用户能够登录并进入工作台
+        target_url: https://example.test/login
+    CreateAiExplorationSessionResponse:
+      type: object
+      additionalProperties: false
+      required:
+      - data
+      - correlation_id
+      properties:
+        data:
+          $ref: '#/components/schemas/AIExplorationSessionResource'
+        correlation_id:
+          type: string
+      example:
+        data:
+          session_id: 01J00000000000000000000001
+          ai_task_id: 01J00000000000000000000003
+          project_id: 01J00000000000000000000000
+          source_case_id: null
+          objective: 验证有效用户能够登录并进入工作台
+          target_url: https://example.test/login
+          lifecycle_status: READY
+          resolved_model_config_id: 01J00000000000000000000002
+          resolved_model_display_name: AI探索默认模型
+          resolved_provider_code: OPENAI
+          resolved_model_name: gpt-5-mini
+          plan:
+            goal: 验证有效用户能够登录并进入工作台
+            assumptions:
+            - 已存在可用测试账号
+            steps:
+            - sequence: 1
+              intent: 打开登录页
+              expected_observation: 页面展示登录表单
+          failure_code: null
+          failure_message: null
+          created_by: 01J00000000000000000000003
+          created_at: '2026-08-25T00:00:00Z'
+          updated_at: '2026-08-25T00:00:01Z'
         correlation_id: example
     CreateManualRecordingRequest:
       type: object

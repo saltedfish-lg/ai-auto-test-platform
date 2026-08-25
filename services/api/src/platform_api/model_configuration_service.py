@@ -30,7 +30,7 @@ from platform_api.model_configuration_schemas import (
     TestModelConfigConnectionRequest,
     UpdateModelConfigRequest,
 )
-from platform_api.model_gateway import ModelGateway
+from platform_api.model_gateway import GatewayInvocationResult, ModelGateway
 from platform_api.models import (
     IdempotencyRecord,
     ModelCapabilityDefault,
@@ -57,6 +57,7 @@ class ResolvedModelConfiguration:
     model_name: str
     request_timeout_seconds: int
     secret_reference: str
+    display_name: str | None = None
 
 
 class ModelConfigurationService:
@@ -134,13 +135,9 @@ class ModelConfigurationService:
             self._authentication.require_platform_permissions_in_transaction(
                 db, actor, "list_model_config_reviews", (REVIEW_PERMISSION,), audit_context
             )
-            criterion = ModelConfiguration.lifecycle_status.in_(
-                ("VALIDATING", "RECOVERING")
-            )
+            criterion = ModelConfiguration.lifecycle_status.in_(("VALIDATING", "RECOVERING"))
             total = int(
-                db.scalar(
-                    select(func.count(ModelConfiguration.model_config_id)).where(criterion)
-                )
+                db.scalar(select(func.count(ModelConfiguration.model_config_id)).where(criterion))
                 or 0
             )
             rows = list(
@@ -196,11 +193,14 @@ class ModelConfigurationService:
                 )
                 if replay:
                     return _stored_model_config(record.response_json)
-                if db.scalar(
-                    select(ModelConfiguration.model_config_id).where(
-                        ModelConfiguration.config_code == body.config_code
+                if (
+                    db.scalar(
+                        select(ModelConfiguration.model_config_id).where(
+                            ModelConfiguration.config_code == body.config_code
+                        )
                     )
-                ) is not None:
+                    is not None
+                ):
                     raise _code_conflict()
 
                 now = utc_now()
@@ -474,9 +474,7 @@ class ModelConfigurationService:
             self._require_version(row, body.expected_version)
             if row.lifecycle_status not in expected_states:
                 raise _state_forbidden(
-                    "The transition requires lifecycle status "
-                    + " or ".join(expected_states)
-                    + "."
+                    "The transition requires lifecycle status " + " or ".join(expected_states) + "."
                 )
             review_audit_details: dict[str, object] | None = None
             if action == "activate" and row.lifecycle_status == "VALIDATING":
@@ -514,8 +512,7 @@ class ModelConfigurationService:
                     raise PlatformError(
                         title="Independent model review required",
                         detail=(
-                            "The submitting operator cannot activate the same model "
-                            "configuration."
+                            "The submitting operator cannot activate the same model configuration."
                         ),
                         status=403,
                         code="MODEL_CONFIG_SELF_REVIEW_FORBIDDEN",
@@ -608,18 +605,12 @@ class ModelConfigurationService:
             # The terminal response is retained for 24 hours by complete().  While the
             # remote call is in progress, use a bounded recovery window so a process
             # crash cannot strand this diagnostic idempotency key for a full day.
-            record.expires_at = utc_now() + timedelta(
-                seconds=tested_timeout_seconds + 30
-            )
+            record.expires_at = utc_now() + timedelta(seconds=tested_timeout_seconds + 30)
             attempt_expires_at = record.expires_at
             idempotency_record_key = record.idempotency_key
             attempt_request_hash = record.request_hash
             secret_row = db.get(ModelConfigurationSecret, model_config_id)
-            provider_secret = (
-                None
-                if secret_row is None
-                else self._decrypt_secret(row, secret_row)
-            )
+            provider_secret = None if secret_row is None else self._decrypt_secret(row, secret_row)
 
         # PRN-004: remote provider I/O must never hold a database transaction or row lock.
         if provider_secret is None:
@@ -728,8 +719,9 @@ class ModelConfigurationService:
                 return _stored_capability_default(record.response_json)
             now = utc_now()
             existing_capability = db.scalar(
-                select(ModelCapabilityDefault.capability_code)
-                .where(ModelCapabilityDefault.capability_code == capability_code)
+                select(ModelCapabilityDefault.capability_code).where(
+                    ModelCapabilityDefault.capability_code == capability_code
+                )
             )
             binding = (
                 db.scalar(
@@ -740,9 +732,7 @@ class ModelConfigurationService:
                 if existing_capability is not None
                 else None
             )
-            previous_model_config_id = (
-                binding.model_config_id if binding is not None else None
-            )
+            previous_model_config_id = binding.model_config_id if binding is not None else None
             model = self._locked(db, body.model_config_id)
             if model.lifecycle_status != ACTIVE:
                 raise PlatformError(
@@ -843,9 +833,7 @@ class ModelConfigurationService:
                 _canonical_payload(body, capability_code),
             )
             if replay:
-                return ClearCapabilityDefaultResult(
-                    capability_code=AI_EXPLORATION, cleared=True
-                )
+                return ClearCapabilityDefaultResult(capability_code=AI_EXPLORATION, cleared=True)
             binding = db.scalar(
                 select(ModelCapabilityDefault)
                 .where(ModelCapabilityDefault.capability_code == capability_code)
@@ -875,9 +863,7 @@ class ModelConfigurationService:
                 reason=body.reason,
                 details={"capability_code": capability_code},
             )
-            result = ClearCapabilityDefaultResult(
-                capability_code=AI_EXPLORATION, cleared=True
-            )
+            result = ClearCapabilityDefaultResult(capability_code=AI_EXPLORATION, cleared=True)
             self._idempotency.complete(
                 record, 200, {"clear_result": result.model_dump(mode="json")}
             )
@@ -885,39 +871,89 @@ class ModelConfigurationService:
 
     def resolve_default(self, capability_code: str) -> ResolvedModelConfiguration:
         """Resolve exactly one ACTIVE platform binding; never use a fallback model."""
+        with self._factory() as db:
+            return self.resolve_default_in_transaction(db, capability_code)
+
+    def resolve_default_in_transaction(
+        self,
+        db: Session,
+        capability_code: str,
+    ) -> ResolvedModelConfiguration:
+        """Resolve a capability default inside the caller's transaction."""
         self._require_capability(capability_code)
+        row = db.execute(
+            select(ModelConfiguration, ModelConfigurationSecret)
+            .join(
+                ModelCapabilityDefault,
+                ModelCapabilityDefault.model_config_id == ModelConfiguration.model_config_id,
+            )
+            .join(
+                ModelConfigurationSecret,
+                ModelConfigurationSecret.model_config_id == ModelConfiguration.model_config_id,
+            )
+            .where(
+                ModelCapabilityDefault.capability_code == capability_code,
+                ModelConfiguration.lifecycle_status == ACTIVE,
+            )
+        ).one_or_none()
+        if row is None:
+            raise PlatformError(
+                title="Capability default unavailable",
+                detail="No ACTIVE default model is bound for the requested capability.",
+                status=503,
+                code="MODEL_CAPABILITY_DEFAULT_UNAVAILABLE",
+            )
+        model, _secret = row
+        return ResolvedModelConfiguration(
+            model_config_id=model.model_config_id,
+            provider_code=model.provider_code,
+            model_name=model.model_name,
+            request_timeout_seconds=model.request_timeout_seconds,
+            secret_reference=f"model-config-secret:{model.model_config_id}",
+            display_name=model.display_name,
+        )
+
+    def invoke(
+        self,
+        resolved: ResolvedModelConfiguration,
+        messages: list[dict[str, str]],
+    ) -> GatewayInvocationResult:
+        """Invoke the exact resolved snapshot; capability changes never retarget a session."""
         with self._factory() as db:
             row = db.execute(
                 select(ModelConfiguration, ModelConfigurationSecret)
                 .join(
-                    ModelCapabilityDefault,
-                    ModelCapabilityDefault.model_config_id == ModelConfiguration.model_config_id,
-                )
-                .join(
                     ModelConfigurationSecret,
-                    ModelConfigurationSecret.model_config_id
-                    == ModelConfiguration.model_config_id,
+                    ModelConfigurationSecret.model_config_id == ModelConfiguration.model_config_id,
                 )
-                .where(
-                    ModelCapabilityDefault.capability_code == capability_code,
-                    ModelConfiguration.lifecycle_status == ACTIVE,
-                )
+                .where(ModelConfiguration.model_config_id == resolved.model_config_id)
             ).one_or_none()
             if row is None:
                 raise PlatformError(
-                    title="Capability default unavailable",
-                    detail="No ACTIVE default model is bound for the requested capability.",
+                    title="Resolved model unavailable",
+                    detail="The resolved model configuration can no longer be invoked.",
                     status=503,
-                    code="MODEL_CAPABILITY_DEFAULT_UNAVAILABLE",
+                    code="MODEL_RUNTIME_CONFIGURATION_UNAVAILABLE",
                 )
-            model, _secret = row
-            return ResolvedModelConfiguration(
-                model_config_id=model.model_config_id,
-                provider_code=model.provider_code,
-                model_name=model.model_name,
-                request_timeout_seconds=model.request_timeout_seconds,
-                secret_reference=f"model-config-secret:{model.model_config_id}",
-            )
+            model, secret = row
+            if (
+                model.provider_code != resolved.provider_code
+                or model.model_name != resolved.model_name
+            ):
+                raise PlatformError(
+                    title="Resolved model snapshot mismatch",
+                    detail="The resolved model configuration no longer matches its snapshot.",
+                    status=503,
+                    code="MODEL_RUNTIME_CONFIGURATION_UNAVAILABLE",
+                )
+            provider_secret = self._decrypt_secret(model, secret)
+        return self._gateway.invoke(
+            provider_code=resolved.provider_code,
+            model_name=resolved.model_name,
+            provider_secret=provider_secret,
+            timeout_seconds=resolved.request_timeout_seconds,
+            messages=messages,
+        )
 
     def _authorize(
         self,
@@ -1000,9 +1036,7 @@ class ModelConfigurationService:
         except SecretStoreError as error:
             raise _secret_store_unavailable() from error
 
-    def _decrypt_secret(
-        self, model: ModelConfiguration, secret: ModelConfigurationSecret
-    ) -> str:
+    def _decrypt_secret(self, model: ModelConfiguration, secret: ModelConfigurationSecret) -> str:
         try:
             return self._secret_protector.decrypt(
                 model.model_config_id, secret.encrypted_secret, secret.key_id
@@ -1018,9 +1052,7 @@ class ModelConfigurationService:
         latency_ms: int,
         message: str,
     ) -> ModelConnectionTestResult:
-        error_code = (
-            None if status == "SUCCESS" else f"MODEL_CONNECTION_{status}"
-        )
+        error_code = None if status == "SUCCESS" else f"MODEL_CONNECTION_{status}"
         return ModelConnectionTestResult(
             status=status,
             provider_code=row.provider_code,
@@ -1169,9 +1201,7 @@ class ModelConfigurationService:
                 reason=reason,
                 correlation_id=context.correlation_id,
                 occurred_at=utc_now(),
-                source_context_hash=hashlib.sha256(
-                    context.source_context.encode("utf-8")
-                ).digest(),
+                source_context_hash=hashlib.sha256(context.source_context.encode("utf-8")).digest(),
                 details_json=details,
             )
         )
@@ -1253,10 +1283,7 @@ def _state_forbidden(detail: str) -> PlatformError:
 def _connection_test_attempt_stale() -> PlatformError:
     return PlatformError(
         title="Model connection test attempt is stale",
-        detail=(
-            "A newer attempt owns this idempotency key; the stale result was not "
-            "persisted."
-        ),
+        detail=("A newer attempt owns this idempotency key; the stale result was not persisted."),
         status=409,
         code="MODEL_CONFIG_CONNECTION_TEST_ATTEMPT_STALE",
     )

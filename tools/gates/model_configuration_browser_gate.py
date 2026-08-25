@@ -13,6 +13,8 @@ import shutil
 import subprocess
 import sys
 import threading
+import urllib.error
+import urllib.request
 from collections.abc import Callable
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -125,6 +127,21 @@ def _safe_log_diagnostic(path: Path) -> str | None:
     return _safe_text_diagnostic(text)
 
 
+def _safe_exception_diagnostic(path: Path) -> str | None:
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace")[-20000:].splitlines()
+    except OSError:
+        return None
+    markers = ("sqlalchemy.exc.", "pymysql.err.", "IntegrityError", "OperationalError")
+    selected: list[str] = []
+    for line in lines:
+        positions = [line.find(marker) for marker in markers if marker in line]
+        if positions:
+            start = min(positions)
+            selected.append(line[start : start + 1000])
+    return _safe_text_diagnostic("\n".join(selected[-8:])) if selected else None
+
+
 def _write_model_secret_key_ring(directory: Path) -> Path:
     path = directory / "model-secret-key-ring.json"
     path.write_text(
@@ -156,13 +173,17 @@ class _GatewayFixture:
 
     def __init__(self, expected_secret: str) -> None:
         self._expected_secret = expected_secret
+        self.concurrency_started = threading.Event()
+        self.concurrency_release = threading.Event()
+        self._concurrency_lock = threading.Lock()
+        self._concurrency_invocations = 0
         fixture = self
 
         class Handler(BaseHTTPRequestHandler):
             def log_message(self, format: str, *args: object) -> None:
                 del format, args
 
-            def do_POST(self) -> None:  # noqa: N802
+            def do_POST(self) -> None:
                 if self.path != "/v1/chat/completions":
                     self.send_error(404)
                     return
@@ -184,7 +205,50 @@ class _GatewayFixture:
                     self.end_headers()
                     self.wfile.write(b'{"error":{"message":"rejected"}}')
                     return
-                body = b'{"id":"runtime-gateway","choices":[{"message":{"content":"OK"}}]}'
+                messages = payload.get("messages", [])
+                planning = any(
+                    isinstance(message, dict)
+                    and "Create an initial browser exploration plan"
+                    in str(message.get("content", ""))
+                    for message in messages
+                )
+                concurrency_probe = any(
+                    isinstance(message, dict)
+                    and "CONCURRENCY_FENCING_GATE" in str(message.get("content", ""))
+                    for message in messages
+                )
+                if concurrency_probe:
+                    with fixture._concurrency_lock:
+                        fixture._concurrency_invocations += 1
+                    fixture.concurrency_started.set()
+                    if not fixture.concurrency_release.wait(timeout=20):
+                        self.send_error(504)
+                        return
+                content = (
+                    json.dumps(
+                        {
+                            "goal": "Reach the synthetic dashboard",
+                            "assumptions": ["A synthetic account exists"],
+                            "steps": [
+                                {
+                                    "sequence": 1,
+                                    "intent": "Open the synthetic login page",
+                                    "expected_observation": "The synthetic login form is visible",
+                                }
+                            ],
+                        },
+                        separators=(",", ":"),
+                    )
+                    if planning
+                    else "OK"
+                )
+                body = json.dumps(
+                    {
+                        "id": "runtime-gateway",
+                        "choices": [{"message": {"content": content}}],
+                    },
+                    separators=(",", ":"),
+                ).encode("utf-8")
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("x-litellm-request-id", "model-browser-runtime")
@@ -207,6 +271,7 @@ class _GatewayFixture:
         self._thread.start()
 
     def stop(self) -> None:
+        self.concurrency_release.set()
         self._server.shutdown()
         self._server.server_close()
         self._thread.join(timeout=10)
@@ -214,6 +279,172 @@ class _GatewayFixture:
     @property
     def stopped(self) -> bool:
         return not self._thread.is_alive()
+
+    @property
+    def concurrency_invocations(self) -> int:
+        with self._concurrency_lock:
+            return self._concurrency_invocations
+
+
+def _json_request(
+    url: str,
+    payload: dict[str, object],
+    *,
+    headers: dict[str, str] | None = None,
+    timeout: float = 30,
+) -> tuple[int, dict[str, object]]:
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(payload, separators=(",", ":")).encode("utf-8"),
+        headers={"Content-Type": "application/json", **(headers or {})},
+        method="POST",
+    )
+    try:
+        response = urllib.request.urlopen(request, timeout=timeout)
+    except urllib.error.HTTPError as error:
+        response = error
+    with response:
+        body = json.loads(response.read(1024 * 1024).decode("utf-8"))
+        if not isinstance(body, dict):
+            raise RuntimeError("runtime API returned a non-object JSON response")
+        return int(response.status), body
+
+
+def _concurrency_fencing_probe(
+    database: str,
+    api_port: int,
+    gateway: _GatewayFixture,
+    username: str,
+    password: str,
+    project_id: str,
+) -> dict[str, object]:
+    """Exercise recovery and a late provider return against two real MySQL transactions."""
+    base_url = f"http://127.0.0.1:{api_port}"
+    login_status, login = _json_request(
+        f"{base_url}/api/v1/auth/login",
+        {"username": username, "password": password},
+    )
+    data = login.get("data")
+    if login_status != 200 or not isinstance(data, dict) or not isinstance(
+        data.get("access_token"), str
+    ):
+        raise RuntimeError("concurrency probe could not authenticate")
+    headers = {
+        "Authorization": f"Bearer {data['access_token']}",
+        "Idempotency-Key": f"concurrency-fencing-{secrets.token_hex(8)}",
+    }
+    objective = f"CONCURRENCY_FENCING_GATE_{secrets.token_hex(6)}"
+    payload = {
+        "project_id": project_id,
+        "objective": objective,
+        "target_url": "https://example.test/concurrency-fencing",
+    }
+    first_result: list[tuple[int, dict[str, object]]] = []
+    first_error: list[BaseException] = []
+
+    def first_request() -> None:
+        try:
+            first_result.append(
+                _json_request(
+                    f"{base_url}/api/v1/ai-exploration-sessions",
+                    payload,
+                    headers=headers,
+                )
+            )
+        except BaseException as exc:  # propagated after joining the worker
+            first_error.append(exc)
+
+    worker = threading.Thread(target=first_request, name="ai-exploration-late-provider")
+    worker.start()
+    try:
+        if not gateway.concurrency_started.wait(timeout=10):
+            raise RuntimeError("concurrency probe provider call did not start")
+        with _connection(database) as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "UPDATE atp_ai_exploration_session "
+                "SET planning_deadline_at=DATE_SUB(CURRENT_TIMESTAMP(6), INTERVAL 1 SECOND) "
+                "WHERE objective=%s AND lifecycle_status='PLANNING'",
+                (objective,),
+            )
+            if cursor.rowcount != 1:
+                raise RuntimeError("concurrency probe did not find one planning checkpoint")
+        recovered_status, recovered = _json_request(
+            f"{base_url}/api/v1/ai-exploration-sessions",
+            payload,
+            headers=headers,
+        )
+    finally:
+        gateway.concurrency_release.set()
+        worker.join(timeout=20)
+    if worker.is_alive():
+        raise RuntimeError("late provider request did not terminate")
+    if first_error:
+        raise RuntimeError("late provider request failed") from first_error[0]
+    if len(first_result) != 1:
+        raise RuntimeError("late provider request did not return exactly once")
+    first_status, first = first_result[0]
+    first_data = first.get("data")
+    recovered_data = recovered.get("data")
+    if not (
+        first_status == recovered_status == 201
+        and isinstance(first_data, dict)
+        and isinstance(recovered_data, dict)
+        and first_data.get("lifecycle_status") == "FAILED"
+        and recovered_data.get("lifecycle_status") == "FAILED"
+        and first_data.get("session_id") == recovered_data.get("session_id")
+        and gateway.concurrency_invocations == 1
+    ):
+        raise RuntimeError(
+            "concurrency fencing responses were inconsistent: "
+            + json.dumps(
+                {
+                    "first_status": first_status,
+                    "recovered_status": recovered_status,
+                    "first_lifecycle": (
+                        first_data.get("lifecycle_status")
+                        if isinstance(first_data, dict)
+                        else None
+                    ),
+                    "recovered_lifecycle": (
+                        recovered_data.get("lifecycle_status")
+                        if isinstance(recovered_data, dict)
+                        else None
+                    ),
+                    "same_session": (
+                        first_data.get("session_id") == recovered_data.get("session_id")
+                        if isinstance(first_data, dict) and isinstance(recovered_data, dict)
+                        else False
+                    ),
+                    "provider_invocations": gateway.concurrency_invocations,
+                },
+                separators=(",", ":"),
+            )
+        )
+    with _connection(database) as connection, connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT COUNT(*),SUM(lifecycle_status='FAILED') "
+            "FROM atp_ai_exploration_session WHERE objective=%s",
+            (objective,),
+        )
+        session_count, failed_count = cursor.fetchone()
+        cursor.execute(
+            "SELECT SUM(action='PLANNING_INTERRUPTED'),SUM(action='PLANNING_SUCCEEDED') "
+            "FROM atp_ai_exploration_audit WHERE session_id=%s",
+            (str(first_data["session_id"]),),
+        )
+        interrupted_count, succeeded_count = cursor.fetchone()
+    if not (
+        int(session_count) == int(failed_count) == 1
+        and int(interrupted_count or 0) == 1
+        and int(succeeded_count or 0) == 0
+    ):
+        raise RuntimeError("concurrency fencing database evidence was inconsistent")
+    return {
+        "two_real_mysql_transactions": True,
+        "single_session": True,
+        "single_provider_invocation": True,
+        "recovery_terminal_preserved_after_late_provider_return": True,
+    }
 
 
 def _grant_platform_scope(database: str, username: str) -> None:
@@ -313,6 +544,65 @@ def _database_evidence(
         if int(cursor.fetchone()[0]) != 1:
             raise RuntimeError("browser model capability default was not persisted")
         evidence["capability_default_persisted"] = True
+        cursor.execute(
+            "SELECT s.lifecycle_status,s.plan,s.ai_task_id,s.ai_call_id,"
+            "t.status,c.lifecycle_status,s.required_permission,"
+            "s.permission_decision,s.data_scope_decision,s.resolved_model_config_id "
+            "FROM atp_ai_exploration_session s "
+            "JOIN atp_ai_task t ON t.ai_task_id=s.ai_task_id "
+            "JOIN atp_ai_call c ON c.ai_call_id=s.ai_call_id "
+            "JOIN atp_model_config m ON m.model_config_id=s.resolved_model_config_id "
+            "WHERE m.config_code=%s ORDER BY s.created_at DESC LIMIT 1",
+            (ordinary_code,),
+        )
+        exploration = cursor.fetchone()
+        if exploration is None:
+            raise RuntimeError("browser AI exploration session was not persisted")
+        plan = exploration[1]
+        if isinstance(plan, str):
+            plan = json.loads(plan)
+        if not (
+            str(exploration[0]) == "READY"
+            and isinstance(plan, dict)
+            and plan.get("steps")
+            and str(exploration[4]) == "QUEUED"
+            and str(exploration[5]) == "SUCCEEDED"
+            and str(exploration[6]) == "AI_TASK_CREATE"
+            and str(exploration[7]) == "ALLOWED"
+            and str(exploration[8])
+        ):
+            raise RuntimeError("browser AI exploration aggregate evidence is incomplete")
+        cursor.execute(
+            "SELECT action,result_code,required_permission,permission_decision,"
+            "data_scope_decision,participant_subjects,provider_request_id "
+            "FROM atp_ai_exploration_audit WHERE session_id=("
+            "SELECT session_id FROM atp_ai_exploration_session "
+            "WHERE ai_task_id=%s) AND action='PLANNING_SUCCEEDED' "
+            "ORDER BY occurred_at DESC LIMIT 1",
+            (str(exploration[2]),),
+        )
+        exploration_audit = cursor.fetchone()
+        if exploration_audit is None or not (
+            str(exploration_audit[1]) == "SUCCESS"
+            and str(exploration_audit[2]) == "AI_TASK_CREATE"
+            and str(exploration_audit[3]) == "ALLOWED"
+            and str(exploration_audit[4])
+            and exploration_audit[5]
+            and str(exploration_audit[6]) == "model-browser-runtime"
+        ):
+            raise RuntimeError("browser AI exploration audit evidence is incomplete")
+        exploration_evidence = json.dumps(
+            {"session": list(exploration), "audit": list(exploration_audit)},
+            ensure_ascii=False,
+            default=str,
+        ).encode("utf-8")
+        if provider_secret.encode("utf-8") in exploration_evidence:
+            raise RuntimeError("provider secret leaked into AI exploration evidence")
+        evidence["ai_exploration_ready"] = True
+        evidence["ai_exploration_task_queued"] = True
+        evidence["ai_exploration_call_succeeded"] = True
+        evidence["ai_exploration_audit_complete"] = True
+        evidence["ai_exploration_secret_absent"] = True
     return evidence
 
 
@@ -332,6 +622,7 @@ def main() -> int:
             "MYSQL_PERSISTENCE",
             "MODEL_SECRET_ENCRYPTION",
             "LITELLM_PROTOCOL_CONNECTION",
+            "AI_EXPLORATION_FOUNDATION",
             "ISOLATED_RUNTIME_CLEANUP",
         ],
     )
@@ -374,6 +665,7 @@ def main() -> int:
     mysql_version = "UNKNOWN"
     browser_resolution = "NOT_EVALUATED"
     database_evidence: dict[str, object] = {}
+    concurrency_evidence: dict[str, object] = {}
     stage = "mysql_connect"
     blocker: str | None = None
     error_type: str | None = None
@@ -420,6 +712,19 @@ def main() -> int:
             )
         finally:
             engine.dispose()
+        exploration_project_id = new_ulid()
+        with _connection(database) as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "INSERT INTO atp_project "
+                "(project_id,project_code,lifecycle_status,display_name,row_version,"
+                "created_at,updated_at,extension_json) "
+                "VALUES (%s,%s,'ACTIVE',%s,0,CURRENT_TIMESTAMP(6),CURRENT_TIMESTAMP(6),NULL)",
+                (
+                    exploration_project_id,
+                    f"browser-exploration-{secrets.token_hex(4)}",
+                    "浏览器 AI 探索项目",
+                ),
+            )
         _grant_platform_scope(database, manager_username)
         _grant_platform_scope(database, reviewer_username)
         database_ready = True
@@ -515,6 +820,8 @@ def main() -> int:
                 "ATP_MODEL_E2E_PROVIDER": PROVIDER_CODE,
                 "ATP_MODEL_E2E_MODEL_NAME": MODEL_NAME,
                 "ATP_MODEL_E2E_SECRET": provider_secret,
+                "ATP_MODEL_E2E_EXPLORATION_PROJECT": "浏览器 AI 探索项目",
+                "ATP_MODEL_E2E_EXPLORATION_PROJECT_ID": exploration_project_id,
             }
         )
         browser_resolution = _validate_playwright_browser(node, browser_environment)
@@ -533,6 +840,16 @@ def main() -> int:
         browser_exit = completed.returncode
         if browser_exit != 0:
             raise RuntimeError("Model Configuration browser acceptance command failed")
+
+        stage = "concurrency_fencing"
+        concurrency_evidence = _concurrency_fencing_probe(
+            database,
+            api_port,
+            gateway,
+            super_username,
+            super_password,
+            exploration_project_id,
+        )
 
         stage = "database_evidence"
         database_evidence = _database_evidence(
@@ -571,6 +888,18 @@ def main() -> int:
             error_diagnostic = _safe_startup_diagnostic(
                 runtime_directory / "web.log"
             ) or _safe_log_diagnostic(runtime_directory / "web.log")
+        elif stage == "chromium_test":
+            for handle in log_handles:
+                handle.flush()
+            error_code = "BROWSER_ACCEPTANCE_FAILED"
+            error_diagnostic = _safe_exception_diagnostic(
+                runtime_directory / "api.log"
+            ) or _safe_log_diagnostic(runtime_directory / "api.log")
+        elif stage == "concurrency_fencing":
+            error_code = "AI_EXPLORATION_CONCURRENCY_FENCING_FAILED"
+            error_diagnostic = _safe_exception_diagnostic(
+                runtime_directory / "api.log"
+            ) or _safe_text_diagnostic(str(exc))
         if status != "BLOCKED":
             exit_code = 1
     finally:
@@ -629,8 +958,19 @@ def main() -> int:
             },
             "test_runner": "playwright",
             "test_cases": [
-                "apps/web/e2e/model-configuration.spec.ts::AI model configuration browser closure",
-                "apps/web/e2e/model-configuration.spec.ts::SUPER_ADMIN model configuration self-approval",
+                (
+                    "apps/web/e2e/model-configuration.spec.ts::"
+                    "AI model configuration browser closure"
+                ),
+                (
+                    "apps/web/e2e/model-configuration.spec.ts::"
+                    "SUPER_ADMIN model configuration self-approval"
+                ),
+                (
+                    "apps/web/e2e/model-configuration.spec.ts::"
+                    "AI exploration planning through browser/API/gateway/MySQL"
+                ),
+                "AI exploration recovery fencing with two real MySQL transactions",
             ],
             "gateway_boundary": "LITELLM_CHAT_COMPLETIONS_COMPATIBLE_LOOPBACK",
             "browser_exit_code": browser_exit,
@@ -642,6 +982,18 @@ def main() -> int:
                     else ("NOT_RUN" if browser_exit is None else "FAIL")
                 ),
                 "database_evidence": "PASS" if database_evidence else "NOT_RUN",
+                "ai_exploration_foundation": (
+                    "PASS"
+                    if database_evidence.get("ai_exploration_ready")
+                    and database_evidence.get("ai_exploration_task_queued")
+                    and database_evidence.get("ai_exploration_call_succeeded")
+                    and database_evidence.get("ai_exploration_audit_complete")
+                    and database_evidence.get("ai_exploration_secret_absent")
+                    else "NOT_RUN"
+                ),
+                "ai_exploration_concurrency_fencing": (
+                    "PASS" if concurrency_evidence else "NOT_RUN"
+                ),
                 "secret_encryption": (
                     "PASS"
                     if database_evidence.get("ordinary_secret_encrypted")
@@ -656,6 +1008,7 @@ def main() -> int:
                 "cleanup": "PASS" if cleanup_success else "FAIL",
             },
             "database_evidence": database_evidence,
+            "concurrency_evidence": concurrency_evidence,
             "cleanup_status": {
                 "temporary_database_removed": removed if created else True,
                 "runtime_directory_removed": runtime_removed,

@@ -2,6 +2,7 @@ import { computed, ref, shallowRef } from "vue";
 import { defineStore } from "pinia";
 
 import { apiClient, bindAuthTransport } from "../api/client";
+import { useAIExplorationsStore } from "./aiExplorations";
 import { useModelConfigurationsStore } from "./modelConfigurations";
 import { useProjectsStore } from "./projects";
 import type {
@@ -32,6 +33,7 @@ export const useSessionStore = defineStore("session", () => {
 
   function acceptAuthentication(response: AuthenticationResponse): void {
     if (currentUser.value?.user_id !== response.data.current_user.user_id) {
+      useAIExplorationsStore().clear();
       useProjectsStore().clearProjects();
       useModelConfigurationsStore().clearConfigurations();
     }
@@ -40,6 +42,7 @@ export const useSessionStore = defineStore("session", () => {
   }
 
   function clearSession(): void {
+    useAIExplorationsStore().clear();
     useProjectsStore().clearProjects();
     useModelConfigurationsStore().clearConfigurations();
     accessToken.value = null;

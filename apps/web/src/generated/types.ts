@@ -3301,6 +3301,50 @@ export type CreateAiExplorationResponse = {
   correlation_id: string;
 };
 
+export type AIExplorationPlanStep = {
+  sequence: number;
+  intent: string;
+  expected_observation: string;
+};
+
+export type AIExplorationPlan = {
+  goal: string;
+  assumptions: Array<string>;
+  steps: Array<AIExplorationPlanStep>;
+};
+
+export type AIExplorationSessionResource = {
+  session_id: string;
+  ai_task_id: string;
+  project_id: string;
+  source_case_id: string | null;
+  objective: string;
+  target_url: string;
+  lifecycle_status: "CREATED" | "PLANNING" | "READY" | "FAILED" | "RUNNING" | "SUCCEEDED";
+  resolved_model_config_id: string;
+  resolved_model_display_name: string | null;
+  resolved_provider_code: "OPENAI" | "ANTHROPIC" | "DEEPSEEK" | "QWEN" | "DOUBAO";
+  resolved_model_name: string;
+  plan: AIExplorationPlan | null;
+  failure_code: "AI_EXPLORATION_MODEL_UNAVAILABLE" | "AI_EXPLORATION_MODEL_RESPONSE_INVALID" | "AI_EXPLORATION_PLANNING_FAILED" | "AI_EXPLORATION_PLANNING_INTERRUPTED" | null;
+  failure_message: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CreateAiExplorationSessionRequest = {
+  project_id: string;
+  source_case_id?: string | null;
+  objective: string;
+  target_url: string;
+};
+
+export type CreateAiExplorationSessionResponse = {
+  data: AIExplorationSessionResource;
+  correlation_id: string;
+};
+
 export type CreateManualRecordingRequest = {
   expected_version?: number;
   reason?: string | null;
