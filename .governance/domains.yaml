@@ -53,11 +53,32 @@ domains:
       - SECURITY_SENSITIVE
       - PRODUCT_SOVEREIGNTY_SENSITIVE
     - patterns:
-      - apps/web/e2e/*.spec.ts
+      - apps/web/e2e/model-configuration.spec.ts
+      - apps/web/src/views/ModelConfigurationsView.vue
+      - apps/web/src/stores/modelConfigurations.ts
+      domains:
+      - AI_MODEL_CONFIGURATION
+      - ACCEPTANCE
+      - BROWSER_UI
       tests:
       - apps/web/e2e
       gates:
-      - playwright_test
+      - MODEL_CONFIGURATION_BROWSER_RUNTIME_GATE
+      formal_gate_conditions:
+      - ACCEPTANCE_OR_USER_VISIBLE_BEHAVIOR_CHANGED
+      - MODEL_CONFIGURATION_BROWSER_RUNTIME_CHANGED
+      reviewer_risks:
+      - HIGH_REGRESSION_RISK
+    - patterns:
+      - apps/web/e2e/project-management.spec.ts
+      tests:
+      - apps/web/e2e
+      formal_gate_conditions:
+      - ACCEPTANCE_OR_USER_VISIBLE_BEHAVIOR_CHANGED
+    - patterns:
+      - apps/web/e2e/*.spec.ts
+      tests:
+      - apps/web/e2e
     kind: implementation
   BACKEND:
     owner_identity: services/api
@@ -112,6 +133,19 @@ domains:
       - PRODUCT_SECURITY_RULE
       reviewer_risks:
       - PRODUCT_SOVEREIGNTY_SENSITIVE
+    - patterns:
+      - services/api/src/platform_api/model_configuration_*.py
+      - services/api/tests/test_model_configuration.py
+      domains:
+      - AI_MODEL_CONFIGURATION
+      - ACCEPTANCE
+      gates:
+      - MODEL_CONFIGURATION_BROWSER_RUNTIME_GATE
+      formal_gate_conditions:
+      - ACCEPTANCE_OR_USER_VISIBLE_BEHAVIOR_CHANGED
+      - MODEL_CONFIGURATION_BROWSER_RUNTIME_CHANGED
+      reviewer_risks:
+      - HIGH_REGRESSION_RISK
     kind: implementation
   API_CONTRACT:
     owner_identity: packages/contracts
@@ -176,6 +210,17 @@ domains:
     - authority_validators
     formal_gate_conditions:
     - MIGRATION_OR_DATABASE_SCHEMA_CHANGED
+    routes:
+    - patterns:
+      - docs/authority/编码权威事实/DATABASE_DDL/V10__ai_model_configuration_foundation.sql
+      domains:
+      - AI_MODEL_CONFIGURATION
+      - ACCEPTANCE
+      gates:
+      - MODEL_CONFIGURATION_BROWSER_RUNTIME_GATE
+      formal_gate_conditions:
+      - ACCEPTANCE_OR_USER_VISIBLE_BEHAVIOR_CHANGED
+      - MODEL_CONFIGURATION_BROWSER_RUNTIME_CHANGED
     kind: implementation
   AUTHENTICATION:
     owner_identity: docs/authority/编码权威事实/AUTHENTICATION_CONTRACT
@@ -284,6 +329,7 @@ domains:
     - workers/scheduler/src/platform_scheduler/config.py
     - tools/gates/auth_mysql_gate.py
     - tools/gates/auth_browser_gate.py
+    - tools/gates/model_configuration_browser_gate.py
     - tools/mysql84_gate.py
     - docs/authority/validation/run_mysql84_gate.py
     - .env.example
@@ -294,4 +340,15 @@ domains:
     - database_environment_contract
     reviewer_risks:
     - HIGH_REGRESSION_RISK
+    routes:
+    - patterns:
+      - tools/gates/model_configuration_browser_gate.py
+      domains:
+      - ACCEPTANCE
+      - BROWSER_UI
+      gates:
+      - MODEL_CONFIGURATION_BROWSER_RUNTIME_GATE
+      formal_gate_conditions:
+      - ACCEPTANCE_OR_USER_VISIBLE_BEHAVIOR_CHANGED
+      - MODEL_CONFIGURATION_BROWSER_RUNTIME_CHANGED
     kind: infrastructure

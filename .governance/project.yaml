@@ -5,6 +5,46 @@ project:
 runtime:
   use_legacy_domain_metadata: true
   generic_defaults: true
+  task_acceptance_alias_gates:
+  - playwright_test
+  task_acceptance_routes:
+  - route_id: authentication_browser_acceptance
+    when_any_affected_paths:
+    - apps/web/e2e/auth.spec.ts
+    - apps/web/src/views/LoginView.vue
+    - apps/web/src/views/ChangePasswordView.vue
+    - tools/gates/auth_browser_gate.py
+    command:
+    - python
+    - tools/gates/auth_browser_gate.py
+    execution_identity:
+      capability: authentication_browser_acceptance
+  - route_id: model_configuration_browser_acceptance
+    when_any_formal_gate_conditions:
+    - MODEL_CONFIGURATION_BROWSER_RUNTIME_CHANGED
+    when_any_affected_paths:
+    - apps/web/e2e/model-configuration.spec.ts
+    - apps/web/src/views/ModelConfigurationsView.vue
+    - apps/web/src/stores/modelConfigurations.ts
+    - services/api/src/platform_api/model_configuration_*.py
+    - services/api/tests/test_model_configuration.py
+    - docs/authority/编码权威事实/DATABASE_DDL/V10__ai_model_configuration_foundation.sql
+    - tools/gates/model_configuration_browser_gate.py
+    command:
+    - python
+    - tools/gates/model_configuration_browser_gate.py
+    execution_identity:
+      capability: model_configuration_browser_acceptance
+  - route_id: project_management_browser_acceptance
+    when_any_affected_paths:
+    - apps/web/e2e/project-management.spec.ts
+    - apps/web/src/views/Project*.vue
+    - tools/gates/project_acceptance_runtime.py
+    command:
+    - python
+    - tools/gates/project_acceptance_runtime.py
+    execution_identity:
+      capability: project_management_browser_acceptance
   task_acceptance_command:
   - npm
   - --workspace

@@ -9,6 +9,7 @@ if __package__ in (None, ''):
 
 import argparse
 import errno
+import fnmatch
 import hashlib
 import json
 import os
@@ -114,9 +115,23 @@ def _validated_identity_keys(value: object, *, field: str) -> list[str]:
     return list(value)
 
 
-def _execution_identity_metadata(root: Path, gate: str) -> dict[str, Any]:
+def _execution_identity_metadata(
+    root: Path, gate: str, ctx: dict[str, Any] | None = None
+) -> dict[str, Any]:
     configured = gate_config(root).get(gate) or {}
-    raw = configured.get('execution_identity') or {}
+    acceptance_aliases = {
+        str(value) for value in runtime_config(root).get('task_acceptance_alias_gates') or []
+    }
+    route = (
+        _acceptance_route(root, ctx or {})
+        if gate == 'REAL_ACCEPTANCE_GATE' or gate in acceptance_aliases
+        else None
+    )
+    raw = (
+        route.get('execution_identity')
+        if isinstance(route, dict) and route.get('execution_identity') is not None
+        else configured.get('execution_identity')
+    ) or {}
     if not isinstance(raw, dict):
         raise ValueError('execution_identity must be a mapping')
     allowed_fields = {
@@ -195,8 +210,9 @@ def _execution_identity(
     env: dict[str, str],
     workspace_digest: str,
     timeout_seconds: int,
+    ctx: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    metadata = _execution_identity_metadata(root, gate)
+    metadata = _execution_identity_metadata(root, gate, ctx)
     runtime_digest, runtime_present, runtime_missing = _environment_identity(
         env, metadata['runtime_environment_keys']
     )
@@ -430,7 +446,53 @@ def runtime_supported_formal_gate_ids(root: Path) -> set[str]:
     return set(load_runtime_gate_catalog(root))
 
 
+def _acceptance_route(root: Path, ctx: dict[str, Any]) -> dict[str, Any] | None:
+    """Select one project-owned acceptance route from Task facts.
+
+    Generic Runtime only understands conditions, domains, and affected paths. Concrete
+    capabilities and commands remain in the Project Profile.
+    """
+    routes = runtime_config(root).get('task_acceptance_routes') or []
+    if not isinstance(routes, list):
+        raise ValueError('runtime.task_acceptance_routes must be a list')
+    conditions = {str(value) for value in ctx.get('formal_gate_conditions', [])}
+    domains = {str(value) for value in ctx.get('domains', [])}
+    affected = [str(value).replace('\\', '/') for value in ctx.get('affected_files', [])]
+    matches: list[dict[str, Any]] = []
+    for route in routes:
+        if not isinstance(route, dict):
+            raise ValueError('runtime.task_acceptance_routes entries must be mappings')
+        route_conditions = {
+            str(value) for value in route.get('when_any_formal_gate_conditions') or []
+        }
+        route_domains = {str(value) for value in route.get('when_any_domains') or []}
+        route_paths = [str(value) for value in route.get('when_any_affected_paths') or []]
+        predicates = [
+            bool(route_conditions & conditions) if route_conditions else True,
+            bool(route_domains & domains) if route_domains else True,
+            any(fnmatch.fnmatch(path, pattern) for path in affected for pattern in route_paths)
+            if route_paths
+            else True,
+        ]
+        if all(predicates):
+            matches.append(route)
+    if len(matches) > 1:
+        raise ValueError('runtime.task_acceptance_routes matched more than one route')
+    return matches[0] if matches else None
+
+
 def _acceptance_command(root: Path, ctx: dict[str, Any]) -> list[str] | None:
+    route = _acceptance_route(root, ctx)
+    if route is not None:
+        configured_route = command_tokens(route.get('command'))
+        if not configured_route:
+            raise ValueError('matched task acceptance route has no valid command')
+        return format_command(
+            configured_route,
+            root=root,
+            task_id=str(ctx.get('task_id', '')),
+            files=[str(x) for x in ctx.get('affected_files', [])],
+        )
     configured = command_tokens(runtime_config(root).get('task_acceptance_command'))
     if configured:
         return format_command(configured, root=root, task_id=str(ctx.get('task_id', '')), files=[str(x) for x in ctx.get('affected_files', [])])
@@ -443,6 +505,11 @@ def _acceptance_command(root: Path, ctx: dict[str, Any]) -> list[str] | None:
 
 def command_for_gate(root: Path, gate: str, ctx: dict[str, Any]) -> list[str] | None:
     root = root.resolve()
+    acceptance_aliases = {
+        str(value) for value in runtime_config(root).get('task_acceptance_alias_gates') or []
+    }
+    if gate in acceptance_aliases:
+        return _acceptance_command(root, ctx)
     formal = load_runtime_gate_catalog(root)
     if gate in formal:
         command = str(formal[gate]['command']).strip()
@@ -538,6 +605,7 @@ def run_required(root: Path, task_id: str, timeout: int = DEFAULT_GATE_TIMEOUT_S
     executed_identities: dict[str, tuple[int, dict[str, Any]]] = {}
     gate_env = _gate_env(root)
     for gate in required:
+        started = time.time()
         try:
             gate_timeout = _gate_timeout_seconds(root, gate, timeout)
         except ValueError as exc:
@@ -548,7 +616,17 @@ def run_required(root: Path, task_id: str, timeout: int = DEFAULT_GATE_TIMEOUT_S
                 'stderr_tail': str(exc),
             })
             continue
-        cmd = command_for_gate(root, gate, ctx)
+        try:
+            cmd = command_for_gate(root, gate, ctx)
+        except ValueError as exc:
+            results.append({
+                'task_id': task_id, 'gate': gate, 'status': 'BLOCKED',
+                'reason': 'INVALID_GATE_CONFIGURATION', 'exit_code': None,
+                'workspace_digest': gate_digest, 'timeout_seconds': gate_timeout,
+                'duration_ms': round((time.time() - started) * 1000),
+                'stderr_tail': _captured_output_tail(exc, gate_env),
+            })
+            continue
         if cmd is None:
             results.append({
                 'task_id': task_id, 'gate': gate, 'status': 'NOT_CONFIGURED',
@@ -556,12 +634,11 @@ def run_required(root: Path, task_id: str, timeout: int = DEFAULT_GATE_TIMEOUT_S
                 'workspace_digest': gate_digest, 'timeout_seconds': gate_timeout,
             })
             continue
-        started = time.time()
         execution: dict[str, Any] | None = None
         gate_result: dict[str, Any]
         try:
             execution = _execution_identity(
-                root, gate, cmd, gate_env, gate_digest, gate_timeout
+                root, gate, cmd, gate_env, gate_digest, gate_timeout, ctx
             )
             prior = (
                 executed_identities.get(str(execution['execution_identity']))

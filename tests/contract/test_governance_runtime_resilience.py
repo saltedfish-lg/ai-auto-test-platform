@@ -25,7 +25,7 @@ from tools.governance.authority_lock import acquire, cleanup_stale as cleanup_st
 from tools.governance.impact_scan import load_domain_metadata, scan
 from tools.governance.incremental_closure import expand
 from tools.governance.process_identity import NOT_RUNNING, inspect_process
-from tools.governance.project_profile import command_tokens, gate_config
+from tools.governance.project_profile import command_tokens, gate_config, runtime_config
 from tools.governance.required_gate_runner import (
     DEFAULT_GATE_TIMEOUT_SECONDS,
     MAX_GATE_TIMEOUT_SECONDS,
@@ -686,28 +686,48 @@ def test_gate_runner_reuses_canonical_timeout_without_passing_it(
     assert reused['canonical_timeout_seconds'] == 2
 
 
-def test_project_profile_declares_acceptance_reuse_and_governance_timeout():
+def test_project_profile_declares_capability_specific_acceptance_routing():
     gates = gate_config(ROOT)
-    acceptance = gates['REAL_ACCEPTANCE_GATE']['execution_identity']
-    browser = gates['playwright_test']['execution_identity']
-    assert acceptance == browser
-    assert acceptance['capability'] == 'project_management_browser_acceptance'
-    assert acceptance['runtime_environment_keys'] == [
-        'PLAYWRIGHT_BASE_URL', 'PLAYWRIGHT_TEST_FILE'
+    routes = runtime_config(ROOT)['task_acceptance_routes']
+    by_id = {route['route_id']: route for route in routes}
+    assert set(by_id) == {
+        'authentication_browser_acceptance',
+        'model_configuration_browser_acceptance',
+        'project_management_browser_acceptance',
+    }
+    model_route = by_id['model_configuration_browser_acceptance']
+    assert model_route['command'] == [
+        'python', 'tools/gates/model_configuration_browser_gate.py'
     ]
-    assert acceptance['database_environment_keys'] == ['ATP_PROJECT_E2E_CODE']
-    assert 'ATP_DATABASE_URL' not in acceptance['database_environment_keys']
+    assert model_route['execution_identity']['capability'] == (
+        'model_configuration_browser_acceptance'
+    )
     assert gates['governance_contract_test']['timeout_seconds'] >= 900
     template = ROOT / 'agent-governance-lite/templates/project-profile/.governance/gates.yaml'
     template_gates = yaml.safe_load(template.read_text(encoding='utf-8'))['gates']
     assert template_gates['governance_contract_test']['timeout_seconds'] >= 900
-    context = {'task_id': 'PROFILE_PROBE', 'affected_files': [], 'relevant_tests': []}
+    context = {
+        'task_id': 'PROFILE_PROBE',
+        'affected_files': ['apps/web/e2e/model-configuration.spec.ts'],
+        'relevant_tests': [],
+        'formal_gate_conditions': ['MODEL_CONFIGURATION_BROWSER_RUNTIME_CHANGED'],
+    }
     acceptance_command = required_gate_runner.command_for_gate(
         ROOT, 'REAL_ACCEPTANCE_GATE', context
     )
-    browser_command = required_gate_runner.command_for_gate(ROOT, 'playwright_test', context)
-    assert command_tokens(gates['REAL_ACCEPTANCE_GATE']['command']) == browser_command
-    assert acceptance_command == browser_command
+    assert acceptance_command == [
+        'python', 'tools/gates/model_configuration_browser_gate.py'
+    ]
+    assert required_gate_runner.command_for_gate(ROOT, 'playwright_test', context) == (
+        acceptance_command
+    )
+    assert required_gate_runner._execution_identity_metadata(
+        ROOT, 'REAL_ACCEPTANCE_GATE', context
+    ) == {
+        'capability': 'model_configuration_browser_acceptance',
+        'runtime_environment_keys': [],
+        'database_environment_keys': [],
+    }
 
 
 @pytest.mark.parametrize('identity', [

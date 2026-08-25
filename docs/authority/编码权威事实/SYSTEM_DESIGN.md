@@ -22,6 +22,7 @@
 |AUTH_MYSQL_RUNTIME_GATE|AUTH_RBAC|python tools/gates/auth_mysql_gate.py|
 |AUTH_BROWSER_RUNTIME_GATE|AUTH_RBAC|python tools/gates/auth_browser_gate.py|
 |FULL_SCHEMA_MYSQL84_RUNTIME_GATE|DATABASE_SCHEMA|python tools/mysql84_gate.py --execute|
+|MODEL_CONFIGURATION_BROWSER_RUNTIME_GATE|AI_MODEL_CONFIGURATION|python tools/gates/model_configuration_browser_gate.py|
 |REAL_ACCEPTANCE_GATE|ACCEPTANCE|task-specific acceptance tests|
 
 ## Authority 规则

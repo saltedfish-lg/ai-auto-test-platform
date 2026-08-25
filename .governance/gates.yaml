@@ -34,6 +34,13 @@ gates:
     - npm
     - run
     - test:web
+  MODEL_CONFIGURATION_BROWSER_RUNTIME_GATE:
+    command:
+    - python
+    - tools/gates/model_configuration_browser_gate.py
+    timeout_seconds: 600
+    execution_identity:
+      capability: model_configuration_browser_acceptance
   playwright_test:
     command:
     - npm
@@ -56,12 +63,7 @@ gates:
     - run
     - test:e2e
     execution_identity:
-      capability: project_management_browser_acceptance
-      runtime_environment_keys:
-      - PLAYWRIGHT_BASE_URL
-      - PLAYWRIGHT_TEST_FILE
-      database_environment_keys:
-      - ATP_PROJECT_E2E_CODE
+      capability: task_specific_browser_acceptance
   runner_test:
     command:
     - python

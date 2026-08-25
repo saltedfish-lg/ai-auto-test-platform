@@ -238,6 +238,11 @@ runtime_gate_catalog:
     command: python tools/mysql84_gate.py --execute
     required_when:
     - MIGRATION_OR_DATABASE_SCHEMA_CHANGED
+  - gate_id: MODEL_CONFIGURATION_BROWSER_RUNTIME_GATE
+    scope: AI_MODEL_CONFIGURATION
+    command: python tools/gates/model_configuration_browser_gate.py
+    required_when:
+    - MODEL_CONFIGURATION_BROWSER_RUNTIME_CHANGED
   - gate_id: REAL_ACCEPTANCE_GATE
     scope: ACCEPTANCE
     command: task-specific acceptance tests
