@@ -183,6 +183,50 @@ class Project(Base):
     extension_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
 
 
+class Environment(Base):
+    __tablename__ = "atp_environment"
+    environment_id: Mapped[str] = mapped_column(String(26), primary_key=True)
+    project_id: Mapped[str | None] = mapped_column(
+        String(26), ForeignKey("atp_project.project_id")
+    )
+    environment_code: Mapped[str | None] = mapped_column(String(191))
+    environment_terminal_access_revision_id: Mapped[str | None] = mapped_column(String(26))
+    lifecycle_status: Mapped[str] = mapped_column(String(11))
+    enablement_state: Mapped[str] = mapped_column(String(8))
+    accessibility_state: Mapped[str] = mapped_column(String(11))
+    display_name: Mapped[str | None] = mapped_column(String(255))
+    row_version: Mapped[int] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime] = mapped_column(DateTime)
+    created_by: Mapped[str | None] = mapped_column(String(26))
+    updated_by: Mapped[str | None] = mapped_column(String(26))
+    extension_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+
+
+class EnvironmentAudit(Base):
+    __tablename__ = "atp_environment_audit"
+    audit_id: Mapped[str] = mapped_column(String(26), primary_key=True)
+    environment_id: Mapped[str | None] = mapped_column(
+        String(26), ForeignKey("atp_environment.environment_id")
+    )
+    project_id: Mapped[str] = mapped_column(String(26), ForeignKey("atp_project.project_id"))
+    environment_code: Mapped[str] = mapped_column(String(191))
+    action: Mapped[str] = mapped_column(String(64))
+    operation_id: Mapped[str] = mapped_column(String(128))
+    actor_user_id: Mapped[str] = mapped_column(String(26), ForeignKey("atp_user.user_id"))
+    required_permission: Mapped[str] = mapped_column(String(128))
+    scope_decision: Mapped[str] = mapped_column(String(64))
+    previous_status: Mapped[str | None] = mapped_column(String(11))
+    new_status: Mapped[str | None] = mapped_column(String(11))
+    result_code: Mapped[str] = mapped_column(String(64))
+    reason: Mapped[str | None] = mapped_column(String(1000))
+    before_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    after_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    correlation_id: Mapped[str] = mapped_column(String(128))
+    occurred_at: Mapped[datetime] = mapped_column(DateTime)
+    source_context_hash: Mapped[bytes] = mapped_column(MySQLBinary(32))
+
+
 class RoleBinding(Base):
     __tablename__ = "atp_role_binding"
     role_binding_id: Mapped[str] = mapped_column(String(26), primary_key=True)

@@ -8,8 +8,8 @@ BEGIN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Retired atp_platform_design_baseline_release must not exist at the current migration head';
   END IF;
 
-  IF (SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type='BASE TABLE') <> 91 THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Expected exactly 91 base tables after V3 → V4 → V5 → V6 → V7 → V8 → V9 → V10 → V11 → V12';
+  IF (SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type='BASE TABLE') <> 92 THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Expected exactly 92 base tables after V3 → V4 → V5 → V6 → V7 → V8 → V9 → V10 → V11 → V12';
   END IF;
   IF EXISTS (
     SELECT 1 FROM information_schema.columns

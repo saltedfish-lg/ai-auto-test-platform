@@ -70,6 +70,7 @@ def _database_evidence(database: str, project_code: str) -> dict[str, object]:
     retry_code = f"RETRY-{project_code}"
     denied_code = f"DENIED-{project_code}"
     service_account_code = f"SERVICE-{project_code}"
+    environment_code = f"ENV-{project_code}"
     with _connection(database) as connection, connection.cursor() as cursor:
         cursor.execute(
             "SELECT project_id, display_name, lifecycle_status, row_version "
@@ -168,6 +169,54 @@ def _database_evidence(database: str, project_code: str) -> dict[str, object]:
             "AND response_status IS NOT NULL AND completed_at IS NOT NULL"
         )
         terminal_commands = int(cursor.fetchone()[0])
+        cursor.execute(
+            "SELECT environment_id,display_name,lifecycle_status,row_version,"
+            "environment_terminal_access_revision_id FROM atp_environment "
+            "WHERE project_id=%s AND environment_code=%s",
+            (project_id, environment_code),
+        )
+        environment = cursor.fetchone()
+        if environment is None:
+            raise RuntimeError("browser-created environment was not persisted")
+        (
+            environment_id,
+            environment_display_name,
+            environment_status,
+            environment_row_version,
+            environment_terminal_revision,
+        ) = environment
+        cursor.execute(
+            "SELECT action,COUNT(*) FROM atp_environment_audit "
+            "WHERE project_id=%s AND environment_code=%s AND result_code='SUCCESS' "
+            "GROUP BY action",
+            (project_id, environment_code),
+        )
+        environment_audit_actions = {
+            str(action): int(count) for action, count in cursor.fetchall()
+        }
+        cursor.execute(
+            "SELECT COUNT(*) FROM atp_environment_audit "
+            "WHERE project_id=%s AND environment_code=%s "
+            "AND result_code IN ('ENVIRONMENT_CONCURRENCY_CONFLICT',"
+            "'ENVIRONMENT_TERMINAL_ACCESS_BINDING_DEFERRED',"
+            "'ENVIRONMENT_CODE_CONFLICT') AND correlation_id<>'' "
+            "AND OCTET_LENGTH(source_context_hash)=32",
+            (project_id, environment_code),
+        )
+        environment_failed_audits = int(cursor.fetchone()[0])
+        cursor.execute(
+            "SELECT event_type,COUNT(*) FROM atp_outbox_event "
+            "WHERE aggregate_id=%s GROUP BY event_type",
+            (environment_id,),
+        )
+        environment_event_types = {
+            str(event_type): int(count) for event_type, count in cursor.fetchall()
+        }
+        cursor.execute(
+            "SELECT COUNT(*) FROM atp_environment WHERE environment_code=%s",
+            (environment_code,),
+        )
+        cross_project_environment_count = int(cursor.fetchone()[0])
 
     required_audits = {
         "PROJECT_CREATED",
@@ -291,6 +340,23 @@ def _database_evidence(database: str, project_code: str) -> dict[str, object]:
         raise RuntimeError("project audit/outbox evidence is incomplete")
     if terminal_commands < 7:
         raise RuntimeError("project idempotency terminal evidence is incomplete")
+    if (
+        environment_display_name != "真实事务更新环境"
+        or environment_status != "CONFIGURING"
+        or int(environment_row_version) != 2
+        or environment_terminal_revision is not None
+    ):
+        raise RuntimeError("Environment persistence does not match the browser/API workflow")
+    if not {"ENVIRONMENT_CREATED", "ENVIRONMENT_UPDATED"}.issubset(
+        environment_audit_actions
+    ):
+        raise RuntimeError("Environment success audit evidence is incomplete")
+    if environment_failed_audits < 3:
+        raise RuntimeError("Environment failure audit evidence is incomplete")
+    if environment_event_types.get("environment.configuring") != 1:
+        raise RuntimeError("Environment outbox evidence is incomplete")
+    if cross_project_environment_count != 2:
+        raise RuntimeError("Environment project-scoped uniqueness evidence is incomplete")
     return {
         "project_status": lifecycle_status,
         "project_row_version": int(row_version),
@@ -306,6 +372,12 @@ def _database_evidence(database: str, project_code: str) -> dict[str, object]:
         "audit_actions": audit_actions,
         "outbox_event_types": event_types,
         "terminal_command_count": terminal_commands,
+        "environment_status": environment_status,
+        "environment_row_version": int(environment_row_version),
+        "environment_audit_actions": environment_audit_actions,
+        "environment_failed_audit_count": environment_failed_audits,
+        "environment_outbox_event_types": environment_event_types,
+        "cross_project_environment_count": cross_project_environment_count,
     }
 
 
@@ -785,33 +857,42 @@ def main() -> int:
                 "--config",
                 "apps/web/playwright.config.ts",
             ]
+        command_environment = dict(browser_environment)
+        if args.task_id:
+            # The governance summary embeds Playwright's Unicode separators.
+            # Pin the nested Python CLI to UTF-8 on Windows instead of inheriting GBK.
+            command_environment["PYTHONIOENCODING"] = "utf-8"
         completed = subprocess.run(
             command,
             cwd=ROOT,
-            env=browser_environment,
+            env=command_environment,
             check=False,
         )
         browser_exit = completed.returncode
         if browser_exit != 0:
             raise RuntimeError("project browser acceptance command failed")
-        stage = "dynamic_owner_revocation_probe"
-        dynamic_owner_evidence = _dynamic_owner_revocation_probe(
-            database,
-            api_port,
-            owner_username,
-            owner_password,
-            project_code,
-        )
-        stage = "audit_unavailable_probe"
-        audit_unavailable_evidence = _audit_unavailable_probe(
-            database,
-            api_port,
-            authorized_username,
-            authorized_password,
-            project_code,
-        )
-        stage = "database_evidence"
-        database_evidence = _database_evidence(database, project_code)
+        if not args.task_id:
+            # The canonical REAL_ACCEPTANCE_GATE executed these probes in its own
+            # isolated runtime. The task wrapper only hosts the Required Gates;
+            # its fixture database has not run the project-management E2E flow.
+            stage = "dynamic_owner_revocation_probe"
+            dynamic_owner_evidence = _dynamic_owner_revocation_probe(
+                database,
+                api_port,
+                owner_username,
+                owner_password,
+                project_code,
+            )
+            stage = "audit_unavailable_probe"
+            audit_unavailable_evidence = _audit_unavailable_probe(
+                database,
+                api_port,
+                authorized_username,
+                authorized_password,
+                project_code,
+            )
+            stage = "database_evidence"
+            database_evidence = _database_evidence(database, project_code)
         status = "PASS"
         exit_code = 0
     except GateBlocked as exc:

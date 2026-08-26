@@ -67,6 +67,18 @@ const projectErrorMessages: Record<string, string> = {
   AUTH_PERMISSION_DENIED: "当前账号没有执行此操作的权限。",
 };
 
+const environmentErrorMessages: Record<string, string> = {
+  ENVIRONMENT_NOT_FOUND: "环境不存在或已不可访问。",
+  ENVIRONMENT_PROJECT_SCOPE_REQUIRED: "请选择明确的项目后再查询环境。",
+  ENVIRONMENT_FILTER_INVALID: "环境筛选条件不正确。",
+  ENVIRONMENT_CODE_CONFLICT: "该项目内的环境编码已被使用。",
+  ENVIRONMENT_IDENTITY_IMMUTABLE: "项目归属和环境编码创建后不可修改。",
+  ENVIRONMENT_CONCURRENCY_CONFLICT: "环境已被其他操作更新，请刷新后重试。",
+  ENVIRONMENT_OPERATION_FORBIDDEN_FOR_STATE: "当前环境状态不允许执行此操作。",
+  ENVIRONMENT_TERMINAL_ACCESS_REVISION_INVALID: "Terminal Access Revision 无效或不属于当前项目。",
+  ENVIRONMENT_UPDATE_EMPTY: "请至少修改一个可编辑的环境字段。",
+};
+
 const modelConfigurationErrorMessages: Record<string, string> = {
   MODEL_CONFIG_NOT_FOUND: "模型配置不存在或已不可访问。",
   MODEL_CONFIG_CODE_CONFLICT: "模型配置编码已被使用，请更换后重试。",
@@ -100,6 +112,7 @@ const aiExplorationErrorMessages: Record<string, string> = {
 export function getApiErrorMessage(error: unknown, fallback: string): string {
   if (!(error instanceof ApiRequestError)) return fallback;
   const code = error.problem?.code;
+  if (code && environmentErrorMessages[code]) return environmentErrorMessages[code];
   if (code && projectErrorMessages[code]) return projectErrorMessages[code];
   if (error.status === 401) return "登录状态已失效，请重新登录。";
   if (error.status === 403) return "当前账号没有执行此操作的权限。";

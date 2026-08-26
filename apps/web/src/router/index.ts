@@ -6,6 +6,7 @@ import ChangePasswordView from "../views/ChangePasswordView.vue";
 import AIExplorationView from "../views/AIExplorationView.vue";
 import LoginView from "../views/LoginView.vue";
 import ModelConfigurationsView from "../views/ModelConfigurationsView.vue";
+import EnvironmentsView from "../views/EnvironmentsView.vue";
 import ProjectDetailView from "../views/ProjectDetailView.vue";
 import ProjectsListView from "../views/ProjectsListView.vue";
 import WorkspaceHomeView from "../views/WorkspaceHomeView.vue";
@@ -44,6 +45,11 @@ export function createPlatformRouter(history: RouterHistory = createWebHistory()
             path: "projects/:id",
             name: "projects.detail",
             component: ProjectDetailView,
+          },
+          {
+            path: "projects/:projectId/environments",
+            name: "projects.environments",
+            component: EnvironmentsView,
           },
           {
             path: "ai-settings/model-configurations",

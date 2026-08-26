@@ -667,6 +667,17 @@ input {
   line-height: 1.65;
 }
 
+.environment-toolbar {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.environment-pagination {
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
 @media (max-width: 900px) {
   .auth-page {
     grid-template-columns: 1fr;

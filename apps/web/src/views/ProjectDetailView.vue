@@ -100,6 +100,11 @@ async function submitTransition(): Promise<void> {
         <p class="monospace">{{ projects.current?.project_code }}</p>
       </div>
       <div v-if="projects.current" class="page-actions">
+        <PermissionGate permission="PROJECT_VIEW">
+          <el-button @click="router.push({ name: 'projects.environments', params: { projectId } })">
+            环境管理
+          </el-button>
+        </PermissionGate>
         <PermissionGate permission="PROJECT_EDIT">
           <el-button
             v-if="projects.current.lifecycle_status === 'ACTIVE'"

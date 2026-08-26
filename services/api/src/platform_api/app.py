@@ -21,6 +21,8 @@ from platform_api.auth_service import AuthenticationService
 from platform_api.config import ApiSettings
 from platform_api.database import create_database_engine, create_session_factory
 from platform_api.errors import PlatformError, ProblemDetails
+from platform_api.environment_router import router as environment_router
+from platform_api.environment_service import EnvironmentService
 from platform_api.idempotency import IdempotencyCoordinator
 from platform_api.middleware import CorrelationIdMiddleware
 from platform_api.model_configuration_router import (
@@ -99,6 +101,11 @@ def create_app(settings: ApiSettings) -> FastAPI:
         app.state.auth_service,
         idempotency,
     )
+    app.state.environment_service = EnvironmentService(
+        app.state.session_factory,
+        app.state.auth_service,
+        idempotency,
+    )
     secret_protector = (
         AesGcmSecretProtector.load(settings.model_secret_key_ring_file)
         if settings.model_secret_key_ring_file is not None
@@ -125,6 +132,7 @@ def create_app(settings: ApiSettings) -> FastAPI:
     app.include_router(auth_router)
     app.include_router(user_admin_router)
     app.include_router(project_router)
+    app.include_router(environment_router)
     app.include_router(model_configuration_router)
     app.include_router(ai_exploration_router)
 

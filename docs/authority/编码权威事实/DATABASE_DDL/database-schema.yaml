@@ -2621,7 +2621,7 @@ tables:
     default: null
   - name: environment_terminal_access_revision_id
     type: VARCHAR(26)
-    nullable: false
+    nullable: true
     primary_key: false
     default: null
   - name: lifecycle_status
@@ -2679,6 +2679,7 @@ tables:
   unique_keys:
   - name: uq_atp_environment_business
     columns:
+    - project_id
     - environment_code
   check_constraints:
   - name: ck_atp_environment_lifecycle_status
@@ -2701,7 +2702,15 @@ tables:
     referenced_column: environment_terminal_access_revision_id
     on_delete: RESTRICT
     on_update: RESTRICT
-  indexes: []
+  indexes:
+  - name: idx_atp_environment_project_status
+    columns:
+    - project_id
+    - lifecycle_status
+  - name: idx_atp_environment_project_enablement
+    columns:
+    - project_id
+    - enablement_state
   delete_behavior: DECLARED_PER_FOREIGN_KEY
   data_owner: DOMAIN_OR_TECHNICAL_OWNER
   idempotency_and_audit: ROW_VERSION_OR_TECHNICAL_TABLE_RULE
@@ -2715,6 +2724,137 @@ tables:
   - project_id
   - environment_terminal_access_revision_id
   extension_json_rule: NON_CONTRACT_EXTENSIONS_ONLY
+- table_name: atp_environment_audit
+  columns:
+  - name: audit_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: true
+    default: null
+  - name: environment_id
+    type: VARCHAR(26)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: project_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: environment_code
+    type: VARCHAR(191)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: action
+    type: VARCHAR(64)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: operation_id
+    type: VARCHAR(128)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: actor_user_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: required_permission
+    type: VARCHAR(128)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: scope_decision
+    type: VARCHAR(64)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: previous_status
+    type: VARCHAR(11)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: new_status
+    type: VARCHAR(11)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: result_code
+    type: VARCHAR(64)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: reason
+    type: VARCHAR(1000)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: before_json
+    type: JSON
+    nullable: true
+    primary_key: false
+    default: null
+  - name: after_json
+    type: JSON
+    nullable: true
+    primary_key: false
+    default: null
+  - name: correlation_id
+    type: VARCHAR(128)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: occurred_at
+    type: DATETIME(6)
+    nullable: false
+    primary_key: false
+    default: CURRENT_TIMESTAMP(6)
+  - name: source_context_hash
+    type: BINARY(32)
+    nullable: false
+    primary_key: false
+    default: null
+  primary_key:
+  - audit_id
+  unique_keys: []
+  check_constraints: []
+  foreign_keys:
+  - name: fk_atp_environment_audit_environment
+    column: environment_id
+    referenced_table: atp_environment
+    referenced_column: environment_id
+    on_delete: RESTRICT
+    on_update: RESTRICT
+  - name: fk_atp_environment_audit_project
+    column: project_id
+    referenced_table: atp_project
+    referenced_column: project_id
+    on_delete: RESTRICT
+    on_update: RESTRICT
+  - name: fk_atp_environment_audit_actor
+    column: actor_user_id
+    referenced_table: atp_user
+    referenced_column: user_id
+    on_delete: RESTRICT
+    on_update: RESTRICT
+  indexes:
+  - name: idx_atp_environment_audit_resource
+    columns:
+    - project_id
+    - environment_id
+    - occurred_at
+  delete_behavior: APPEND_ONLY_RESTRICT
+  data_owner: ENVIRONMENT_MANAGEMENT
+  idempotency_and_audit: APPEND_ONLY_COMMAND_EVIDENCE
+  business_unique_key: audit_id
+  state_fields: []
+  relationship_fields:
+  - environment_id
+  - project_id
+  - actor_user_id
+  extension_json_rule: NOT_APPLICABLE
 - table_name: atp_environment_terminal_access_revision
   columns:
   - name: environment_terminal_access_revision_id

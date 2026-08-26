@@ -77,9 +77,101 @@ test("project management browser closure", async ({ page, request }) => {
   await expect(lifecycle(page)).toContainText("ACTIVE");
   await expect(page.getByText("Owner ALL 仅限当前 project_id，不代表全平台范围。")).toBeVisible();
 
+  await page.getByRole("button", { name: "环境管理" }).click();
+  await expect(page).toHaveURL(new RegExp(`/projects/${projectId}/environments$`));
+  await page.getByRole("button", { name: "创建环境" }).click();
+  const environmentDialog = page.getByRole("dialog", { name: "创建环境" });
+  const environmentCode = `ENV-${projectCode}`;
+  await environmentDialog.getByLabel("环境编码").fill(environmentCode);
+  await environmentDialog.getByLabel("环境名称").fill("浏览器验收环境");
+  const environmentResponse = page.waitForResponse(
+    (response) => response.url().endsWith("/api/v1/environment") &&
+      response.request().method() === "POST",
+  );
+  await environmentDialog.getByRole("button", { name: "确认创建" }).click();
+  const createdEnvironmentResponse = await environmentResponse;
+  expect(createdEnvironmentResponse.status()).toBe(201);
+  const createdEnvironment = (await createdEnvironmentResponse.json()).data;
+  expect(createdEnvironment.lifecycle_status).toBe("CONFIGURING");
+  expect(createdEnvironment.environment_terminal_access_revision_id).toBeUndefined();
+  const environmentId = createdEnvironment.environment_id as string;
+
+  const directAuthorizedLogin = await request.post("/api/v1/auth/login", {
+    data: { username: authorizedUsername, password: authorizedPassword },
+  });
+  expect(directAuthorizedLogin.status()).toBe(200);
+  const directAuthorizedToken = (await directAuthorizedLogin.json()).data.access_token as string;
+  const authorizedHeaders = { Authorization: `Bearer ${directAuthorizedToken}` };
+  const environmentUpdateKey = `environment-update-${projectCode}`;
+  const environmentUpdateBody = {
+    expected_version: 1,
+    display_name: "真实事务更新环境",
+    reason: "验证 Environment CAS、幂等、审计与 Outbox 同事务",
+  };
+  const environmentUpdate = await request.patch(`/api/v1/environment/${environmentId}`, {
+    headers: { ...authorizedHeaders, "Idempotency-Key": environmentUpdateKey },
+    data: environmentUpdateBody,
+  });
+  expect(environmentUpdate.status()).toBe(200);
+  expect((await environmentUpdate.json()).data.row_version).toBe(2);
+  const environmentReplay = await request.patch(`/api/v1/environment/${environmentId}`, {
+    headers: { ...authorizedHeaders, "Idempotency-Key": environmentUpdateKey },
+    data: environmentUpdateBody,
+  });
+  expect(environmentReplay.status()).toBe(200);
+  expect((await environmentReplay.json()).data.row_version).toBe(2);
+  const environmentMismatchedReplay = await request.patch(`/api/v1/environment/${environmentId}`, {
+    headers: { ...authorizedHeaders, "Idempotency-Key": environmentUpdateKey },
+    data: { ...environmentUpdateBody, display_name: "不同载荷不得复用" },
+  });
+  expect(environmentMismatchedReplay.status()).toBe(409);
+  const staleEnvironmentUpdate = await request.patch(`/api/v1/environment/${environmentId}`, {
+    headers: { ...authorizedHeaders, "Idempotency-Key": `environment-stale-${projectCode}` },
+    data: { expected_version: 1, display_name: "陈旧版本不得覆盖" },
+  });
+  expect(staleEnvironmentUpdate.status()).toBe(409);
+  expect((await staleEnvironmentUpdate.json()).code).toBe("ENVIRONMENT_CONCURRENCY_CONFLICT");
+  const deferredTerminalBinding = await request.patch(`/api/v1/environment/${environmentId}`, {
+    headers: { ...authorizedHeaders, "Idempotency-Key": `environment-terminal-${projectCode}` },
+    data: { expected_version: 2, environment_terminal_access_revision_id: null },
+  });
+  expect(deferredTerminalBinding.status()).toBe(409);
+  expect((await deferredTerminalBinding.json()).code).toBe(
+    "ENVIRONMENT_TERMINAL_ACCESS_BINDING_DEFERRED",
+  );
+  const duplicateEnvironment = await request.post("/api/v1/environment", {
+    headers: { ...authorizedHeaders, "Idempotency-Key": `environment-duplicate-${projectCode}` },
+    data: { project_id: projectId, environment_code: environmentCode },
+  });
+  expect(duplicateEnvironment.status()).toBe(409);
+  expect((await duplicateEnvironment.json()).code).toBe("ENVIRONMENT_CODE_CONFLICT");
+
+  const crossProject = await request.post("/api/v1/project", {
+    headers: { ...authorizedHeaders, "Idempotency-Key": `environment-cross-project-${projectCode}` },
+    data: { project_code: `ENV-CROSS-${projectCode}` },
+  });
+  expect(crossProject.status()).toBe(201);
+  const crossProjectId = (await crossProject.json()).data.project_id as string;
+  const crossProjectEnvironment = await request.post("/api/v1/environment", {
+    headers: { ...authorizedHeaders, "Idempotency-Key": `environment-cross-create-${projectCode}` },
+    data: { project_id: crossProjectId, environment_code: environmentCode },
+  });
+  expect(crossProjectEnvironment.status()).toBe(201);
+  const missingProjectEnvironment = await request.post("/api/v1/environment", {
+    headers: { ...authorizedHeaders, "Idempotency-Key": `environment-missing-${projectCode}` },
+    data: { project_id: "Z".repeat(26), environment_code: "MISSING-PROJECT" },
+  });
+  expect(missingProjectEnvironment.status()).toBe(404);
+  expect((await missingProjectEnvironment.json()).code).toBe("ENVIRONMENT_NOT_FOUND");
+  await expect(page.getByText(environmentCode, { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: /返回项目详情/ }).click();
+
   await page.getByRole("button", { name: /返回项目列表/ }).click();
   await expect(page.getByText(projectCode, { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "查看详情" }).click();
+  const projectRow = page.getByRole("row").filter({
+    has: page.getByText(projectCode, { exact: true }),
+  });
+  await projectRow.getByRole("button", { name: "查看详情" }).click();
 
   await page.getByRole("button", { name: "编辑基础信息" }).click();
   const editDialog = page.getByRole("dialog", { name: "编辑项目基础信息" });
@@ -117,12 +209,6 @@ test("project management browser closure", async ({ page, request }) => {
   await transition("停用项目", "归档前按规则停用", "DISABLED");
   await transition("归档项目", "浏览器验收归档", "ARCHIVED");
 
-  const directAuthorizedLogin = await request.post("/api/v1/auth/login", {
-    data: { username: authorizedUsername, password: authorizedPassword },
-  });
-  expect(directAuthorizedLogin.status()).toBe(200);
-  const directAuthorizedToken = (await directAuthorizedLogin.json()).data.access_token as string;
-  const authorizedHeaders = { Authorization: `Bearer ${directAuthorizedToken}` };
   const retryCode = `RETRY-${projectCode}`;
   const retryKey = `retry-${projectCode}`;
   const ineligible = await request.post("/api/v1/project", {
