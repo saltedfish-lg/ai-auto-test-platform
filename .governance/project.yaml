@@ -39,6 +39,18 @@ runtime:
     when_any_affected_paths:
     - apps/web/e2e/project-management.spec.ts
     - apps/web/src/views/Project*.vue
+    - apps/web/src/views/EnvironmentsView.vue
+    - apps/web/src/views/BusinessTerminalsView.vue
+    - services/api/src/platform_api/project_*.py
+    - services/api/src/platform_api/environment_*.py
+    - services/api/src/platform_api/business_terminal_*.py
+    - services/api/src/platform_api/automation_asset_service.py
+    - services/api/tests/test_project_foundation.py
+    - services/api/tests/test_environment_foundation.py
+    - services/api/tests/test_business_terminal_foundation.py
+    - docs/authority/编码权威事实/DATABASE_DDL/V9__project_management_foundation.sql
+    - docs/authority/编码权威事实/DATABASE_DDL/V12__environment_management_foundation.sql
+    - docs/authority/编码权威事实/DATABASE_DDL/V13__business_terminal_foundation.sql
     - tools/gates/project_acceptance_runtime.py
     command:
     - python

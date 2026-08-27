@@ -8,23 +8,29 @@ Agent/Skill/docs/validators.
 from __future__ import annotations
 
 import argparse
-from functools import lru_cache
 import json
 import re
+import sys
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
 import yaml
+
+_BOOTSTRAP_ROOT = Path(__file__).resolve().parents[1]
+if str(_BOOTSTRAP_ROOT) not in sys.path:
+    sys.path.insert(0, str(_BOOTSTRAP_ROOT))
+from tools._bootstrap import ensure_repo_root_on_path
+
+REPO_ROOT = ensure_repo_root_on_path(__file__)
 
 YAML_LOADER = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
 
 def _yaml_load(text: str):
     return yaml.load(text, Loader=YAML_LOADER)
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-AUTHORITY_ROOT = REPO_ROOT / "docs" / "authority"
-MIGRATION_RE = re.compile(r"^V(?P<version>\d+)__(?P<name>.+)\.sql$")
 
+AUTHORITY_ROOT = REPO_ROOT / "docs" / "authority"
 CURRENT_CONTRACT_SOURCES = {
     "SYSTEM-DESIGN": ("编码权威事实/SYSTEM_DESIGN.yaml", "metadata.artifact_id"),
     "DATABASE-SCHEMA": ("编码权威事实/DATABASE_DDL/database-schema.yaml", "metadata.artifact_id"),
@@ -61,22 +67,10 @@ def _nested(mapping: dict[str, Any], dotted: str) -> Any:
 
 
 def discover_migrations(authority_root: Path = AUTHORITY_ROOT) -> list[dict[str, Any]]:
-    ddl_dir = authority_root / "编码权威事实" / "DATABASE_DDL"
-    found: list[dict[str, Any]] = []
-    for path in ddl_dir.iterdir():
-        if not path.is_file():
-            continue
-        match = MIGRATION_RE.fullmatch(path.name)
-        if not match:
-            continue
-        found.append({"version": int(match.group("version")), "name": path.name, "path": path})
-    found.sort(key=lambda item: item["version"])
-    versions = [item["version"] for item in found]
-    if len(versions) != len(set(versions)):
-        raise ValueError(f"duplicate migration versions: {versions}")
-    if not found:
-        raise ValueError(f"no formal migrations found under {ddl_dir}")
-    return found
+    """Compatibility export backed by platform_common.migrations."""
+    from platform_common.migrations import discover_migrations as _discover
+
+    return _discover(authority_root)
 
 
 def _ddl_current_counts(migrations: list[dict[str, Any]]) -> tuple[int, int]:

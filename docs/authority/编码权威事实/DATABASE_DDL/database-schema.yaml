@@ -9575,9 +9575,9 @@ migration_execution:
   selected_tool: Flyway
   authority_source: docs/authority/编码权威事实/DATABASE_DDL
   migration_discovery_source: tools/current_facts.py#discover_migrations
-  current_runtime_gate_executor: DIRECT_MYSQL_CLIENT_OR_PYMYSQL
-  flyway_runtime_integration_status: SELECTED_BUT_NOT_YET_WIRED_IN_REPOSITORY
-  truth_rule: Flyway remains the selected migration tool; until runtime wiring exists, current executable gates must apply
-    every mechanically discovered formal migration in numeric order and must not hard-code the current migration head.
+  current_runtime_gate_executor: FLYWAY_CLI_FOR_FORMAL_MIGRATION; DIRECT_MYSQL_ONLY_FOR_LOW_LEVEL_SCHEMA_VALIDATION
+  flyway_runtime_integration_status: WIRED_AND_REQUIRED
+  truth_rule: Flyway is the formal application-schema migration executor, discovers the Authority chain dynamically, records
+    flyway_schema_history and validates checksum/head; direct MySQL execution remains only for isolated low-level schema/upgrade validation.
   retired_active_models:
   - OBJ-085 / atp_platform_design_baseline_release

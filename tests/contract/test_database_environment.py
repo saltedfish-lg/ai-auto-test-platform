@@ -27,7 +27,7 @@ from platform_common.environment import (  # noqa: E402
 from platform_api.config import ApiSettings  # noqa: E402
 from platform_scheduler.config import SchedulerSettings  # noqa: E402
 from platform_worker.config import WorkerSettings  # noqa: E402
-from tools.database import check_connection  # noqa: E402
+from tools.database import check_connection, rebuild_local_database  # noqa: E402
 from tools.gates import auth_mysql_gate  # noqa: E402
 from tools.governance import required_gate_runner  # noqa: E402
 from tools.package_delivery import _forbidden_member  # noqa: E402
@@ -239,3 +239,132 @@ def test_database_secrets_are_not_forwarded_to_unrelated_frontend_or_isolated_co
     assert 'web_environment.pop(DATABASE_URL_ENV, None)' in browser_source
     assert 'compose_env.pop(ADMIN_URL_ENV, None)' in schema_source
     assert 'compose_env.pop("ATP_DATABASE_URL", None)' in schema_source
+
+
+
+def test_local_database_rebuild_requires_local_environment_and_exact_dev_database() -> None:
+    app = "mysql+pymysql://app:secret@127.0.0.1:3306/ai_auto_test_platform_dev"
+    admin = "mysql+pymysql://root:secret@127.0.0.1:3306/mysql"
+    with pytest.raises(rebuild_local_database.RebuildBlocked, match="LOCAL_ENVIRONMENT_REQUIRED"):
+        rebuild_local_database._validate_safety(
+            platform_environment="production",
+            app_url=app,
+            admin_url=admin,
+            confirm="ai_auto_test_platform_dev",
+        )
+    with pytest.raises(rebuild_local_database.RebuildBlocked, match="UNSAFE_DATABASE_TARGET"):
+        rebuild_local_database._validate_safety(
+            platform_environment="local",
+            app_url="mysql+pymysql://app:secret@127.0.0.1:3306/production",
+            admin_url=admin,
+            confirm="production",
+        )
+
+
+def test_local_database_rebuild_requires_explicit_target_confirmation() -> None:
+    app = "mysql+pymysql://app:secret@127.0.0.1:3306/ai_auto_test_platform_dev"
+    admin = "mysql+pymysql://root:secret@127.0.0.1:3306/mysql"
+    with pytest.raises(
+        rebuild_local_database.RebuildBlocked,
+        match="EXPLICIT_DATABASE_CONFIRMATION_REQUIRED",
+    ):
+        rebuild_local_database._validate_safety(
+            platform_environment="local",
+            app_url=app,
+            admin_url=admin,
+            confirm="wrong-name",
+        )
+
+
+def test_local_database_rebuild_dry_run_uses_current_dynamic_migration_chain(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = "mysql+pymysql://app:secret@127.0.0.1:3306/ai_auto_test_platform_dev"
+    admin = "mysql+pymysql://root:secret@127.0.0.1:3306/mysql"
+    monkeypatch.setenv("PLATFORM_ENVIRONMENT", "local")
+    monkeypatch.setenv("ATP_DATABASE_URL", app)
+    monkeypatch.setenv("ATP_MYSQL_ADMIN_URL", admin)
+    result = rebuild_local_database.run(confirm="ai_auto_test_platform_dev", dry_run=True)
+    migrations = auth_mysql_gate._migration_names(auth_mysql_gate._resolve_authority())
+    assert result["status"] == "DRY_RUN"
+    assert result["migrations"] == list(migrations)
+    assert result["migration_head"] == migrations[-1]
+    assert "secret" not in repr(result)
+
+
+def test_flyway_runtime_integration_never_places_database_password_on_command_line(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from types import SimpleNamespace
+    from tools.database import flyway
+
+    values = {
+        flyway.APP_ENV: "mysql+pymysql://app:app-secret@127.0.0.1:3306/ai_auto_test_platform_dev",
+        flyway.ADMIN_ENV: "mysql+pymysql://root:admin-secret@127.0.0.1:3306/mysql",
+    }
+    monkeypatch.setattr(flyway, "get_env", lambda name, **_kwargs: values.get(name))
+    monkeypatch.setattr(flyway, "resolve_flyway_command", lambda: "flyway")
+    monkeypatch.setattr(
+        flyway,
+        "discover_migrations",
+        lambda _root: [{"version": 13, "name": "V13__business_terminal_foundation.sql"}],
+    )
+    captured: dict[str, object] = {}
+
+    def fake_run(command: list[str], **kwargs: object) -> SimpleNamespace:
+        captured["command"] = command
+        captured["env"] = kwargs["env"]
+        return SimpleNamespace(returncode=0, stdout="Successfully validated", stderr="")
+
+    monkeypatch.setattr(flyway.subprocess, "run", fake_run)
+    result = flyway.run_flyway("validate")
+    assert result["status"] == "PASS"
+    assert captured["command"] == ["flyway", "validate"]
+    rendered_command = repr(captured["command"])
+    assert "app-secret" not in rendered_command
+    assert "admin-secret" not in rendered_command
+    env = captured["env"]
+    assert isinstance(env, dict)
+    assert env["FLYWAY_PASSWORD"] == "admin-secret"
+    assert env["FLYWAY_BASELINE_ON_MIGRATE"] == "false"
+    assert env["FLYWAY_CLEAN_DISABLED"] == "true"
+
+
+def test_rebuild_checks_flyway_readiness_before_destructive_database_rebuild(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+    monkeypatch.setattr(rebuild_local_database, "load_project_environment", lambda **_kwargs: None)
+    values = {
+        rebuild_local_database.APP_ENV: "mysql+pymysql://app:secret@127.0.0.1:3306/ai_auto_test_platform_dev",
+        rebuild_local_database.ADMIN_ENV: "mysql+pymysql://root:secret@127.0.0.1:3306/mysql",
+        rebuild_local_database.LOCAL_ENV: "local",
+    }
+    monkeypatch.setattr(rebuild_local_database, "get_env", lambda name, **_kwargs: values.get(name))
+    monkeypatch.setattr(
+        rebuild_local_database,
+        "discover_migrations",
+        lambda _root: [{"version": 13, "name": "V13__business_terminal_foundation.sql"}],
+    )
+
+    def blocked_flyway() -> str:
+        calls.append("flyway-readiness")
+        raise RuntimeError("FLYWAY_NOT_INSTALLED")
+
+    monkeypatch.setattr(rebuild_local_database, "resolve_flyway_command", blocked_flyway)
+    monkeypatch.setattr(
+        rebuild_local_database,
+        "_rebuild_database",
+        lambda *_args, **_kwargs: calls.append("destructive-rebuild"),
+    )
+    with pytest.raises(RuntimeError, match="FLYWAY_NOT_INSTALLED"):
+        rebuild_local_database.run(confirm="ai_auto_test_platform_dev")
+    assert calls == ["flyway-readiness"]
+
+
+def test_database_preflight_contract_includes_flyway_and_schema_head_checks() -> None:
+    source = (ROOT / "tools/database/check_connection.py").read_text(encoding="utf-8")
+    assert "FLYWAY_VALIDATE" in source
+    assert "DATABASE_SCHEMA_PREFLIGHT" in source
+    assert "run_schema_preflight" in source
+    assert "discover_migrations" in source

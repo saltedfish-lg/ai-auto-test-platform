@@ -69,6 +69,14 @@ class ApiSettings(BaseSettings):
         validation_alias="ATP_LITELLM_DYNAMIC_CREDENTIALS_ENABLED",
         repr=False,
     )
+    schema_preflight_mode: Literal["required", "disabled"] = Field(
+        default="required",
+        validation_alias="ATP_SCHEMA_PREFLIGHT_MODE",
+    )
+    migration_authority_root: Path | None = Field(
+        default=None,
+        validation_alias="ATP_MIGRATION_AUTHORITY_ROOT",
+    )
 
     @field_validator("database_url")
     @classmethod

@@ -36,6 +36,7 @@ def test_all_python_processes_assemble_from_installed_packages(tmp_path: Path) -
     api_settings = ApiSettings(
         _env_file=None,
         environment="test",
+        schema_preflight_mode="disabled",
         database_url=database_url,
         jwt_key_ring_file=jwt_key_ring.manifest_file,
         auth_hmac_master_key_file=hmac_key_ring,

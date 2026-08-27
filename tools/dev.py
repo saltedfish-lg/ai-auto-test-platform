@@ -22,6 +22,7 @@ AUTHORITY_VALIDATION = AUTHORITY_ROOT / "validation"
 AUTHORITY_RELATIVE = AUTHORITY_ROOT.relative_to(ROOT).as_posix()
 AUTH_MYSQL_GATE = "tools/gates/auth_mysql_gate.py"
 AUTH_BROWSER_GATE = "tools/gates/auth_browser_gate.py"
+FLYWAY_MIGRATION_GATE = "tools/gates/flyway_migration_gate.py"
 PYTHON_SOURCE_PATHS = (
     "packages/platform-common/src",
     "packages/domain-kernel/src",
@@ -126,6 +127,14 @@ def auth_browser_gate() -> None:
     run((PYTHON, AUTH_BROWSER_GATE))
 
 
+def flyway(operation: str) -> None:
+    run((PYTHON, "tools/database/flyway.py", operation))
+
+
+def flyway_migration_gate() -> None:
+    run((PYTHON, FLYWAY_MIGRATION_GATE))
+
+
 def build() -> None:
     build_root = ROOT / ".build"
     web_dist = ROOT / "apps" / "web" / "dist"
@@ -177,6 +186,11 @@ COMMANDS = {
     "test-integration": test_integration,
     "verify-migrations": verify_migrations,
     "database-preflight": lambda: run((PYTHON, "tools/database/check_connection.py")),
+    "flyway-info": lambda: flyway("info"),
+    "flyway-validate": lambda: flyway("validate"),
+    "flyway-migrate": lambda: flyway("migrate"),
+    "flyway-baseline-current": lambda: flyway("baseline-current"),
+    "flyway-migration-gate": flyway_migration_gate,
     "auth-mysql-gate": auth_mysql_gate,
     "auth-browser-gate": auth_browser_gate,
     "generate-openapi": lambda: run((PYTHON, "tools/openapi_client.py", "generate")),

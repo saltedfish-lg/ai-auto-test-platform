@@ -121,10 +121,10 @@ database_contract:
   migration_execution:
     selected_tool: Flyway
     authority_source: docs/authority/编码权威事实/DATABASE_DDL
-    current_executable_gate: docs/authority/validation/run_mysql84_gate.py
-    current_executor: DIRECT_MYSQL_CLIENT_OR_CONTAINER_MYSQL_CLIENT
-    flyway_runtime_integration_status: SELECTED_BUT_NOT_YET_WIRED_IN_REPOSITORY
-    truth_rule: Full Schema Gate 每个受影响Task按当前正式Migration链真实执行；历史运行结果不得直接作为新Task的PASS。
+    current_executable_gate: python tools/gates/flyway_migration_gate.py
+    current_executor: FLYWAY_CLI_WITH_AUTHORITY_FILESYSTEM_LOCATION
+    flyway_runtime_integration_status: WIRED_AND_REQUIRED
+    truth_rule: 正式应用Schema Migration统一由Flyway按当前Living Authority链执行并记录history/checksum；API启动只读Preflight并在history/head或ORM结构不兼容时fail-fast；Full Schema Gate继续承担隔离低层Schema/升级验证。
     migration_discovery_source: tools/current_facts.py#migration
     admin_connection_env: ATP_MYSQL_ADMIN_URL
   current_facts_source: tools/current_facts.py#database
@@ -236,6 +236,11 @@ runtime_gate_catalog:
   - gate_id: FULL_SCHEMA_MYSQL84_RUNTIME_GATE
     scope: DATABASE_SCHEMA
     command: python tools/mysql84_gate.py --execute
+    required_when:
+    - MIGRATION_OR_DATABASE_SCHEMA_CHANGED
+  - gate_id: FLYWAY_MIGRATION_RUNTIME_GATE
+    scope: DATABASE_SCHEMA
+    command: python tools/gates/flyway_migration_gate.py
     required_when:
     - MIGRATION_OR_DATABASE_SCHEMA_CHANGED
   - gate_id: MODEL_CONFIGURATION_BROWSER_RUNTIME_GATE

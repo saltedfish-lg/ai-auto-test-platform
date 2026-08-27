@@ -86,15 +86,30 @@ ATP_MYSQL_ADMIN_URL=mysql+pymysql://<admin_user>:<admin_password>@127.0.0.1:3306
 - 数据库密码如果包含 `@ : / # % ? &` 等 URL 特殊字符，必须在 DSN 中进行 percent-encoding，例如 `@` → `%40`、`#` → `%23`；不要通过弱化密码来规避 URL 编码。
 - 真实 `.env`、完整 DSN 和密码不得进入源码、`.governance`、Authority、Task Context、Gate Result、日志或正式 ZIP。
 
-连接自检：
+数据库与Schema Preflight：
 
 ```powershell
-python tools/database/check_connection.py
-# 或
 python tools/dev.py database-preflight
 ```
 
-成功时分别输出 `APP_DATABASE_CONNECTION=PASS` 与 `MYSQL_ADMIN_CONNECTION=PASS`，诊断信息只显示脱敏目标。
+该检查不再只做 `SELECT 1`：会同时验证应用/管理连接、MySQL 8.4、Flyway CLI、`flyway validate`、当前 Migration Head、`flyway_schema_history` 与 API ORM 所需表/列。任一不一致均返回非零退出码。
+
+正式 Migration 统一通过 Flyway 执行，Flyway CLI 必须在 `PATH` 中；若运行环境无法通过 `PATH` 解析，可通过非秘密配置 `FLYWAY_COMMAND` 指定可执行文件绝对路径。数据库凭据仅从 `ATP_DATABASE_URL` / `ATP_MYSQL_ADMIN_URL` 注入 Flyway 子进程环境，不写入仓库 Flyway 配置或命令行参数。
+
+```powershell
+python tools/dev.py flyway-info
+python tools/dev.py flyway-validate
+python tools/dev.py flyway-migrate
+```
+
+对于此前已经通过直连 SQL 完整执行到当前 Authority Head、但尚无 `flyway_schema_history` 的现有开发库，可在 ORM Schema Shape 校验通过后一次性纳管：
+
+```powershell
+python tools/dev.py flyway-baseline-current
+python tools/dev.py database-preflight
+```
+
+API 默认 `ATP_SCHEMA_PREFLIGHT_MODE=required`：进程启动前只读校验 Flyway history/head 与 ORM Schema Shape，不在 API 启动路径执行 DDL。
 
 ## 安装依赖
 

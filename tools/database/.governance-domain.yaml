@@ -1,0 +1,16 @@
+schema_version: 3
+owner_identity: tools/database
+domains:
+  - DATABASE_SCHEMA
+inherit: true
+engineering_gates:
+  - database_environment_contract
+routes:
+  - patterns:
+      - flyway.py
+      - check_connection.py
+      - rebuild_local_database.py
+    formal_gate_conditions:
+      - MIGRATION_OR_DATABASE_SCHEMA_CHANGED
+    reviewer_risks:
+      - RUNTIME_DATABASE_MIGRATION_SENSITIVE

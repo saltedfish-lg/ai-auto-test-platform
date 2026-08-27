@@ -60,6 +60,7 @@ def _settings(key_ring_file: Path) -> ApiSettings:
     return ApiSettings(
         _env_file=None,
         environment="test",
+        schema_preflight_mode="disabled",
         database_url="mysql+pymysql://platform:local@127.0.0.1/platform_test",
         jwt_key_ring_file=key_ring_file,
         auth_hmac_master_key_file=key_ring_file.parent / "auth-hmac-master.key",

@@ -285,6 +285,7 @@ def test_p1_auth_rbac_real_mysql_runtime_gate(
     key_ring = generate_development_key_ring(key_directory, kid="auth-mysql-rs256-v1")
     settings = ApiSettings(
         environment="test",
+        schema_preflight_mode="disabled",
         database_url=_database_url(),
         jwt_key_ring_file=key_ring.manifest_file,
         auth_hmac_master_key_file=_hmac_ring_file(key_directory),

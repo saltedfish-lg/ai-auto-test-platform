@@ -94,3 +94,10 @@ gates:
     - pytest
     - tests/contract/test_database_environment.py
     - -q
+  FLYWAY_MIGRATION_RUNTIME_GATE:
+    command:
+    - python
+    - tools/gates/flyway_migration_gate.py
+    timeout_seconds: 600
+    execution_identity:
+      capability: flyway_migration_runtime

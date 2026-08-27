@@ -56,6 +56,7 @@ def settings(key_ring_file: Path) -> ApiSettings:
     return ApiSettings(
         _env_file=None,
         environment="test",
+        schema_preflight_mode="disabled",
         database_url="mysql+pymysql://platform:local@127.0.0.1/platform_test",
         jwt_key_ring_file=key_ring_file,
         auth_hmac_master_key_file=hmac_key_file,
@@ -115,6 +116,7 @@ def test_missing_key_ring_configuration_is_rejected(
         ApiSettings(
             _env_file=None,
             environment="test",
+            schema_preflight_mode="disabled",
             database_url="mysql+pymysql://platform:local@127.0.0.1/platform_test",
         )
 
@@ -130,6 +132,7 @@ def test_invalid_database_configuration_hides_secret_input() -> None:
         ApiSettings(
             _env_file=None,
             environment="test",
+            schema_preflight_mode="disabled",
             database_url=f"postgresql://platform:{marker}@127.0.0.1/platform",
         )
 
@@ -233,3 +236,29 @@ def test_process_self_check_is_internal_and_deterministic(key_ring_file: Path) -
         "status": "ready",
         "authority_model": "SINGLE_LIVING_AUTHORITY",
     }
+
+
+def test_api_startup_fails_closed_when_schema_preflight_rejects_database(
+    key_ring_file: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from platform_api.schema_preflight import SchemaPreflightFailure
+
+    governed = settings(key_ring_file).model_copy(update={"schema_preflight_mode": "required"})
+
+    def reject(*_args: object, **_kwargs: object) -> dict[str, object]:
+        raise SchemaPreflightFailure(
+            "DATABASE_MIGRATION_HEAD_MISMATCH",
+            {"expected_version": "13", "actual_version": "12"},
+        )
+
+    class _FakeEngine:
+        def dispose(self) -> None:
+            pass
+
+    monkeypatch.setattr("platform_api.app.create_database_engine", lambda _url: _FakeEngine())
+    monkeypatch.setattr("platform_api.app.create_session_factory", lambda _engine: object())
+    monkeypatch.setattr("platform_api.app.run_schema_preflight", reject)
+    app = create_app(governed)
+    with pytest.raises(RuntimeError, match="DATABASE_SCHEMA_PREFLIGHT_FAILED:DATABASE_MIGRATION_HEAD_MISMATCH"):
+        with TestClient(app):
+            pass

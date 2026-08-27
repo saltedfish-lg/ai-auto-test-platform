@@ -2099,7 +2099,7 @@ directory_structure:
   forbidden: 禁止放业务模块特有规则。
   effect_class: CURRENT_AUTHORITY_ONLY
 - path: docs/authority/编码权威事实/DATABASE_DDL
-  responsibility: 当前 Living Authority 的版本化 Migration SQL 唯一源码；Flyway 为已选工具但仓库运行时接线尚未落地，当前 Gate 直接执行完整 Authority SQL 链
+  responsibility: 当前 Living Authority 的版本化 Migration SQL 唯一源码；Flyway 已正式接入并作为应用Schema Migration执行器，API启动只读校验Flyway history/head与ORM结构，低层Schema Gate保留隔离直连验证
   forbidden: 禁止手工改库不留迁移。
   effect_class: CURRENT_AUTHORITY_ONLY
 - path: tests/unit

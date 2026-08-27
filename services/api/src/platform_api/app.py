@@ -37,6 +37,7 @@ from platform_api.project_router import router as project_router
 from platform_api.project_service import ProjectService
 from platform_api.rate_limit import AuthenticationRateLimitService
 from platform_api.secret_store import AesGcmSecretProtector, UnavailableSecretProtector
+from platform_api.schema_preflight import SchemaPreflightFailure, run_schema_preflight
 from platform_api.security import JwtKeyRing, JwtService, PasswordService
 from platform_api.session_service import SessionService
 from platform_api.user_admin_router import router as user_admin_router
@@ -58,10 +59,40 @@ def create_app(settings: ApiSettings) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        if settings.schema_preflight_mode == "required":
+            try:
+                result = run_schema_preflight(
+                    engine,
+                    authority_root=settings.migration_authority_root,
+                )
+            except SchemaPreflightFailure as error:
+                LOGGER.critical(
+                    "database schema preflight failed",
+                    extra={
+                        "service": settings.service_name,
+                        "preflight_code": error.code,
+                        **error.metadata,
+                    },
+                )
+                engine.dispose()
+                raise RuntimeError(f"DATABASE_SCHEMA_PREFLIGHT_FAILED:{error.code}") from None
+            app.state.schema_preflight = result
+            LOGGER.info(
+                "database schema preflight passed",
+                extra={
+                    "service": settings.service_name,
+                    "migration_head": result["migration_head"],
+                    "migration_version": result["migration_version"],
+                },
+            )
+        else:
+            app.state.schema_preflight = {"status": "DISABLED"}
         LOGGER.info("api process started", extra={"service": settings.service_name})
-        yield
-        engine.dispose()
-        LOGGER.info("api process stopped", extra={"service": settings.service_name})
+        try:
+            yield
+        finally:
+            engine.dispose()
+            LOGGER.info("api process stopped", extra={"service": settings.service_name})
 
     app = FastAPI(
         title="AI automation test execution platform",
