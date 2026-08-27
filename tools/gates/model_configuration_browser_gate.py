@@ -48,13 +48,10 @@ from tools.gates.auth_mysql_gate import (  # noqa: E402
     GateBlocked,
     _connection,
     _drop_isolated_database,
-    _execute_script,
-    _migration_names,
-    _migration_path,
     _new_database_name,
-    _resolve_authority,
     _test_database_url,
 )
+from tools.database.flyway import FlywayBlocked, run_flyway  # noqa: E402
 from tools.governance.runtime_gate_result import (  # noqa: E402
     finalize_runtime_result,
     runtime_result_base,
@@ -647,7 +644,6 @@ def main() -> int:
         emit()
         return 2
 
-    authority = _resolve_authority()
     database = _new_database_name("model")
     runtime_directory = RUNTIME_ROOT / f"model-configuration-browser-{secrets.token_hex(6)}"
     runtime_directory.mkdir(parents=True, exist_ok=False)
@@ -686,9 +682,8 @@ def main() -> int:
             )
             created = True
 
-        stage = "migrations"
-        for migration in _migration_names(authority):
-            _execute_script(database, _migration_path(authority, migration))
+        stage = "flyway_migrations"
+        run_flyway("migrate", target_database=database)
 
         stage = "fixtures"
         database_url = _test_database_url(database)
@@ -857,7 +852,7 @@ def main() -> int:
         )
         status = "PASS"
         exit_code = 0
-    except GateBlocked as exc:
+    except (GateBlocked, FlywayBlocked) as exc:
         status = "BLOCKED"
         blocker = str(exc)
         exit_code = 2

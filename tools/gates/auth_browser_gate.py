@@ -39,11 +39,7 @@ from tools.gates.auth_mysql_gate import (
     GateBlocked,
     _connection,
     _drop_isolated_database,
-    _execute_script,
-    _migration_names,
-    _migration_path,
     _new_database_name,
-    _resolve_authority,
     _test_database_url,
 )
 from platform_api.bootstrap import AdminBootstrapService
@@ -313,8 +309,6 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--result-output", type=Path)
     args = parser.parse_args()
-    authority = _resolve_authority()
-    migrations = _migration_names(authority)
     result_payload = runtime_result_base(
         ROOT,
         gate_id=GATE_STATUS_NAME,
@@ -374,9 +368,8 @@ def main() -> int:
                 f"CREATE DATABASE `{database}` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci"
             )
             created = True
-        stage = "migrations"
-        for migration in migrations:
-            _execute_script(database, _migration_path(authority, migration))
+        stage = "flyway_migrations"
+        run_flyway("migrate", target_database=database)
 
         stage = "fixtures"
         database_url = _test_database_url(database)
@@ -508,7 +501,7 @@ def main() -> int:
         browser_exit = completed.returncode
         status = "PASS" if browser_exit == 0 else "FAIL"
         exit_code = browser_exit
-    except GateBlocked as exc:
+    except (GateBlocked, FlywayBlocked) as exc:
         status = "BLOCKED"
         blocker = str(exc)
         exit_code = 2
