@@ -105,12 +105,9 @@ async function applyFilter(): Promise<void> {
 }
 
 async function loadPage(): Promise<void> {
-  await environments.load(
-    projectId.value,
-    lifecycleFilter.value || undefined,
-    currentPage.value,
-    pageSize.value,
-  ).catch(() => undefined);
+  await environments
+    .load(projectId.value, lifecycleFilter.value || undefined, currentPage.value, pageSize.value)
+    .catch(() => undefined);
 }
 
 async function changePage(page: number): Promise<void> {
@@ -129,19 +126,31 @@ async function changePageSize(size: number): Promise<void> {
   <section class="project-page" aria-labelledby="environment-title">
     <div class="page-heading">
       <div>
-        <el-button link type="primary" @click="router.push({ name: 'projects.detail', params: { id: projectId } })">
+        <el-button
+          link
+          type="primary"
+          @click="router.push({ name: 'projects.detail', params: { id: projectId } })"
+        >
           ← 返回项目详情
         </el-button>
         <h2 id="environment-title">环境管理</h2>
-        <p class="muted">Environment 只维护环境级事实；Terminal Access 在后续模块绑定。</p>
+        <p class="muted">
+          Environment 只维护环境级事实；访问配置由各业务终端自己的 Revision 维护。
+        </p>
       </div>
       <PermissionGate permission="PROJECT_EDIT">
         <el-button type="primary" @click="openCreate">创建环境</el-button>
       </PermissionGate>
     </div>
 
-    <el-alert v-if="environments.errorMessage" :title="environments.errorMessage" type="error"
-              :closable="false" show-icon class="workspace-alert">
+    <el-alert
+      v-if="environments.errorMessage"
+      :title="environments.errorMessage"
+      type="error"
+      :closable="false"
+      show-icon
+      class="workspace-alert"
+    >
       <template v-if="environments.correlationId" #default>
         <span class="correlation-id">请求标识：{{ environments.correlationId }}</span>
       </template>
@@ -149,13 +158,34 @@ async function changePageSize(size: number): Promise<void> {
 
     <el-card shadow="never">
       <div class="environment-toolbar">
-        <el-select v-model="lifecycleFilter" aria-label="生命周期筛选" placeholder="全部生命周期" clearable>
-          <el-option v-for="status in ['CONFIGURING','VALIDATING','ACTIVE','UNREACHABLE','DISABLED','RECOVERING','ARCHIVED']"
-                     :key="status" :label="status" :value="status" />
+        <el-select
+          v-model="lifecycleFilter"
+          aria-label="生命周期筛选"
+          placeholder="全部生命周期"
+          clearable
+        >
+          <el-option
+            v-for="status in [
+              'CONFIGURING',
+              'VALIDATING',
+              'ACTIVE',
+              'UNREACHABLE',
+              'DISABLED',
+              'RECOVERING',
+              'ARCHIVED',
+            ]"
+            :key="status"
+            :label="status"
+            :value="status"
+          />
         </el-select>
         <el-button @click="applyFilter">筛选</el-button>
       </div>
-      <el-table :data="environments.items" v-loading="environments.status === 'loading'" empty-text="当前项目暂无环境">
+      <el-table
+        :data="environments.items"
+        v-loading="environments.status === 'loading'"
+        empty-text="当前项目暂无环境"
+      >
         <el-table-column prop="environment_code" label="环境编码" min-width="160" />
         <el-table-column prop="display_name" label="环境名称" min-width="160" />
         <el-table-column prop="lifecycle_status" label="生命周期" min-width="130" />
@@ -166,54 +196,93 @@ async function changePageSize(size: number): Promise<void> {
           <template #default="{ row }">
             <el-button link type="primary" @click="openDetail(row)">详情</el-button>
             <PermissionGate permission="PROJECT_EDIT">
-              <el-button link type="primary" :disabled="row.lifecycle_status === 'ARCHIVED'" @click="openEdit(row)">编辑</el-button>
-              <el-button v-if="['ACTIVE','DISABLED'].includes(row.lifecycle_status)" link
-                         :type="row.enablement_state === 'ENABLED' ? 'warning' : 'success'"
-                         @click="toggleEnablement(row)">
+              <el-button
+                link
+                type="primary"
+                :disabled="row.lifecycle_status === 'ARCHIVED'"
+                @click="openEdit(row)"
+                >编辑</el-button
+              >
+              <el-button
+                v-if="['ACTIVE', 'DISABLED'].includes(row.lifecycle_status)"
+                link
+                :type="row.enablement_state === 'ENABLED' ? 'warning' : 'success'"
+                @click="toggleEnablement(row)"
+              >
                 {{ row.enablement_state === "ENABLED" ? "停用" : "恢复" }}
               </el-button>
             </PermissionGate>
           </template>
         </el-table-column>
       </el-table>
-      <el-pagination class="environment-pagination" background layout="total, sizes, prev, pager, next"
-                     :current-page="currentPage" :page-size="pageSize" :page-sizes="[20, 50, 100, 200]"
-                     :total="environments.page.total" @current-change="changePage" @size-change="changePageSize" />
+      <el-pagination
+        class="environment-pagination"
+        background
+        layout="total, sizes, prev, pager, next"
+        :current-page="currentPage"
+        :page-size="pageSize"
+        :page-sizes="[20, 50, 100, 200]"
+        :total="environments.page.total"
+        @current-change="changePage"
+        @size-change="changePageSize"
+      />
     </el-card>
 
     <el-dialog v-model="createVisible" title="创建环境" width="min(540px, 92vw)">
       <el-form label-position="top" @submit.prevent="submitCreate">
-        <el-form-item label="环境编码" required><el-input v-model="createForm.environment_code" maxlength="191" /></el-form-item>
-        <el-form-item label="环境名称"><el-input v-model="createForm.display_name" maxlength="255" /></el-form-item>
-        <el-form-item label="创建原因"><el-input v-model="createForm.reason" type="textarea" maxlength="1000" /></el-form-item>
-        <p class="security-form-note">新环境进入 CONFIGURING；此阶段不要求 Terminal Access Revision。</p>
+        <el-form-item label="环境编码" required
+          ><el-input v-model="createForm.environment_code" maxlength="191"
+        /></el-form-item>
+        <el-form-item label="环境名称"
+          ><el-input v-model="createForm.display_name" maxlength="255"
+        /></el-form-item>
+        <el-form-item label="创建原因"
+          ><el-input v-model="createForm.reason" type="textarea" maxlength="1000"
+        /></el-form-item>
+        <p class="security-form-note">
+          新环境进入 CONFIGURING；此阶段不要求 Terminal Access Revision。
+        </p>
       </el-form>
       <template #footer>
         <el-button @click="createVisible = false">取消</el-button>
-        <el-button type="primary" :loading="environments.status === 'saving'" @click="submitCreate">确认创建</el-button>
+        <el-button type="primary" :loading="environments.status === 'saving'" @click="submitCreate"
+          >确认创建</el-button
+        >
       </template>
     </el-dialog>
 
     <el-dialog v-model="editVisible" title="编辑环境" width="min(520px, 92vw)">
       <el-form label-position="top" @submit.prevent="submitEdit">
-        <el-form-item label="环境编码"><el-input :model-value="selected?.environment_code" disabled /></el-form-item>
-        <el-form-item label="环境名称"><el-input v-model="editForm.display_name" maxlength="255" /></el-form-item>
-        <el-form-item label="变更原因"><el-input v-model="editForm.reason" type="textarea" maxlength="1000" /></el-form-item>
+        <el-form-item label="环境编码"
+          ><el-input :model-value="selected?.environment_code" disabled
+        /></el-form-item>
+        <el-form-item label="环境名称"
+          ><el-input v-model="editForm.display_name" maxlength="255"
+        /></el-form-item>
+        <el-form-item label="变更原因"
+          ><el-input v-model="editForm.reason" type="textarea" maxlength="1000"
+        /></el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="editVisible = false">取消</el-button>
-        <el-button type="primary" :loading="environments.status === 'saving'" @click="submitEdit">保存</el-button>
+        <el-button type="primary" :loading="environments.status === 'saving'" @click="submitEdit"
+          >保存</el-button
+        >
       </template>
     </el-dialog>
 
     <el-dialog v-model="detailVisible" title="环境详情" width="min(620px, 92vw)">
       <dl v-if="selected" class="identity-list">
-        <dt>Environment ID</dt><dd class="monospace">{{ selected.environment_id }}</dd>
-        <dt>Project ID</dt><dd class="monospace">{{ selected.project_id }}</dd>
-        <dt>环境编码</dt><dd>{{ selected.environment_code }}</dd>
-        <dt>生命周期</dt><dd>{{ selected.lifecycle_status }}</dd>
-        <dt>Terminal Revision</dt><dd class="monospace">{{ selected.environment_terminal_access_revision_id || "未绑定" }}</dd>
-        <dt>当前版本</dt><dd>v{{ selected.row_version }}</dd>
+        <dt>Environment ID</dt>
+        <dd class="monospace">{{ selected.environment_id }}</dd>
+        <dt>Project ID</dt>
+        <dd class="monospace">{{ selected.project_id }}</dd>
+        <dt>环境编码</dt>
+        <dd>{{ selected.environment_code }}</dd>
+        <dt>生命周期</dt>
+        <dd>{{ selected.lifecycle_status }}</dd>
+        <dt>当前版本</dt>
+        <dd>v{{ selected.row_version }}</dd>
       </dl>
     </el-dialog>
   </section>

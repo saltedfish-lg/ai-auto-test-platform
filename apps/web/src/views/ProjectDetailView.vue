@@ -105,6 +105,13 @@ async function submitTransition(): Promise<void> {
             环境管理
           </el-button>
         </PermissionGate>
+        <PermissionGate permission="BUSINESS_TERMINAL_VIEW">
+          <el-button
+            @click="router.push({ name: 'projects.business-terminals', params: { projectId } })"
+          >
+            业务终端
+          </el-button>
+        </PermissionGate>
         <PermissionGate permission="PROJECT_EDIT">
           <el-button
             v-if="projects.current.lifecycle_status === 'ACTIVE'"
@@ -161,19 +168,28 @@ async function submitTransition(): Promise<void> {
         <el-card shadow="never">
           <template #header><strong>项目信息</strong></template>
           <dl class="identity-list">
-            <dt>项目编码</dt><dd class="monospace">{{ projects.current.project_code }}</dd>
-            <dt>项目名称</dt><dd>{{ projects.current.display_name || "未设置" }}</dd>
+            <dt>项目编码</dt>
+            <dd class="monospace">{{ projects.current.project_code }}</dd>
+            <dt>项目名称</dt>
+            <dd>{{ projects.current.display_name || "未设置" }}</dd>
             <dt>生命周期</dt>
-            <dd><el-tag type="success">{{ projects.current.lifecycle_status }}</el-tag></dd>
-            <dt>当前版本</dt><dd>v{{ projects.current.row_version }}</dd>
-            <dt>项目 ID</dt><dd class="monospace">{{ projects.current.project_id }}</dd>
+            <dd>
+              <el-tag type="success">{{ projects.current.lifecycle_status }}</el-tag>
+            </dd>
+            <dt>当前版本</dt>
+            <dd>v{{ projects.current.row_version }}</dd>
+            <dt>项目 ID</dt>
+            <dd class="monospace">{{ projects.current.project_id }}</dd>
           </dl>
         </el-card>
 
         <el-card shadow="never">
           <template #header>
             <div class="section-heading">
-              <div><strong>项目负责人</strong><p>ACTIVE 成员与 Owner 职责共同派生项目范围</p></div>
+              <div>
+                <strong>项目负责人</strong>
+                <p>ACTIVE 成员与 Owner 职责共同派生项目范围</p>
+              </div>
               <el-tag type="info">{{ projects.current.owners.length }} 人</el-tag>
             </div>
           </template>

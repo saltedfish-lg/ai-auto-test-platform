@@ -71,6 +71,7 @@ def _database_evidence(database: str, project_code: str) -> dict[str, object]:
     denied_code = f"DENIED-{project_code}"
     service_account_code = f"SERVICE-{project_code}"
     environment_code = f"ENV-{project_code}"
+    terminal_code = f"ADMIN-{project_code}"
     with _connection(database) as connection, connection.cursor() as cursor:
         cursor.execute(
             "SELECT project_id, display_name, lifecycle_status, row_version "
@@ -170,8 +171,8 @@ def _database_evidence(database: str, project_code: str) -> dict[str, object]:
         )
         terminal_commands = int(cursor.fetchone()[0])
         cursor.execute(
-            "SELECT environment_id,display_name,lifecycle_status,row_version,"
-            "environment_terminal_access_revision_id FROM atp_environment "
+            "SELECT environment_id,display_name,lifecycle_status,row_version "
+            "FROM atp_environment "
             "WHERE project_id=%s AND environment_code=%s",
             (project_id, environment_code),
         )
@@ -183,7 +184,6 @@ def _database_evidence(database: str, project_code: str) -> dict[str, object]:
             environment_display_name,
             environment_status,
             environment_row_version,
-            environment_terminal_revision,
         ) = environment
         cursor.execute(
             "SELECT action,COUNT(*) FROM atp_environment_audit "
@@ -198,7 +198,6 @@ def _database_evidence(database: str, project_code: str) -> dict[str, object]:
             "SELECT COUNT(*) FROM atp_environment_audit "
             "WHERE project_id=%s AND environment_code=%s "
             "AND result_code IN ('ENVIRONMENT_CONCURRENCY_CONFLICT',"
-            "'ENVIRONMENT_TERMINAL_ACCESS_BINDING_DEFERRED',"
             "'ENVIRONMENT_CODE_CONFLICT') AND correlation_id<>'' "
             "AND OCTET_LENGTH(source_context_hash)=32",
             (project_id, environment_code),
@@ -217,6 +216,83 @@ def _database_evidence(database: str, project_code: str) -> dict[str, object]:
             (environment_code,),
         )
         cross_project_environment_count = int(cursor.fetchone()[0])
+        cursor.execute(
+            "SELECT business_terminal_id,current_published_revision_id,"
+            "lifecycle_status,row_version "
+            "FROM atp_business_terminal WHERE project_id=%s AND terminal_code=%s",
+            (project_id, terminal_code),
+        )
+        terminal = cursor.fetchone()
+        if terminal is None:
+            raise RuntimeError("browser-created BusinessTerminal was not persisted")
+        terminal_id, current_revision_id, terminal_status, terminal_row_version = terminal
+        cursor.execute(
+            "SELECT r.revision_no,r.lifecycle_status,r.login_strategy_id,s.lifecycle_status,"
+            "s.automation_asset_id,a.project_id "
+            "FROM atp_environment_terminal_access_revision r "
+            "LEFT JOIN atp_login_strategy s ON s.login_strategy_id=r.login_strategy_id "
+            "LEFT JOIN atp_automation_asset a ON a.automation_asset_id=s.automation_asset_id "
+            "WHERE r.environment_terminal_access_revision_id=%s "
+            "AND r.business_terminal_id=%s",
+            (current_revision_id, terminal_id),
+        )
+        revision = cursor.fetchone()
+        if revision is None:
+            raise RuntimeError("published Terminal Access Revision was not persisted")
+        (
+            revision_no,
+            revision_status,
+            login_strategy_id,
+            login_strategy_status,
+            automation_asset_id,
+            automation_asset_project_id,
+        ) = revision
+        cursor.execute(
+            "SELECT action,COUNT(*) FROM atp_business_terminal_audit "
+            "WHERE business_terminal_id=%s AND result_code='SUCCESS' GROUP BY action",
+            (terminal_id,),
+        )
+        terminal_audit_actions = {
+            str(action): int(count) for action, count in cursor.fetchall()
+        }
+        cursor.execute(
+            "SELECT event_type,COUNT(*) FROM atp_outbox_event "
+            "WHERE aggregate_id=%s GROUP BY event_type",
+            (terminal_id,),
+        )
+        terminal_event_types = {
+            str(event_type): int(count) for event_type, count in cursor.fetchall()
+        }
+        cursor.execute(
+            "SELECT event_type,COUNT(*),COUNT(CASE WHEN "
+            "JSON_UNQUOTE(JSON_EXTRACT(payload_json,'$.payload."
+            "environment_terminal_access_revision_id'))=%s THEN 1 END) "
+            "FROM atp_outbox_event WHERE aggregate_id=%s GROUP BY event_type",
+            (current_revision_id, current_revision_id),
+        )
+        revision_event_rows = cursor.fetchall()
+        revision_event_types = {
+            str(event_type): int(count) for event_type, count, _ in revision_event_rows
+        }
+        revision_event_identity_count = sum(
+            int(identity_count) for _, _, identity_count in revision_event_rows
+        )
+        cursor.execute(
+            "SELECT action,COUNT(*) FROM atp_login_strategy_audit "
+            "WHERE login_strategy_id=%s AND result_code='SUCCESS' GROUP BY action",
+            (login_strategy_id,),
+        )
+        login_strategy_audit_actions = {
+            str(action): int(count) for action, count in cursor.fetchall()
+        }
+        cursor.execute(
+            "SELECT event_type,COUNT(*) FROM atp_outbox_event "
+            "WHERE aggregate_id=%s GROUP BY event_type",
+            (login_strategy_id,),
+        )
+        login_strategy_event_types = {
+            str(event_type): int(count) for event_type, count in cursor.fetchall()
+        }
 
     required_audits = {
         "PROJECT_CREATED",
@@ -344,19 +420,56 @@ def _database_evidence(database: str, project_code: str) -> dict[str, object]:
         environment_display_name != "真实事务更新环境"
         or environment_status != "CONFIGURING"
         or int(environment_row_version) != 2
-        or environment_terminal_revision is not None
     ):
         raise RuntimeError("Environment persistence does not match the browser/API workflow")
     if not {"ENVIRONMENT_CREATED", "ENVIRONMENT_UPDATED"}.issubset(
         environment_audit_actions
     ):
         raise RuntimeError("Environment success audit evidence is incomplete")
-    if environment_failed_audits < 3:
+    if environment_failed_audits < 2:
         raise RuntimeError("Environment failure audit evidence is incomplete")
     if environment_event_types.get("environment.configuring") != 1:
         raise RuntimeError("Environment outbox evidence is incomplete")
     if cross_project_environment_count != 2:
         raise RuntimeError("Environment project-scoped uniqueness evidence is incomplete")
+    if (
+        current_revision_id is None
+        or terminal_status != "CONFIGURING"
+        or int(terminal_row_version) != 2
+        or int(revision_no) != 1
+        or revision_status != "PUBLISHED"
+        or login_strategy_id is None
+        or login_strategy_status != "ACTIVE"
+        or automation_asset_id is None
+        or automation_asset_project_id != project_id
+    ):
+        raise RuntimeError("BusinessTerminal published Revision ownership is inconsistent")
+    if not {
+        "BUSINESS_TERMINAL_CREATED",
+        "TERMINAL_ACCESS_REVISION_CREATED",
+        "TERMINAL_ACCESS_REVISION_VALIDATING",
+        "TERMINAL_ACCESS_REVISION_PUBLISHED",
+    }.issubset(terminal_audit_actions):
+        raise RuntimeError("BusinessTerminal audit evidence is incomplete")
+    if terminal_event_types.get("business_terminal.configuring") != 1:
+        raise RuntimeError("BusinessTerminal aggregate outbox evidence is incomplete")
+    if not {
+        "environment_terminal_access_revision.draft",
+        "environment_terminal_access_revision.validating",
+        "environment_terminal_access_revision.published",
+    }.issubset(revision_event_types) or revision_event_identity_count != 3:
+        raise RuntimeError("Terminal Access Revision outbox identity evidence is incomplete")
+    if not {
+        "LOGIN_STRATEGY_CREATED",
+        "LOGIN_STRATEGY_UPDATED",
+        "LOGIN_STRATEGY_DRAFT",
+        "LOGIN_STRATEGY_ACTIVE",
+    }.issubset(login_strategy_audit_actions):
+        raise RuntimeError("LoginStrategy audit evidence is incomplete")
+    if not {"login_strategy.draft", "login_strategy.active"}.issubset(
+        login_strategy_event_types
+    ):
+        raise RuntimeError("LoginStrategy lifecycle outbox evidence is incomplete")
     return {
         "project_status": lifecycle_status,
         "project_row_version": int(row_version),
@@ -378,6 +491,16 @@ def _database_evidence(database: str, project_code: str) -> dict[str, object]:
         "environment_failed_audit_count": environment_failed_audits,
         "environment_outbox_event_types": environment_event_types,
         "cross_project_environment_count": cross_project_environment_count,
+        "business_terminal_status": terminal_status,
+        "business_terminal_row_version": int(terminal_row_version),
+        "current_published_revision_id": str(current_revision_id),
+        "published_revision_no": int(revision_no),
+        "login_strategy_status": login_strategy_status,
+        "login_strategy_audit_actions": login_strategy_audit_actions,
+        "login_strategy_outbox_event_types": login_strategy_event_types,
+        "business_terminal_audit_actions": terminal_audit_actions,
+        "business_terminal_outbox_event_types": terminal_event_types,
+        "terminal_access_revision_outbox_event_types": revision_event_types,
     }
 
 
@@ -908,6 +1031,9 @@ def main() -> int:
         elif stage == "web_startup":
             error_code = _startup_error_code(runtime_directory / "web.log")
             error_diagnostic = _safe_startup_diagnostic(runtime_directory / "web.log")
+        elif stage == "database_evidence" and isinstance(exc, RuntimeError):
+            error_code = "DATABASE_EVIDENCE_INVARIANT_FAILED"
+            error_diagnostic = str(exc)
         exit_code = 1
     finally:
         _stop_process(web_process)

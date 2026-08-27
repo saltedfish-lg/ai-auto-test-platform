@@ -15,7 +15,6 @@ const environment: EnvironmentResource = {
   project_id: "P".repeat(26),
   environment_code: "TEST",
   display_name: "测试环境",
-  environment_terminal_access_revision_id: null,
   lifecycle_status: "CONFIGURING",
   enablement_state: "ENABLED",
   accessibility_state: "UNKNOWN",
@@ -56,7 +55,9 @@ describe("Environment management view", () => {
     expect(await screen.findByText("TEST")).toBeTruthy();
     expect(screen.getAllByText("CONFIGURING").length).toBeGreaterThan(0);
     expect(apiClient.list_environment).toHaveBeenCalledWith(
-      expect.objectContaining({ query: expect.objectContaining({ filter: `project_id=${environment.project_id}` }) }),
+      expect.objectContaining({
+        query: expect.objectContaining({ filter: `project_id=${environment.project_id}` }),
+      }),
     );
   });
 

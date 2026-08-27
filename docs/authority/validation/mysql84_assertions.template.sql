@@ -204,6 +204,14 @@ SET @model_audit_delete_trigger_count := (
   SELECT COUNT(*) FROM information_schema.triggers
   WHERE trigger_schema = DATABASE() AND trigger_name = 'trg_atp_model_config_audit_no_delete'
 );
+SET @login_strategy_audit_update_trigger_count := (
+  SELECT COUNT(*) FROM information_schema.triggers
+  WHERE trigger_schema = DATABASE() AND trigger_name = 'trg_atp_login_strategy_audit_no_update'
+);
+SET @login_strategy_audit_delete_trigger_count := (
+  SELECT COUNT(*) FROM information_schema.triggers
+  WHERE trigger_schema = DATABASE() AND trigger_name = 'trg_atp_login_strategy_audit_no_delete'
+);
 
 DROP PROCEDURE IF EXISTS assert_auth_audit_triggers;
 DELIMITER $$
@@ -214,6 +222,10 @@ BEGIN
   END IF;
   IF @model_audit_update_trigger_count <> 1 OR @model_audit_delete_trigger_count <> 1 THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Expected append-only model audit triggers';
+  END IF;
+  IF @login_strategy_audit_update_trigger_count <> 1
+     OR @login_strategy_audit_delete_trigger_count <> 1 THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Expected append-only LoginStrategy audit triggers';
   END IF;
 END$$
 DELIMITER ;

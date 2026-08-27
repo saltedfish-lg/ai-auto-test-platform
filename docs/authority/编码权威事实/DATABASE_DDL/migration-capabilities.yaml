@@ -16,3 +16,5 @@ capabilities:
     migration_name: V11__ai_exploration_foundation.sql
   ENVIRONMENT_MANAGEMENT_FOUNDATION_SCHEMA:
     migration_name: V12__environment_management_foundation.sql
+  BUSINESS_TERMINAL_FOUNDATION_SCHEMA:
+    migration_name: V13__business_terminal_foundation.sql

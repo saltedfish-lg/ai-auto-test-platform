@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import UTC
 import hashlib
 import json
+from datetime import UTC
 
 from pydantic import BaseModel
 from sqlalchemy import func, select
@@ -61,12 +61,19 @@ class EnvironmentService:
                 )
                 actor_user_id = actor.user.user_id
                 scope = self._authentication.require_project_permissions_in_transaction(
-                    db, actor, "create_environment", ("PROJECT_EDIT",), body.project_id,
+                    db,
+                    actor,
+                    "create_environment",
+                    ("PROJECT_EDIT",),
+                    body.project_id,
                     audit_context,
                 )
                 scope_decision = scope
                 record, replay = self._claim(
-                    db, actor.user.user_id, "create_environment", idempotency_key,
+                    db,
+                    actor.user.user_id,
+                    "create_environment",
+                    idempotency_key,
                     _canonical_payload(body),
                 )
                 if replay:
@@ -79,12 +86,13 @@ class EnvironmentService:
                 project_exists = True
                 if project.lifecycle_status != "ACTIVE":
                     raise _state_forbidden("Environment creation requires an ACTIVE project.")
-                if body.environment_terminal_access_revision_id is not None:
-                    raise _terminal_access_deferred()
                 if {"enablement_state", "accessibility_state"} & body.model_fields_set:
                     raise PlatformError(
                         title="Environment creation state is server managed",
-                        detail="enablement_state and accessibility_state cannot be supplied at creation.",
+                        detail=(
+                            "enablement_state and accessibility_state cannot be supplied "
+                            "at creation."
+                        ),
                         status=400,
                         code="ENVIRONMENT_CREATE_STATE_MANAGED",
                     )
@@ -101,7 +109,6 @@ class EnvironmentService:
                     environment_id=new_ulid(),
                     project_id=body.project_id,
                     environment_code=body.environment_code,
-                    environment_terminal_access_revision_id=None,
                     lifecycle_status="CREATED",
                     enablement_state="ENABLED",
                     accessibility_state="UNKNOWN",
@@ -120,12 +127,23 @@ class EnvironmentService:
                 environment.updated_at = utc_now()
                 after = _projection(environment)
                 self._append_audit(
-                    db, environment, audit_context, actor.user.user_id, scope,
-                    action="ENVIRONMENT_CREATED", operation_id="create_environment",
-                    previous_status="CREATED", before=None, after=after, reason=body.reason,
+                    db,
+                    environment,
+                    audit_context,
+                    actor.user.user_id,
+                    scope,
+                    action="ENVIRONMENT_CREATED",
+                    operation_id="create_environment",
+                    previous_status="CREATED",
+                    before=None,
+                    after=after,
+                    reason=body.reason,
                 )
                 self._append_event(
-                    db, environment, "environment.configuring", actor.user.user_id,
+                    db,
+                    environment,
+                    "environment.configuring",
+                    actor.user.user_id,
                     context=audit_context,
                     causation_id=idempotency_key,
                     previous_status="CREATED",
@@ -156,13 +174,18 @@ class EnvironmentService:
                 )
             raise failure from error
         except PlatformError as error:
-            if actor_user_id is not None and scope_decision is not None and project_exists and error.code in {
-                "ENVIRONMENT_CODE_CONFLICT",
-                "ENVIRONMENT_OPERATION_FORBIDDEN_FOR_STATE",
-                "ENVIRONMENT_TERMINAL_ACCESS_BINDING_DEFERRED",
-                "ENVIRONMENT_CREATE_STATE_MANAGED",
-                "ENVIRONMENT_NOT_FOUND",
-            }:
+            if (
+                actor_user_id is not None
+                and scope_decision is not None
+                and project_exists
+                and error.code
+                in {
+                    "ENVIRONMENT_CODE_CONFLICT",
+                    "ENVIRONMENT_OPERATION_FORBIDDEN_FOR_STATE",
+                    "ENVIRONMENT_CREATE_STATE_MANAGED",
+                    "ENVIRONMENT_NOT_FOUND",
+                }
+            ):
                 self._append_failed_audit(
                     audit_context,
                     action="ENVIRONMENT_CREATED",
@@ -225,7 +248,8 @@ class EnvironmentService:
             items = list(
                 db.scalars(
                     query.order_by(ordering, Environment.environment_id)
-                    .offset((page - 1) * page_size).limit(page_size)
+                    .offset((page - 1) * page_size)
+                    .limit(page_size)
                 )
             )
             return EnvironmentListData(
@@ -244,7 +268,11 @@ class EnvironmentService:
             if environment is None or environment.project_id is None:
                 raise _not_found("The environment does not exist.")
             self._authentication.require_project_permissions_in_transaction(
-                db, actor, "get_environment", ("PROJECT_VIEW",), environment.project_id,
+                db,
+                actor,
+                "get_environment",
+                ("PROJECT_VIEW",),
+                environment.project_id,
                 audit_context,
             )
             return _resource(environment)
@@ -271,7 +299,6 @@ class EnvironmentService:
             if failure_evidence and error.code in {
                 "ENVIRONMENT_CONCURRENCY_CONFLICT",
                 "ENVIRONMENT_OPERATION_FORBIDDEN_FOR_STATE",
-                "ENVIRONMENT_TERMINAL_ACCESS_BINDING_DEFERRED",
                 "ENVIRONMENT_UPDATE_NO_EFFECT",
                 "ENVIRONMENT_STATE_NULL_INVALID",
             }:
@@ -299,27 +326,34 @@ class EnvironmentService:
                 db, token, "update_environment", audit_context
             )
             project_id = db.scalar(
-                select(Environment.project_id).where(
-                    Environment.environment_id == environment_id
-                )
+                select(Environment.project_id).where(Environment.environment_id == environment_id)
             )
             if project_id is None:
                 raise _not_found("The environment does not exist.")
             scope = self._authentication.require_project_permissions_in_transaction(
-                db, actor, "update_environment", ("PROJECT_EDIT",), project_id,
+                db,
+                actor,
+                "update_environment",
+                ("PROJECT_EDIT",),
+                project_id,
                 audit_context,
             )
             record, replay = self._claim(
-                db, actor.user.user_id, "update_environment", idempotency_key,
+                db,
+                actor.user.user_id,
+                "update_environment",
+                idempotency_key,
                 _canonical_payload(body, environment_id),
             )
             if replay:
                 return _stored_environment(record.response_json)
             environment = db.scalar(
-                select(Environment).where(
+                select(Environment)
+                .where(
                     Environment.environment_id == environment_id,
                     Environment.project_id == project_id,
-                ).with_for_update()
+                )
+                .with_for_update()
             )
             if environment is None or environment.environment_code is None:
                 raise _not_found("The environment does not exist.")
@@ -341,8 +375,9 @@ class EnvironmentService:
                     code="ENVIRONMENT_IDENTITY_IMMUTABLE",
                 )
             mutable = {
-                "display_name", "environment_terminal_access_revision_id",
-                "enablement_state", "accessibility_state",
+                "display_name",
+                "enablement_state",
+                "accessibility_state",
             } & body.model_fields_set
             if not mutable:
                 raise PlatformError(
@@ -359,8 +394,6 @@ class EnvironmentService:
                         status=400,
                         code="ENVIRONMENT_STATE_NULL_INVALID",
                     )
-            if "environment_terminal_access_revision_id" in mutable:
-                raise _terminal_access_deferred()
             if environment.row_version != body.expected_version:
                 raise PlatformError(
                     title="Environment concurrency conflict",
@@ -394,13 +427,24 @@ class EnvironmentService:
             environment.updated_by = actor.user.user_id
             after = _projection(environment)
             self._append_audit(
-                db, environment, audit_context, actor.user.user_id, scope,
-                action=audit_action, operation_id="update_environment",
-                previous_status=previous_status, before=before, after=after, reason=body.reason,
+                db,
+                environment,
+                audit_context,
+                actor.user.user_id,
+                scope,
+                action=audit_action,
+                operation_id="update_environment",
+                previous_status=previous_status,
+                before=before,
+                after=after,
+                reason=body.reason,
             )
             if transition_event is not None:
                 self._append_event(
-                    db, environment, transition_event, actor.user.user_id,
+                    db,
+                    environment,
+                    transition_event,
+                    actor.user.user_id,
                     context=audit_context,
                     causation_id=idempotency_key,
                     previous_status=previous_status,
@@ -414,70 +458,112 @@ class EnvironmentService:
             return resource
 
     def _claim(
-        self, db: Session, principal_id: str, operation_id: str,
-        idempotency_key: str, payload: bytes,
+        self,
+        db: Session,
+        principal_id: str,
+        operation_id: str,
+        idempotency_key: str,
+        payload: bytes,
     ) -> tuple[IdempotencyRecord, bool]:
-        return self._idempotency.claim(
-            db, principal_id, operation_id, idempotency_key, payload
-        )
+        return self._idempotency.claim(db, principal_id, operation_id, idempotency_key, payload)
 
     @staticmethod
     def _append_event(
-        db: Session, environment: Environment, event_type: str,
-        actor_user_id: str, *, context: AuditContext, causation_id: str,
-        previous_status: str | None, expected_version: int,
+        db: Session,
+        environment: Environment,
+        event_type: str,
+        actor_user_id: str,
+        *,
+        context: AuditContext,
+        causation_id: str,
+        previous_status: str | None,
+        expected_version: int,
         change_summary: dict[str, object],
     ) -> None:
-        sequence = int(db.scalar(select(func.max(OutboxEvent.sequence)).where(
-            OutboxEvent.aggregate_id == environment.environment_id
-        )) or 0) + 1
+        sequence = (
+            int(
+                db.scalar(
+                    select(func.max(OutboxEvent.sequence)).where(
+                        OutboxEvent.aggregate_id == environment.environment_id
+                    )
+                )
+                or 0
+            )
+            + 1
+        )
         event_id = new_ulid()
         occurred_at = utc_now()
-        db.add(OutboxEvent(
-            event_id=event_id, aggregate_id=environment.environment_id, sequence=sequence,
-            event_type=event_type,
-            payload_json={
-                "event_id": event_id,
-                "event_type": event_type,
-                "event_version": "1.0.0",
-                "occurred_at": occurred_at.replace(tzinfo=UTC).isoformat(),
-                "aggregate_id": environment.environment_id,
-                "sequence": sequence,
-                "correlation_id": context.correlation_id,
-                "causation_id": causation_id,
-                "project_id": environment.project_id,
-                "payload": {
-                    "environment_id": environment.environment_id,
+        db.add(
+            OutboxEvent(
+                event_id=event_id,
+                aggregate_id=environment.environment_id,
+                sequence=sequence,
+                event_type=event_type,
+                payload_json={
+                    "event_id": event_id,
+                    "event_type": event_type,
+                    "event_version": "1.0.0",
+                    "occurred_at": occurred_at.replace(tzinfo=UTC).isoformat(),
+                    "aggregate_id": environment.environment_id,
+                    "sequence": sequence,
+                    "correlation_id": context.correlation_id,
+                    "causation_id": causation_id,
                     "project_id": environment.project_id,
-                    "from_state": previous_status,
-                    "to_state": environment.lifecycle_status,
-                    "expected_version": expected_version,
-                    "new_version": environment.row_version,
-                    "changed_by": actor_user_id,
-                    "change_summary": change_summary,
+                    "payload": {
+                        "environment_id": environment.environment_id,
+                        "project_id": environment.project_id,
+                        "from_state": previous_status,
+                        "to_state": environment.lifecycle_status,
+                        "expected_version": expected_version,
+                        "new_version": environment.row_version,
+                        "changed_by": actor_user_id,
+                        "change_summary": change_summary,
+                    },
                 },
-            },
-            occurred_at=occurred_at, published_at=None, attempt_count=0,
-        ))
+                occurred_at=occurred_at,
+                published_at=None,
+                attempt_count=0,
+            )
+        )
 
     @staticmethod
     def _append_audit(
-        db: Session, environment: Environment, context: AuditContext,
-        actor_user_id: str, scope_decision: str, *, action: str,
-        operation_id: str, previous_status: str | None,
-        before: dict[str, object] | None, after: dict[str, object], reason: str | None,
+        db: Session,
+        environment: Environment,
+        context: AuditContext,
+        actor_user_id: str,
+        scope_decision: str,
+        *,
+        action: str,
+        operation_id: str,
+        previous_status: str | None,
+        before: dict[str, object] | None,
+        after: dict[str, object],
+        reason: str | None,
     ) -> None:
         assert environment.project_id is not None and environment.environment_code is not None
-        db.add(EnvironmentAudit(
-            audit_id=new_ulid(), environment_id=environment.environment_id,
-            project_id=environment.project_id, environment_code=environment.environment_code,
-            action=action, operation_id=operation_id, actor_user_id=actor_user_id,
-            required_permission="PROJECT_EDIT", scope_decision=scope_decision,
-            previous_status=previous_status, new_status=environment.lifecycle_status,
-            result_code="SUCCESS", reason=reason, before_json=before, after_json=after,
-            correlation_id=context.correlation_id, occurred_at=utc_now(),
-            source_context_hash=hashlib.sha256(context.source_context.encode("utf-8")).digest(),
-        ))
+        db.add(
+            EnvironmentAudit(
+                audit_id=new_ulid(),
+                environment_id=environment.environment_id,
+                project_id=environment.project_id,
+                environment_code=environment.environment_code,
+                action=action,
+                operation_id=operation_id,
+                actor_user_id=actor_user_id,
+                required_permission="PROJECT_EDIT",
+                scope_decision=scope_decision,
+                previous_status=previous_status,
+                new_status=environment.lifecycle_status,
+                result_code="SUCCESS",
+                reason=reason,
+                before_json=before,
+                after_json=after,
+                correlation_id=context.correlation_id,
+                occurred_at=utc_now(),
+                source_context_hash=hashlib.sha256(context.source_context.encode("utf-8")).digest(),
+            )
+        )
 
     def _append_failed_audit(
         self,
@@ -497,18 +583,30 @@ class EnvironmentService:
     ) -> None:
         """Persist command failure evidence after the business transaction rolls back."""
         with self._factory.begin() as db:
-            db.add(EnvironmentAudit(
-                audit_id=new_ulid(), environment_id=environment_id,
-                project_id=project_id, environment_code=environment_code,
-                action=action, operation_id=operation_id, actor_user_id=actor_user_id,
-                required_permission=required_permission, scope_decision=scope_decision,
-                previous_status=previous_status, new_status=None,
-                result_code=result_code, reason=reason, before_json=None, after_json=None,
-                correlation_id=context.correlation_id, occurred_at=utc_now(),
-                source_context_hash=hashlib.sha256(
-                    context.source_context.encode("utf-8")
-                ).digest(),
-            ))
+            db.add(
+                EnvironmentAudit(
+                    audit_id=new_ulid(),
+                    environment_id=environment_id,
+                    project_id=project_id,
+                    environment_code=environment_code,
+                    action=action,
+                    operation_id=operation_id,
+                    actor_user_id=actor_user_id,
+                    required_permission=required_permission,
+                    scope_decision=scope_decision,
+                    previous_status=previous_status,
+                    new_status=None,
+                    result_code=result_code,
+                    reason=reason,
+                    before_json=None,
+                    after_json=None,
+                    correlation_id=context.correlation_id,
+                    occurred_at=utc_now(),
+                    source_context_hash=hashlib.sha256(
+                        context.source_context.encode("utf-8")
+                    ).digest(),
+                )
+            )
 
 
 def _resource(environment: Environment) -> EnvironmentResource:
@@ -522,7 +620,6 @@ def _resource(environment: Environment) -> EnvironmentResource:
         updated_at=environment.updated_at,
         project_id=environment.project_id,
         environment_code=environment.environment_code,
-        environment_terminal_access_revision_id=environment.environment_terminal_access_revision_id,
         lifecycle_status=environment.lifecycle_status,
         enablement_state=environment.enablement_state,
         accessibility_state=environment.accessibility_state,
@@ -552,9 +649,12 @@ def _parse_filter(value: str | None) -> dict[str, str]:
     result: dict[str, str] = {}
     for part in value.split(";"):
         key, separator, item = part.partition("=")
-        if not separator or key not in {
-            "project_id", "lifecycle_status", "enablement_state", "accessibility_state"
-        } or not item:
+        if (
+            not separator
+            or key
+            not in {"project_id", "lifecycle_status", "enablement_state", "accessibility_state"}
+            or not item
+        ):
             raise PlatformError(
                 title="Environment filter is invalid",
                 detail="Use semicolon-separated key=value environment filters.",
@@ -576,7 +676,10 @@ def _apply_state_changes(
             environment.lifecycle_status = "UNREACHABLE"
             transition_event = "environment.unreachable"
             audit_action = "ENVIRONMENT_UNREACHABLE"
-        elif environment.lifecycle_status == "UNREACHABLE" and body.accessibility_state == "REACHABLE":
+        elif (
+            environment.lifecycle_status == "UNREACHABLE"
+            and body.accessibility_state == "REACHABLE"
+        ):
             environment.lifecycle_status = "RECOVERING"
             transition_event = "environment.recovering"
             audit_action = "ENVIRONMENT_RECOVERING"
@@ -600,8 +703,9 @@ def _apply_state_changes(
 
 
 def _not_found(detail: str) -> PlatformError:
-    return PlatformError(title="Environment not found", detail=detail, status=404,
-                         code="ENVIRONMENT_NOT_FOUND")
+    return PlatformError(
+        title="Environment not found", detail=detail, status=404, code="ENVIRONMENT_NOT_FOUND"
+    )
 
 
 def _code_conflict() -> PlatformError:
@@ -633,13 +737,4 @@ def _state_forbidden(detail: str) -> PlatformError:
         detail=detail,
         status=409,
         code="ENVIRONMENT_OPERATION_FORBIDDEN_FOR_STATE",
-    )
-
-
-def _terminal_access_deferred() -> PlatformError:
-    return PlatformError(
-        title="Terminal Access binding is not available",
-        detail="Terminal Access Revision binding is owned by the later Terminal Access module.",
-        status=409,
-        code="ENVIRONMENT_TERMINAL_ACCESS_BINDING_DEFERRED",
     )

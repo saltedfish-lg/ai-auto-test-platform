@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-test.setTimeout(120_000);
+test.setTimeout(180_000);
 
 function requiredEnvironment(name: string): string {
   const value = process.env[name];
@@ -62,8 +62,7 @@ test("project management browser closure", async ({ page, request }) => {
   await createDialog.getByLabel("创建原因").fill("验证 LC-007 原子项目初始化");
   const createdResponse = page.waitForResponse(
     (response) =>
-      response.url().endsWith("/api/v1/project") &&
-      response.request().method() === "POST",
+      response.url().endsWith("/api/v1/project") && response.request().method() === "POST",
   );
   await createDialog.getByRole("button", { name: "创建并启用" }).click();
   const created = await createdResponse;
@@ -85,8 +84,8 @@ test("project management browser closure", async ({ page, request }) => {
   await environmentDialog.getByLabel("环境编码").fill(environmentCode);
   await environmentDialog.getByLabel("环境名称").fill("浏览器验收环境");
   const environmentResponse = page.waitForResponse(
-    (response) => response.url().endsWith("/api/v1/environment") &&
-      response.request().method() === "POST",
+    (response) =>
+      response.url().endsWith("/api/v1/environment") && response.request().method() === "POST",
   );
   await environmentDialog.getByRole("button", { name: "确认创建" }).click();
   const createdEnvironmentResponse = await environmentResponse;
@@ -131,14 +130,6 @@ test("project management browser closure", async ({ page, request }) => {
   });
   expect(staleEnvironmentUpdate.status()).toBe(409);
   expect((await staleEnvironmentUpdate.json()).code).toBe("ENVIRONMENT_CONCURRENCY_CONFLICT");
-  const deferredTerminalBinding = await request.patch(`/api/v1/environment/${environmentId}`, {
-    headers: { ...authorizedHeaders, "Idempotency-Key": `environment-terminal-${projectCode}` },
-    data: { expected_version: 2, environment_terminal_access_revision_id: null },
-  });
-  expect(deferredTerminalBinding.status()).toBe(409);
-  expect((await deferredTerminalBinding.json()).code).toBe(
-    "ENVIRONMENT_TERMINAL_ACCESS_BINDING_DEFERRED",
-  );
   const duplicateEnvironment = await request.post("/api/v1/environment", {
     headers: { ...authorizedHeaders, "Idempotency-Key": `environment-duplicate-${projectCode}` },
     data: { project_id: projectId, environment_code: environmentCode },
@@ -147,7 +138,10 @@ test("project management browser closure", async ({ page, request }) => {
   expect((await duplicateEnvironment.json()).code).toBe("ENVIRONMENT_CODE_CONFLICT");
 
   const crossProject = await request.post("/api/v1/project", {
-    headers: { ...authorizedHeaders, "Idempotency-Key": `environment-cross-project-${projectCode}` },
+    headers: {
+      ...authorizedHeaders,
+      "Idempotency-Key": `environment-cross-project-${projectCode}`,
+    },
     data: { project_code: `ENV-CROSS-${projectCode}` },
   });
   expect(crossProject.status()).toBe(201);
@@ -164,6 +158,127 @@ test("project management browser closure", async ({ page, request }) => {
   expect(missingProjectEnvironment.status()).toBe(404);
   expect((await missingProjectEnvironment.json()).code).toBe("ENVIRONMENT_NOT_FOUND");
   await expect(page.getByText(environmentCode, { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: /返回项目详情/ }).click();
+
+  const automationAsset = await request.post("/api/v1/automation-asset", {
+    headers: { ...authorizedHeaders, "Idempotency-Key": `automation-asset-${projectCode}` },
+    data: { project_id: projectId, display_name: "浏览器验收自动化资产" },
+  });
+  expect(automationAsset.status()).toBe(201);
+  const automationAssetId = (await automationAsset.json()).data.automation_asset_id as string;
+  const loginStrategy = await request.post("/api/v1/login-strategy", {
+    headers: { ...authorizedHeaders, "Idempotency-Key": `login-strategy-${projectCode}` },
+    data: {
+      project_id: projectId,
+      automation_asset_id: automationAssetId,
+      display_name: "浏览器登录策略",
+      local_storage_presets: [
+        { key: "locale", value: "zh-CN", scope: "ORIGIN", set_before_login: true },
+      ],
+      refresh_after_local_storage: true,
+      captcha_policy: "NONE",
+      reason: "通过 AutomationAsset Aggregate 创建登录策略",
+    },
+  });
+  expect(loginStrategy.status()).toBe(201);
+  const createdStrategyData = (await loginStrategy.json()).data;
+  expect(createdStrategyData.lifecycle_status).toBe("CREATED");
+  const draftedStrategy = await request.patch(
+    `/api/v1/login-strategy/${createdStrategyData.login_strategy_id}`,
+    {
+      headers: { ...authorizedHeaders, "Idempotency-Key": `login-draft-${projectCode}` },
+      data: {
+        expected_version: createdStrategyData.row_version,
+        display_name: "浏览器登录策略",
+        reason: "通过 AutomationAsset Aggregate 进入 DRAFT",
+      },
+    },
+  );
+  expect(draftedStrategy.status()).toBe(200);
+  const strategyData = (await draftedStrategy.json()).data;
+  expect(strategyData.lifecycle_status).toBe("DRAFT");
+  const strategyActivated = await request.post(
+    `/api/v1/login-strategy/${strategyData.login_strategy_id}/activate`,
+    {
+      headers: { ...authorizedHeaders, "Idempotency-Key": `login-activate-${projectCode}` },
+      data: { expected_version: strategyData.row_version, reason: "启用聚合内登录策略" },
+    },
+  );
+  expect(strategyActivated.status()).toBe(200);
+
+  await page.getByRole("button", { name: "业务终端" }).click();
+  await expect(page).toHaveURL(new RegExp(`/projects/${projectId}/business-terminals$`));
+  await page.getByRole("button", { name: "创建业务终端" }).click();
+  const terminalDialog = page.getByRole("dialog", { name: "创建业务终端" });
+  await terminalDialog
+    .locator(".el-form-item", { hasText: "Environment" })
+    .locator(".el-select__wrapper")
+    .click();
+  await page.getByRole("option", { name: "真实事务更新环境" }).click();
+  const terminalCode = `ADMIN-${projectCode}`;
+  await terminalDialog.getByLabel("终端编码").fill(terminalCode);
+  await terminalDialog.getByLabel("终端名称").fill("浏览器验收管理端");
+  await terminalDialog.getByLabel("原因").fill("验证 Terminal 与初始 DRAFT 分开创建");
+  const terminalResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/api/v1/business-terminal") &&
+      response.request().method() === "POST",
+  );
+  await terminalDialog.getByRole("button", { name: "确认创建" }).click();
+  const createdTerminalResponse = await terminalResponse;
+  expect(createdTerminalResponse.status()).toBe(201);
+  const createdTerminal = (await createdTerminalResponse.json()).data;
+  const terminalId = createdTerminal.business_terminal_id as string;
+  expect(createdTerminal.current_published_revision_id).toBeNull();
+  await expect(page.getByText(terminalCode, { exact: true })).toBeVisible();
+
+  const terminalRow = page.getByRole("row").filter({
+    has: page.getByText(terminalCode, { exact: true }),
+  });
+  await terminalRow.getByRole("button", { name: "详情" }).click();
+
+  await page.getByRole("button", { name: "新建访问修订" }).click();
+  const revisionDialog = page.getByRole("dialog", { name: "新建 DRAFT 访问修订" });
+  await revisionDialog.getByLabel("入口 URL").fill("https://example.test/app");
+  await revisionDialog.getByLabel("登录 URL").fill("https://example.test/login");
+  await revisionDialog
+    .locator(".el-form-item", { hasText: "Login Strategy" })
+    .locator(".el-select__wrapper")
+    .click();
+  await page.getByRole("option", { name: "浏览器登录策略" }).click();
+  await revisionDialog.getByLabel("名称").fill("浏览器访问修订 1");
+  await revisionDialog.getByLabel("原因").fill("验证独立 DRAFT 创建");
+  const revisionCreated = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/api/v1/environment-terminal-access-revision") &&
+      response.request().method() === "POST",
+  );
+  await revisionDialog.getByRole("button", { name: "创建 DRAFT" }).click();
+  const createdRevisionResponse = await revisionCreated;
+  expect(createdRevisionResponse.status()).toBe(201);
+  const createdRevision = (await createdRevisionResponse.json()).data;
+  const revisionId = createdRevision.environment_terminal_access_revision_id as string;
+  expect(createdRevision.lifecycle_status).toBe("DRAFT");
+
+  const revisionRow = page.getByRole("row").filter({
+    has: page.getByText("https://example.test/app", { exact: false }),
+  });
+  const revisionValidated = page.waitForResponse((response) =>
+    response.url().endsWith(`/${revisionId}/validate`),
+  );
+  await revisionRow.getByRole("button", { name: "校验" }).click();
+  expect((await revisionValidated).status()).toBe(200);
+  const revisionPublished = page.waitForResponse((response) =>
+    response.url().endsWith(`/${revisionId}/publish`),
+  );
+  await revisionRow.getByRole("button", { name: "发布" }).click();
+  expect((await revisionPublished).status()).toBe(200);
+  const terminalRead = await request.get(`/api/v1/business-terminal/${terminalId}`, {
+    headers: authorizedHeaders,
+  });
+  expect(terminalRead.status()).toBe(200);
+  expect((await terminalRead.json()).data.current_published_revision_id).toBe(revisionId);
+  await page.getByRole("dialog", { name: "业务终端详情" }).locator(".el-dialog__headerbtn").click();
   await page.getByRole("button", { name: /返回项目详情/ }).click();
 
   await page.getByRole("button", { name: /返回项目列表/ }).click();

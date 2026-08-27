@@ -894,7 +894,7 @@ tables:
     default: null
   - name: project_id
     type: VARCHAR(26)
-    nullable: true
+    nullable: false
     primary_key: false
     default: null
   - name: lifecycle_status
@@ -939,7 +939,11 @@ tables:
     default: null
   primary_key:
   - automation_asset_id
-  unique_keys: []
+  unique_keys:
+  - name: uq_atp_automation_asset_scope
+    columns:
+    - automation_asset_id
+    - project_id
   check_constraints:
   - name: ck_atp_automation_asset_lifecycle_status
     expression: (lifecycle_status IN ('CREATED', 'DRAFT', 'ACTIVE', 'DISABLED', 'RECOVERED', 'ARCHIVED', 'LOGICALLY_DELETED'))
@@ -1130,15 +1134,25 @@ tables:
     default: null
   - name: project_id
     type: VARCHAR(26)
-    nullable: true
+    nullable: false
     primary_key: false
     default: null
   - name: terminal_code
     type: VARCHAR(191)
-    nullable: true
+    nullable: false
     primary_key: false
     default: null
   - name: environment_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: terminal_type
+    type: VARCHAR(16)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: current_published_revision_id
     type: VARCHAR(26)
     nullable: true
     primary_key: false
@@ -1188,25 +1202,55 @@ tables:
   unique_keys:
   - name: uq_atp_business_terminal_business
     columns:
+    - project_id
     - terminal_code
+  - name: uq_atp_business_terminal_scope
+    columns:
+    - business_terminal_id
+    - project_id
+    - environment_id
   check_constraints:
   - name: ck_atp_business_terminal_lifecycle_status
     expression: (lifecycle_status IN ('CREATED', 'CONFIGURING', 'VALIDATING', 'ACTIVE', 'UNREACHABLE', 'DISABLED', 'RECOVERING',
       'ARCHIVED'))
+  - name: ck_atp_business_terminal_type
+    expression: (terminal_type IN ('MANAGEMENT', 'CLIENT', 'PDA'))
   foreign_keys:
-  - name: fk_atp_business_terminal_environment_id
-    column: environment_id
+  - name: fk_atp_business_terminal_environment_scope
+    columns:
+    - environment_id
+    - project_id
     referenced_table: atp_environment
-    referenced_column: environment_id
-    on_delete: CASCADE
+    referenced_columns:
+    - environment_id
+    - project_id
+    on_delete: RESTRICT
     on_update: RESTRICT
-  - name: fk_atp_business_terminal_project_id
+  - name: fk_atp_business_terminal_project_v13
     column: project_id
     referenced_table: atp_project
     referenced_column: project_id
     on_delete: RESTRICT
     on_update: RESTRICT
-  indexes: []
+  - name: fk_atp_business_terminal_current_revision
+    columns:
+    - current_published_revision_id
+    - business_terminal_id
+    referenced_table: atp_environment_terminal_access_revision
+    referenced_columns:
+    - environment_terminal_access_revision_id
+    - business_terminal_id
+    on_delete: RESTRICT
+    on_update: RESTRICT
+  indexes:
+  - name: idx_atp_business_terminal_environment_status
+    columns:
+    - environment_id
+    - lifecycle_status
+  - name: idx_atp_business_terminal_project_type
+    columns:
+    - project_id
+    - terminal_type
   delete_behavior: DECLARED_PER_FOREIGN_KEY
   data_owner: DOMAIN_OR_TECHNICAL_OWNER
   idempotency_and_audit: ROW_VERSION_OR_TECHNICAL_TABLE_RULE
@@ -1217,7 +1261,130 @@ tables:
   relationship_fields:
   - environment_id
   - project_id
+  - current_published_revision_id
   extension_json_rule: NON_CONTRACT_EXTENSIONS_ONLY
+- table_name: atp_business_terminal_audit
+  columns:
+  - name: audit_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: true
+    default: null
+  - name: business_terminal_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: environment_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: project_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: action
+    type: VARCHAR(64)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: operation_id
+    type: VARCHAR(128)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: actor_user_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: required_permission
+    type: VARCHAR(128)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: previous_status
+    type: VARCHAR(11)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: new_status
+    type: VARCHAR(11)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: result_code
+    type: VARCHAR(64)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: reason
+    type: VARCHAR(1000)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: before_json
+    type: JSON
+    nullable: true
+    primary_key: false
+    default: null
+  - name: after_json
+    type: JSON
+    nullable: true
+    primary_key: false
+    default: null
+  - name: correlation_id
+    type: VARCHAR(128)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: occurred_at
+    type: DATETIME(6)
+    nullable: false
+    primary_key: false
+    default: CURRENT_TIMESTAMP(6)
+  - name: source_context_hash
+    type: BINARY(32)
+    nullable: false
+    primary_key: false
+    default: null
+  primary_key:
+  - audit_id
+  unique_keys: []
+  check_constraints: []
+  foreign_keys:
+  - name: fk_atp_business_terminal_audit_terminal
+    column: business_terminal_id
+    referenced_table: atp_business_terminal
+    referenced_column: business_terminal_id
+    on_delete: RESTRICT
+    on_update: RESTRICT
+  - name: fk_atp_business_terminal_audit_actor
+    column: actor_user_id
+    referenced_table: atp_user
+    referenced_column: user_id
+    on_delete: RESTRICT
+    on_update: RESTRICT
+  indexes:
+  - name: idx_atp_business_terminal_audit_resource
+    columns:
+    - project_id
+    - business_terminal_id
+    - occurred_at
+  delete_behavior: APPEND_ONLY
+  data_owner: DOM-005
+  idempotency_and_audit: APPEND_ONLY_AUDIT
+  object_id: OBJ-011
+  business_unique_key: audit_id
+  state_fields: []
+  relationship_fields:
+  - business_terminal_id
+  - environment_id
+  - project_id
+  - actor_user_id
+  extension_json_rule: NOT_APPLICABLE
 - table_name: atp_case_attempt
   columns:
   - name: case_attempt_id
@@ -2619,11 +2786,6 @@ tables:
     nullable: true
     primary_key: false
     default: null
-  - name: environment_terminal_access_revision_id
-    type: VARCHAR(26)
-    nullable: true
-    primary_key: false
-    default: null
   - name: lifecycle_status
     type: VARCHAR(11)
     nullable: false
@@ -2681,6 +2843,10 @@ tables:
     columns:
     - project_id
     - environment_code
+  - name: uq_atp_environment_scope
+    columns:
+    - environment_id
+    - project_id
   check_constraints:
   - name: ck_atp_environment_lifecycle_status
     expression: (lifecycle_status IN ('CREATED', 'CONFIGURING', 'VALIDATING', 'ACTIVE', 'UNREACHABLE', 'DISABLED', 'RECOVERING',
@@ -2694,12 +2860,6 @@ tables:
     column: project_id
     referenced_table: atp_project
     referenced_column: project_id
-    on_delete: RESTRICT
-    on_update: RESTRICT
-  - name: fk_atp_environment_environment_terminal_access_revision_id
-    column: environment_terminal_access_revision_id
-    referenced_table: atp_environment_terminal_access_revision
-    referenced_column: environment_terminal_access_revision_id
     on_delete: RESTRICT
     on_update: RESTRICT
   indexes:
@@ -2722,7 +2882,6 @@ tables:
   - accessibility_state
   relationship_fields:
   - project_id
-  - environment_terminal_access_revision_id
   extension_json_rule: NON_CONTRACT_EXTENSIONS_ONLY
 - table_name: atp_environment_audit
   columns:
@@ -2864,17 +3023,47 @@ tables:
     default: null
   - name: project_id
     type: VARCHAR(26)
-    nullable: true
+    nullable: false
     primary_key: false
     default: null
   - name: environment_id
     type: VARCHAR(26)
-    nullable: true
+    nullable: false
     primary_key: false
     default: null
   - name: business_terminal_id
     type: VARCHAR(26)
     nullable: false
+    primary_key: false
+    default: null
+  - name: revision_no
+    type: BIGINT UNSIGNED
+    nullable: false
+    primary_key: false
+    default: null
+  - name: entry_url
+    type: VARCHAR(2048)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: login_url
+    type: VARCHAR(2048)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: login_strategy_id
+    type: VARCHAR(26)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: login_prerequisites
+    type: JSON
+    nullable: true
+    primary_key: false
+    default: null
+  - name: network_requirements
+    type: JSON
+    nullable: true
     primary_key: false
     default: null
   - name: lifecycle_status
@@ -2919,16 +3108,36 @@ tables:
     default: null
   primary_key:
   - environment_terminal_access_revision_id
-  unique_keys: []
+  unique_keys:
+  - name: uq_atp_terminal_access_revision_business
+    columns:
+    - business_terminal_id
+    - revision_no
+  - name: uq_atp_terminal_access_revision_owner
+    columns:
+    - environment_terminal_access_revision_id
+    - business_terminal_id
   check_constraints:
   - name: ck_atp_environment_terminal_access_revision_lifecycle_status
     expression: (lifecycle_status IN ('DRAFT', 'VALIDATING', 'PUBLISHED', 'SUPERSEDED', 'RETIRED', 'ARCHIVED'))
   foreign_keys:
-  - name: fk_atp_environment_terminal_access_revision_environment_id
+  - name: fk_atp_terminal_access_revision_terminal_scope
+    columns:
+    - business_terminal_id
+    - project_id
+    - environment_id
+    referenced_table: atp_business_terminal
+    referenced_columns:
+    - business_terminal_id
+    - project_id
+    - environment_id
+    on_delete: RESTRICT
+    on_update: RESTRICT
+  - name: fk_atp_terminal_access_revision_environment_v13
     column: environment_id
     referenced_table: atp_environment
     referenced_column: environment_id
-    on_delete: CASCADE
+    on_delete: RESTRICT
     on_update: RESTRICT
   - name: fk_atp_environment_terminal_access_revision_business_termina
     column: business_terminal_id
@@ -2936,24 +3145,40 @@ tables:
     referenced_column: business_terminal_id
     on_delete: RESTRICT
     on_update: RESTRICT
-  - name: fk_atp_environment_terminal_access_revision_project_id
+  - name: fk_atp_terminal_access_revision_project_v13
     column: project_id
     referenced_table: atp_project
     referenced_column: project_id
     on_delete: RESTRICT
     on_update: RESTRICT
-  indexes: []
+  - name: fk_atp_terminal_access_revision_login_strategy_scope
+    columns:
+    - login_strategy_id
+    - project_id
+    referenced_table: atp_login_strategy
+    referenced_columns:
+    - login_strategy_id
+    - project_id
+    on_delete: RESTRICT
+    on_update: RESTRICT
+  indexes:
+  - name: idx_atp_terminal_access_revision_status
+    columns:
+    - business_terminal_id
+    - lifecycle_status
+    - revision_no
   delete_behavior: DECLARED_PER_FOREIGN_KEY
   data_owner: DOMAIN_OR_TECHNICAL_OWNER
   idempotency_and_audit: ROW_VERSION_OR_TECHNICAL_TABLE_RULE
   object_id: OBJ-012
-  business_unique_key: environment_terminal_access_revision_id
+  business_unique_key: business_terminal_id+revision_no
   state_fields:
   - lifecycle_status
   relationship_fields:
   - environment_id
   - business_terminal_id
   - project_id
+  - login_strategy_id
   extension_json_rule: NON_CONTRACT_EXTENSIONS_ONLY
 - table_name: atp_execution_attempt
   columns:
@@ -4300,11 +4525,46 @@ tables:
     default: null
   - name: project_id
     type: VARCHAR(26)
-    nullable: true
+    nullable: false
     primary_key: false
     default: null
   - name: automation_asset_id
     type: VARCHAR(26)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: local_storage_presets
+    type: JSON
+    nullable: false
+    primary_key: false
+    default: null
+  - name: refresh_after_local_storage
+    type: BOOLEAN
+    nullable: false
+    primary_key: false
+    default: '0'
+  - name: captcha_policy
+    type: VARCHAR(24)
+    nullable: false
+    primary_key: false
+    default: NONE
+  - name: captcha_request_header_name
+    type: VARCHAR(191)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: captcha_request_header_value
+    type: VARCHAR(191)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: captcha_response_header_name
+    type: VARCHAR(191)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: session_policy
+    type: JSON
     nullable: true
     primary_key: false
     default: null
@@ -4350,24 +4610,38 @@ tables:
     default: null
   primary_key:
   - login_strategy_id
-  unique_keys: []
+  unique_keys:
+  - name: uq_atp_login_strategy_scope
+    columns:
+    - login_strategy_id
+    - project_id
   check_constraints:
   - name: ck_atp_login_strategy_lifecycle_status
     expression: (lifecycle_status IN ('CREATED', 'DRAFT', 'ACTIVE', 'DISABLED', 'RECOVERED', 'ARCHIVED', 'LOGICALLY_DELETED'))
+  - name: ck_atp_login_strategy_captcha_policy
+    expression: (captcha_policy IN ('NONE', 'RESPONSE_HEADER'))
   foreign_keys:
-  - name: fk_atp_login_strategy_automation_asset_id
-    column: automation_asset_id
+  - name: fk_atp_login_strategy_automation_asset_scope
+    columns:
+    - automation_asset_id
+    - project_id
     referenced_table: atp_automation_asset
-    referenced_column: automation_asset_id
-    on_delete: CASCADE
+    referenced_columns:
+    - automation_asset_id
+    - project_id
+    on_delete: RESTRICT
     on_update: RESTRICT
-  - name: fk_atp_login_strategy_project_id
+  - name: fk_atp_login_strategy_project_v13
     column: project_id
     referenced_table: atp_project
     referenced_column: project_id
     on_delete: RESTRICT
     on_update: RESTRICT
-  indexes: []
+  indexes:
+  - name: idx_atp_login_strategy_project_status
+    columns:
+    - project_id
+    - lifecycle_status
   delete_behavior: DECLARED_PER_FOREIGN_KEY
   data_owner: DOMAIN_OR_TECHNICAL_OWNER
   idempotency_and_audit: ROW_VERSION_OR_TECHNICAL_TABLE_RULE
@@ -4379,6 +4653,128 @@ tables:
   - automation_asset_id
   - project_id
   extension_json_rule: NON_CONTRACT_EXTENSIONS_ONLY
+- table_name: atp_login_strategy_audit
+  columns:
+  - name: audit_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: true
+    default: null
+  - name: login_strategy_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: automation_asset_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: project_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: action
+    type: VARCHAR(64)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: operation_id
+    type: VARCHAR(128)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: actor_user_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: required_permission
+    type: VARCHAR(128)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: previous_status
+    type: VARCHAR(17)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: new_status
+    type: VARCHAR(17)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: result_code
+    type: VARCHAR(64)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: reason
+    type: VARCHAR(1000)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: before_json
+    type: JSON
+    nullable: true
+    primary_key: false
+    default: null
+  - name: after_json
+    type: JSON
+    nullable: true
+    primary_key: false
+    default: null
+  - name: correlation_id
+    type: VARCHAR(128)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: occurred_at
+    type: DATETIME(6)
+    nullable: false
+    primary_key: false
+    default: CURRENT_TIMESTAMP(6)
+  - name: source_context_hash
+    type: BINARY(32)
+    nullable: false
+    primary_key: false
+    default: null
+  primary_key:
+  - audit_id
+  unique_keys: []
+  check_constraints: []
+  foreign_keys:
+  - name: fk_atp_login_strategy_audit_strategy
+    column: login_strategy_id
+    referenced_table: atp_login_strategy
+    referenced_column: login_strategy_id
+    on_delete: RESTRICT
+    on_update: RESTRICT
+  - name: fk_atp_login_strategy_audit_actor
+    column: actor_user_id
+    referenced_table: atp_user
+    referenced_column: user_id
+    on_delete: RESTRICT
+    on_update: RESTRICT
+  indexes:
+  - name: idx_atp_login_strategy_audit_resource
+    columns:
+    - project_id
+    - login_strategy_id
+    - occurred_at
+  delete_behavior: APPEND_ONLY
+  data_owner: DOM-005
+  idempotency_and_audit: APPEND_ONLY_AUDIT
+  object_id: OBJ-048
+  business_unique_key: audit_id
+  state_fields: []
+  relationship_fields:
+  - login_strategy_id
+  - automation_asset_id
+  - project_id
+  - actor_user_id
+  extension_json_rule: NOT_APPLICABLE
 - table_name: atp_manual_recording_control_lease
   columns:
   - name: manual_recording_control_lease_id

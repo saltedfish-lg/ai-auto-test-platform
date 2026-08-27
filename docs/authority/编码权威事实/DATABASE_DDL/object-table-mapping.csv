@@ -9,7 +9,7 @@ OBJ-007,项目,AGGREGATE_ROOT,AGG-003,TABLE,atp_project,project_id,LC-007,lifecy
 OBJ-008,项目成员,RELATIONSHIP_ENTITY,AGG-003,TABLE,atp_project_member,project_member_id,LC-008,lifecycle_status
 OBJ-009,环境,AGGREGATE_ROOT,AGG-004,TABLE,atp_environment,environment_id,LC-009,lifecycle_status|enablement_state|accessibility_state
 OBJ-010,业务模块,AGGREGATE_MEMBER,AGG-003,TABLE,atp_business_module,business_module_id,LC-010,lifecycle_status
-OBJ-011,业务终端,CONFIGURATION_ENTITY,AGG-004,TABLE,atp_business_terminal,business_terminal_id,LC-011,lifecycle_status
+OBJ-011,业务终端,CONFIGURATION_ENTITY,AGG-004,TABLE,atp_business_terminal_audit,audit_id,LC-011,lifecycle_status
 OBJ-012,环境终端访问配置修订,VERSION_ENTITY,AGG-004,TABLE,atp_environment_terminal_access_revision,environment_terminal_access_revision_id,LC-012,lifecycle_status
 OBJ-013,测试账号,AGGREGATE_ROOT,AGG-005,TABLE,atp_test_account,test_account_id,LC-013,lifecycle_status|credential_state
 OBJ-014,凭证版本,VERSION_ENTITY,AGG-005,TABLE,atp_credential_revision,credential_revision_id,LC-014,lifecycle_status
@@ -46,7 +46,7 @@ OBJ-044,隔离令牌,VALUE_OBJECT,AGG-016,EMBEDDED_VALUE,,,LC-044,lifecycle_stat
 OBJ-045,重试策略,DOMAIN_POLICY,,SERVICE_OR_EXTERNAL_NOT_PERSISTED,,,LC-045,lifecycle_status
 OBJ-046,恢复动作,DOMAIN_SERVICE,,SERVICE_OR_EXTERNAL_NOT_PERSISTED,,,LC-046,lifecycle_status
 OBJ-047,自动化资产,AGGREGATE_ROOT,AGG-017,TABLE,atp_automation_asset,automation_asset_id,LC-047,lifecycle_status
-OBJ-048,登录策略,CONFIGURATION_ENTITY,AGG-017,TABLE,atp_login_strategy,login_strategy_id,LC-048,lifecycle_status
+OBJ-048,登录策略,CONFIGURATION_ENTITY,AGG-017,TABLE,atp_login_strategy_audit,audit_id,LC-048,lifecycle_status
 OBJ-049,页面对象,CONFIGURATION_ENTITY,AGG-017,TABLE,atp_page_object,page_object_id,LC-049,lifecycle_status
 OBJ-050,动作资产,CONFIGURATION_ENTITY,AGG-017,TABLE,atp_action_asset,action_asset_id,LC-050,lifecycle_status
 OBJ-051,断言资产,CONFIGURATION_ENTITY,AGG-017,TABLE,atp_assertion_asset,assertion_asset_id,LC-051,lifecycle_status

@@ -2378,7 +2378,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
-      x-permission-code: PROJECT_VIEW
+      x-permission-code: BUSINESS_TERMINAL_VIEW
       security:
       - BearerAuth: []
     post:
@@ -2460,7 +2460,7 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateBusinessTerminalRequest'
-      x-permission-code: PROJECT_EDIT
+      x-permission-code: BUSINESS_TERMINAL_CREATE
       security:
       - BearerAuth: []
   /api/v1/business-terminal/{id}:
@@ -2538,7 +2538,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
-      x-permission-code: PROJECT_VIEW
+      x-permission-code: BUSINESS_TERMINAL_VIEW
       security:
       - BearerAuth: []
     patch:
@@ -2626,7 +2626,747 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/UpdateBusinessTerminalRequest'
+      x-permission-code: BUSINESS_TERMINAL_EDIT
+      security:
+      - BearerAuth: []
+  /api/v1/business-terminal/{id}/validate:
+    post:
+      operationId: validate_business_terminal
+      summary: 校验业务终端
+      tags:
+      - 业务终端
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 26
+          maxLength: 26
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 191
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateBusinessTerminalResponse'
+        '401':
+          description: Unauthenticated
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: Invalid lifecycle state, stale version, or idempotency conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          $ref: '#/components/responses/RequestValidationFailed'
+        '500':
+          description: Internal error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LifecycleCommandRequest'
+      x-permission-code: BUSINESS_TERMINAL_EDIT
+      security:
+      - BearerAuth: []
+  /api/v1/business-terminal/{id}/reconfigure:
+    post:
+      operationId: reconfigure_business_terminal
+      summary: 退回配置业务终端
+      tags:
+      - 业务终端
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 26
+          maxLength: 26
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 191
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateBusinessTerminalResponse'
+        '401':
+          description: Unauthenticated
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: Invalid lifecycle state, stale version, or idempotency conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          $ref: '#/components/responses/RequestValidationFailed'
+        '500':
+          description: Internal error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LifecycleCommandRequest'
+      x-permission-code: BUSINESS_TERMINAL_EDIT
+      security:
+      - BearerAuth: []
+  /api/v1/business-terminal/{id}/activate:
+    post:
+      operationId: activate_business_terminal
+      summary: 启用业务终端
+      tags:
+      - 业务终端
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 26
+          maxLength: 26
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 191
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateBusinessTerminalResponse'
+        '401':
+          description: Unauthenticated
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: Invalid lifecycle state, stale version, or idempotency conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          $ref: '#/components/responses/RequestValidationFailed'
+        '500':
+          description: Internal error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LifecycleCommandRequest'
+      x-permission-code: BUSINESS_TERMINAL_EDIT
+      security:
+      - BearerAuth: []
+  /api/v1/business-terminal/{id}/mark-unreachable:
+    post:
+      operationId: mark_unreachable_business_terminal
+      summary: 标记业务终端不可达
+      tags:
+      - 业务终端
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 26
+          maxLength: 26
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 191
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateBusinessTerminalResponse'
+        '401':
+          description: Unauthenticated
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: Invalid lifecycle state, stale version, or idempotency conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          $ref: '#/components/responses/RequestValidationFailed'
+        '500':
+          description: Internal error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LifecycleCommandRequest'
+      x-permission-code: BUSINESS_TERMINAL_EDIT
+      security:
+      - BearerAuth: []
+  /api/v1/business-terminal/{id}/recover:
+    post:
+      operationId: recover_business_terminal
+      summary: 恢复业务终端
+      tags:
+      - 业务终端
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 26
+          maxLength: 26
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 191
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateBusinessTerminalResponse'
+        '401':
+          description: Unauthenticated
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: Invalid lifecycle state, stale version, or idempotency conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          $ref: '#/components/responses/RequestValidationFailed'
+        '500':
+          description: Internal error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LifecycleCommandRequest'
+      x-permission-code: BUSINESS_TERMINAL_EDIT
+      security:
+      - BearerAuth: []
+  /api/v1/business-terminal/{id}/disable:
+    post:
+      operationId: disable_business_terminal
+      summary: 停用业务终端
+      tags:
+      - 业务终端
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 26
+          maxLength: 26
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 191
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateBusinessTerminalResponse'
+        '401':
+          description: Unauthenticated
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: Invalid lifecycle state, stale version, or idempotency conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          $ref: '#/components/responses/RequestValidationFailed'
+        '500':
+          description: Internal error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LifecycleCommandRequest'
+      x-permission-code: BUSINESS_TERMINAL_EDIT
+      security:
+      - BearerAuth: []
+  /api/v1/business-terminal/{id}/archive:
+    post:
+      operationId: archive_business_terminal
+      summary: 归档业务终端
+      tags:
+      - 业务终端
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 26
+          maxLength: 26
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 191
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateBusinessTerminalResponse'
+        '401':
+          description: Unauthenticated
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: Invalid lifecycle state, stale version, or idempotency conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          $ref: '#/components/responses/RequestValidationFailed'
+        '500':
+          description: Internal error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LifecycleCommandRequest'
+      x-permission-code: BUSINESS_TERMINAL_ARCHIVE
+      security:
+      - BearerAuth: []
+  /api/v1/login-strategy/{id}/activate:
+    post:
+      operationId: activate_login_strategy
+      summary: 启用登录策略
+      tags:
+      - 登录策略
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 26
+          maxLength: 26
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 191
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateLoginStrategyResponse'
+        '401':
+          description: Unauthenticated
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: Invalid lifecycle state, stale version, or idempotency conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          $ref: '#/components/responses/RequestValidationFailed'
+        '500':
+          description: Internal error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LifecycleCommandRequest'
       x-permission-code: PROJECT_EDIT
+      security:
+      - BearerAuth: []
+  /api/v1/environment-terminal-access-revision/{id}/validate:
+    post:
+      operationId: validate_environment_terminal_access_revision
+      summary: 校验终端访问修订
+      tags:
+      - 环境终端访问配置修订
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 26
+          maxLength: 26
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 191
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateEnvironmentTerminalAccessRevisionResponse'
+        '401':
+          description: Unauthenticated
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: Invalid lifecycle state, stale version, or idempotency conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          $ref: '#/components/responses/RequestValidationFailed'
+        '500':
+          description: Internal error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LifecycleCommandRequest'
+      x-permission-code: BUSINESS_TERMINAL_EDIT
+      security:
+      - BearerAuth: []
+  /api/v1/environment-terminal-access-revision/{id}/publish:
+    post:
+      operationId: publish_environment_terminal_access_revision
+      summary: 发布终端访问修订并更新终端指针
+      tags:
+      - 环境终端访问配置修订
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 26
+          maxLength: 26
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 191
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateEnvironmentTerminalAccessRevisionResponse'
+        '401':
+          description: Unauthenticated
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: Invalid lifecycle state, stale version, or idempotency conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          $ref: '#/components/responses/RequestValidationFailed'
+        '500':
+          description: Internal error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublishTerminalAccessRevisionRequest'
+      x-permission-code: BUSINESS_TERMINAL_EDIT
       security:
       - BearerAuth: []
   /api/v1/environment-terminal-access-revision:
@@ -2725,7 +3465,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
-      x-permission-code: PROJECT_VIEW
+      x-permission-code: BUSINESS_TERMINAL_VIEW
       security:
       - BearerAuth: []
     post:
@@ -2807,7 +3547,7 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateEnvironmentTerminalAccessRevisionRequest'
-      x-permission-code: PROJECT_EDIT
+      x-permission-code: BUSINESS_TERMINAL_EDIT
       security:
       - BearerAuth: []
   /api/v1/environment-terminal-access-revision/{id}:
@@ -2885,95 +3625,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
-      x-permission-code: PROJECT_VIEW
-      security:
-      - BearerAuth: []
-    patch:
-      operationId: update_environment_terminal_access_revision
-      summary: 更新环境终端访问配置修订
-      tags:
-      - 环境终端访问配置修订
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          minLength: 1
-      - name: X-Correlation-Id
-        in: header
-        required: false
-        schema:
-          type: string
-      - name: Idempotency-Key
-        in: header
-        required: true
-        schema:
-          type: string
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/UpdateEnvironmentTerminalAccessRevisionResponse'
-        '400':
-          description: Bad request
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
-          description: Unauthenticated
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '404':
-          description: Not found
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '409':
-          description: Conflict
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '422':
-          $ref: '#/components/responses/RequestValidationFailed'
-        '429':
-          description: Rate limited
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '500':
-          description: Internal error
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '503':
-          description: Service unavailable
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UpdateEnvironmentTerminalAccessRevisionRequest'
-      x-permission-code: PROJECT_EDIT
+      x-permission-code: BUSINESS_TERMINAL_VIEW
       security:
       - BearerAuth: []
   /api/v1/test-account:
@@ -23247,12 +23899,6 @@ components:
           - string
           - 'null'
           maxLength: 191
-        environment_terminal_access_revision_id:
-          type:
-          - string
-          - 'null'
-          minLength: 26
-          maxLength: 26
         lifecycle_status:
           type: string
           enum:
@@ -23369,17 +24015,24 @@ components:
           type: string
           format: date-time
         project_id:
-          type:
-          - string
-          - 'null'
+          type: string
           minLength: 26
           maxLength: 26
         terminal_code:
-          type:
-          - string
-          - 'null'
+          type: string
+          minLength: 1
           maxLength: 191
         environment_id:
+          type: string
+          minLength: 26
+          maxLength: 26
+        terminal_type:
+          type: string
+          enum:
+          - MANAGEMENT
+          - CLIENT
+          - PDA
+        current_published_revision_id:
           type:
           - string
           - 'null'
@@ -23398,12 +24051,20 @@ components:
           - ARCHIVED
       required:
       - business_terminal_id
+      - project_id
+      - environment_id
+      - terminal_code
+      - terminal_type
       - row_version
       - created_at
       - updated_at
       - lifecycle_status
       example:
         business_terminal_id: 01J00000000000000000000000
+        project_id: 01J00000000000000000000001
+        environment_id: 01J00000000000000000000002
+        terminal_code: ADMIN
+        terminal_type: MANAGEMENT
         row_version: 0
         created_at: '2026-08-06T06:46:00Z'
         updated_at: '2026-08-06T06:46:00Z'
@@ -23431,17 +24092,46 @@ components:
           type: string
           format: date-time
         environment_id:
-          type:
-          - string
-          - 'null'
+          type: string
           minLength: 26
           maxLength: 26
         business_terminal_id:
+          type: string
+          minLength: 26
+          maxLength: 26
+        project_id:
+          type: string
+          minLength: 26
+          maxLength: 26
+        revision_no:
+          type: integer
+          minimum: 1
+        entry_url:
+          type: string
+          format: uri
+          maxLength: 2048
+        login_url:
+          type:
+          - string
+          - 'null'
+          format: uri
+          maxLength: 2048
+        login_strategy_id:
           type:
           - string
           - 'null'
           minLength: 26
           maxLength: 26
+        login_prerequisites:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+        network_requirements:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
         lifecycle_status:
           type: string
           enum:
@@ -23453,12 +24143,22 @@ components:
           - ARCHIVED
       required:
       - environment_terminal_access_revision_id
+      - project_id
+      - environment_id
+      - business_terminal_id
+      - revision_no
+      - entry_url
       - row_version
       - created_at
       - updated_at
       - lifecycle_status
       example:
         environment_terminal_access_revision_id: 01J00000000000000000000000
+        project_id: 01J00000000000000000000001
+        environment_id: 01J00000000000000000000002
+        business_terminal_id: 01J00000000000000000000003
+        revision_no: 1
+        entry_url: https://example.test/app
         row_version: 0
         created_at: '2026-08-06T06:46:00Z'
         updated_at: '2026-08-06T06:46:00Z'
@@ -25240,6 +25940,10 @@ components:
           type: string
           minLength: 26
           maxLength: 26
+        project_id:
+          type: string
+          minLength: 26
+          maxLength: 26
         display_name:
           type:
           - string
@@ -25266,16 +25970,40 @@ components:
           - LOGICALLY_DELETED
       required:
       - automation_asset_id
+      - project_id
       - row_version
       - created_at
       - updated_at
       - lifecycle_status
       example:
         automation_asset_id: 01J00000000000000000000000
+        project_id: 01J00000000000000000000001
         row_version: 0
         created_at: '2026-08-06T06:46:00Z'
         updated_at: '2026-08-06T06:46:00Z'
         lifecycle_status: CREATED
+    LocalStoragePreset:
+      type: object
+      additionalProperties: false
+      required:
+      - key
+      - value
+      - scope
+      - set_before_login
+      properties:
+        key:
+          type: string
+          minLength: 1
+          maxLength: 191
+        value:
+          type: string
+          maxLength: 4000
+        scope:
+          type: string
+          enum:
+          - ORIGIN
+        set_before_login:
+          type: boolean
     LoginStrategyResource:
       type: object
       additionalProperties: false
@@ -25299,11 +26027,45 @@ components:
           type: string
           format: date-time
         automation_asset_id:
+          type: string
+          minLength: 26
+          maxLength: 26
+        project_id:
+          type: string
+          minLength: 26
+          maxLength: 26
+        local_storage_presets:
+          type: array
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/LocalStoragePreset'
+        refresh_after_local_storage:
+          type: boolean
+        captcha_policy:
+          type: string
+          enum:
+          - NONE
+          - RESPONSE_HEADER
+        captcha_request_header_name:
           type:
           - string
           - 'null'
-          minLength: 26
-          maxLength: 26
+          maxLength: 191
+        captcha_request_header_value:
+          type:
+          - string
+          - 'null'
+          maxLength: 191
+        captcha_response_header_name:
+          type:
+          - string
+          - 'null'
+          maxLength: 191
+        session_policy:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
         lifecycle_status:
           type: string
           enum:
@@ -25316,12 +26078,22 @@ components:
           - LOGICALLY_DELETED
       required:
       - login_strategy_id
+      - project_id
+      - automation_asset_id
+      - local_storage_presets
+      - refresh_after_local_storage
+      - captcha_policy
       - row_version
       - created_at
       - updated_at
       - lifecycle_status
       example:
         login_strategy_id: 01J00000000000000000000000
+        project_id: 01J00000000000000000000001
+        automation_asset_id: 01J00000000000000000000002
+        local_storage_presets: []
+        refresh_after_local_storage: false
+        captcha_policy: NONE
         row_version: 0
         created_at: '2026-08-06T06:46:00Z'
         updated_at: '2026-08-06T06:46:00Z'
@@ -27985,7 +28757,10 @@ components:
           - 'null'
           maxLength: 191
       required: []
-      example: {}
+      example:
+        environment_id: 01J00000000000000000000002
+        terminal_code: ADMIN
+        terminal_type: MANAGEMENT
     CreateRoleResponse:
       type: object
       additionalProperties: false
@@ -28282,12 +29057,6 @@ components:
           - string
           - 'null'
           maxLength: 191
-        environment_terminal_access_revision_id:
-          type:
-          - string
-          - 'null'
-          minLength: 26
-          maxLength: 26
         enablement_state:
           type: string
           enum:
@@ -28371,12 +29140,6 @@ components:
           - string
           - 'null'
           maxLength: 191
-        environment_terminal_access_revision_id:
-          type:
-          - string
-          - 'null'
-          minLength: 26
-          maxLength: 26
         enablement_state:
           type: string
           enum:
@@ -28432,46 +29195,74 @@ components:
           page: 1
           page_size: 1
           total: 0
-    CreateBusinessTerminalRequest:
+    LifecycleCommandRequest:
       type: object
       additionalProperties: false
+      required:
+      - expected_version
+      - reason
       properties:
         expected_version:
           type: integer
           minimum: 0
         reason:
+          type: string
+          minLength: 1
+          maxLength: 1000
+    PublishTerminalAccessRevisionRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - expected_version
+      - expected_terminal_version
+      - reason
+      properties:
+        expected_version:
+          type: integer
+          minimum: 0
+        expected_terminal_version:
+          type: integer
+          minimum: 0
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 1000
+    CreateBusinessTerminalRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        reason:
           type:
           - string
           - 'null'
           maxLength: 1000
-        business_terminal_id:
-          type: string
-          minLength: 26
-          maxLength: 26
         display_name:
           type:
           - string
           - 'null'
           maxLength: 255
-        project_id:
-          type:
-          - string
-          - 'null'
-          minLength: 26
-          maxLength: 26
         terminal_code:
-          type:
-          - string
-          - 'null'
+          type: string
+          minLength: 1
           maxLength: 191
         environment_id:
-          type:
-          - string
-          - 'null'
+          type: string
           minLength: 26
           maxLength: 26
-      required: []
-      example: {}
+        terminal_type:
+          type: string
+          enum:
+          - MANAGEMENT
+          - CLIENT
+          - PDA
+      required:
+      - environment_id
+      - terminal_code
+      - terminal_type
+      example:
+        environment_id: 01J00000000000000000000002
+        terminal_code: ADMIN
+        terminal_type: MANAGEMENT
     CreateBusinessTerminalResponse:
       type: object
       additionalProperties: false
@@ -28486,6 +29277,10 @@ components:
       example:
         data:
           business_terminal_id: 01J00000000000000000000000
+          project_id: 01J00000000000000000000001
+          environment_id: 01J00000000000000000000002
+          terminal_code: ADMIN
+          terminal_type: MANAGEMENT
           row_version: 0
           created_at: '2026-08-06T06:46:00Z'
           updated_at: '2026-08-06T06:46:00Z'
@@ -28505,6 +29300,10 @@ components:
       example:
         data:
           business_terminal_id: 01J00000000000000000000000
+          project_id: 01J00000000000000000000001
+          environment_id: 01J00000000000000000000002
+          terminal_code: ADMIN
+          terminal_type: MANAGEMENT
           row_version: 0
           created_at: '2026-08-06T06:46:00Z'
           updated_at: '2026-08-06T06:46:00Z'
@@ -28527,23 +29326,6 @@ components:
           - string
           - 'null'
           maxLength: 255
-        project_id:
-          type:
-          - string
-          - 'null'
-          minLength: 26
-          maxLength: 26
-        terminal_code:
-          type:
-          - string
-          - 'null'
-          maxLength: 191
-        environment_id:
-          type:
-          - string
-          - 'null'
-          minLength: 26
-          maxLength: 26
       required:
       - expected_version
       example:
@@ -28562,6 +29344,10 @@ components:
       example:
         data:
           business_terminal_id: 01J00000000000000000000000
+          project_id: 01J00000000000000000000001
+          environment_id: 01J00000000000000000000002
+          terminal_code: ADMIN
+          terminal_type: MANAGEMENT
           row_version: 0
           created_at: '2026-08-06T06:46:00Z'
           updated_at: '2026-08-06T06:46:00Z'
@@ -28590,37 +29376,52 @@ components:
       type: object
       additionalProperties: false
       properties:
-        expected_version:
-          type: integer
-          minimum: 0
         reason:
           type:
           - string
           - 'null'
           maxLength: 1000
-        environment_terminal_access_revision_id:
-          type: string
-          minLength: 26
-          maxLength: 26
         display_name:
           type:
           - string
           - 'null'
           maxLength: 255
-        environment_id:
-          type:
-          - string
-          - 'null'
-          minLength: 26
-          maxLength: 26
         business_terminal_id:
+          type: string
+          minLength: 26
+          maxLength: 26
+        entry_url:
+          type: string
+          format: uri
+          maxLength: 2048
+        login_url:
+          type:
+          - string
+          - 'null'
+          format: uri
+          maxLength: 2048
+        login_strategy_id:
           type:
           - string
           - 'null'
           minLength: 26
           maxLength: 26
-      required: []
-      example: {}
+        login_prerequisites:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+        network_requirements:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+      required:
+      - business_terminal_id
+      - entry_url
+      example:
+        business_terminal_id: 01J00000000000000000000003
+        entry_url: https://example.test/app
     CreateEnvironmentTerminalAccessRevisionResponse:
       type: object
       additionalProperties: false
@@ -28635,6 +29436,11 @@ components:
       example:
         data:
           environment_terminal_access_revision_id: 01J00000000000000000000000
+          project_id: 01J00000000000000000000001
+          environment_id: 01J00000000000000000000002
+          business_terminal_id: 01J00000000000000000000003
+          revision_no: 1
+          entry_url: https://example.test/app
           row_version: 0
           created_at: '2026-08-06T06:46:00Z'
           updated_at: '2026-08-06T06:46:00Z'
@@ -28654,44 +29460,16 @@ components:
       example:
         data:
           environment_terminal_access_revision_id: 01J00000000000000000000000
+          project_id: 01J00000000000000000000001
+          environment_id: 01J00000000000000000000002
+          business_terminal_id: 01J00000000000000000000003
+          revision_no: 1
+          entry_url: https://example.test/app
           row_version: 0
           created_at: '2026-08-06T06:46:00Z'
           updated_at: '2026-08-06T06:46:00Z'
           lifecycle_status: DRAFT
         correlation_id: example
-    UpdateEnvironmentTerminalAccessRevisionRequest:
-      type: object
-      additionalProperties: false
-      properties:
-        expected_version:
-          type: integer
-          minimum: 0
-        reason:
-          type:
-          - string
-          - 'null'
-          maxLength: 1000
-        display_name:
-          type:
-          - string
-          - 'null'
-          maxLength: 255
-        environment_id:
-          type:
-          - string
-          - 'null'
-          minLength: 26
-          maxLength: 26
-        business_terminal_id:
-          type:
-          - string
-          - 'null'
-          minLength: 26
-          maxLength: 26
-      required:
-      - expected_version
-      example:
-        expected_version: 0
     UpdateEnvironmentTerminalAccessRevisionResponse:
       type: object
       additionalProperties: false
@@ -28706,6 +29484,11 @@ components:
       example:
         data:
           environment_terminal_access_revision_id: 01J00000000000000000000000
+          project_id: 01J00000000000000000000001
+          environment_id: 01J00000000000000000000002
+          business_terminal_id: 01J00000000000000000000003
+          revision_no: 1
+          entry_url: https://example.test/app
           row_version: 0
           created_at: '2026-08-06T06:46:00Z'
           updated_at: '2026-08-06T06:46:00Z'
@@ -28787,7 +29570,8 @@ components:
           - EXPIRED
           - REVOKED
       required: []
-      example: {}
+      example:
+        project_id: 01J00000000000000000000001
     CreateTestAccountResponse:
       type: object
       additionalProperties: false
@@ -32164,9 +32948,6 @@ components:
       type: object
       additionalProperties: false
       properties:
-        expected_version:
-          type: integer
-          minimum: 0
         reason:
           type:
           - string
@@ -32176,13 +32957,19 @@ components:
           type: string
           minLength: 26
           maxLength: 26
+        project_id:
+          type: string
+          minLength: 26
+          maxLength: 26
         display_name:
           type:
           - string
           - 'null'
           maxLength: 255
-      required: []
-      example: {}
+      required:
+      - project_id
+      example:
+        project_id: 01J00000000000000000000001
     CreateAutomationAssetResponse:
       type: object
       additionalProperties: false
@@ -32197,6 +32984,7 @@ components:
       example:
         data:
           automation_asset_id: 01J00000000000000000000000
+          project_id: 01J00000000000000000000001
           row_version: 0
           created_at: '2026-08-06T06:46:00Z'
           updated_at: '2026-08-06T06:46:00Z'
@@ -32216,6 +33004,7 @@ components:
       example:
         data:
           automation_asset_id: 01J00000000000000000000000
+          project_id: 01J00000000000000000000001
           row_version: 0
           created_at: '2026-08-06T06:46:00Z'
           updated_at: '2026-08-06T06:46:00Z'
@@ -32256,6 +33045,7 @@ components:
       example:
         data:
           automation_asset_id: 01J00000000000000000000000
+          project_id: 01J00000000000000000000001
           row_version: 0
           created_at: '2026-08-06T06:46:00Z'
           updated_at: '2026-08-06T06:46:00Z'
@@ -32284,15 +33074,16 @@ components:
       type: object
       additionalProperties: false
       properties:
-        expected_version:
-          type: integer
-          minimum: 0
         reason:
           type:
           - string
           - 'null'
           maxLength: 1000
-        login_strategy_id:
+        project_id:
+          type: string
+          minLength: 26
+          maxLength: 26
+        automation_asset_id:
           type: string
           minLength: 26
           maxLength: 26
@@ -32301,14 +33092,46 @@ components:
           - string
           - 'null'
           maxLength: 255
-        automation_asset_id:
+        local_storage_presets:
+          type: array
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/LocalStoragePreset'
+        refresh_after_local_storage:
+          type: boolean
+          default: false
+        captcha_policy:
+          type: string
+          enum:
+          - NONE
+          - RESPONSE_HEADER
+          default: NONE
+        captcha_request_header_name:
           type:
           - string
           - 'null'
-          minLength: 26
-          maxLength: 26
-      required: []
-      example: {}
+          maxLength: 191
+        captcha_request_header_value:
+          type:
+          - string
+          - 'null'
+          maxLength: 191
+        captcha_response_header_name:
+          type:
+          - string
+          - 'null'
+          maxLength: 191
+        session_policy:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+      required:
+      - project_id
+      - automation_asset_id
+      example:
+        project_id: 01J00000000000000000000001
+        automation_asset_id: 01J00000000000000000000002
     CreateLoginStrategyResponse:
       type: object
       additionalProperties: false
@@ -32323,6 +33146,11 @@ components:
       example:
         data:
           login_strategy_id: 01J00000000000000000000000
+          project_id: 01J00000000000000000000001
+          automation_asset_id: 01J00000000000000000000002
+          local_storage_presets: []
+          refresh_after_local_storage: false
+          captcha_policy: NONE
           row_version: 0
           created_at: '2026-08-06T06:46:00Z'
           updated_at: '2026-08-06T06:46:00Z'
@@ -32342,6 +33170,11 @@ components:
       example:
         data:
           login_strategy_id: 01J00000000000000000000000
+          project_id: 01J00000000000000000000001
+          automation_asset_id: 01J00000000000000000000002
+          local_storage_presets: []
+          refresh_after_local_storage: false
+          captcha_policy: NONE
           row_version: 0
           created_at: '2026-08-06T06:46:00Z'
           updated_at: '2026-08-06T06:46:00Z'
@@ -32364,12 +33197,38 @@ components:
           - string
           - 'null'
           maxLength: 255
-        automation_asset_id:
+        local_storage_presets:
+          type: array
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/LocalStoragePreset'
+        refresh_after_local_storage:
+          type: boolean
+        captcha_policy:
+          type: string
+          enum:
+          - NONE
+          - RESPONSE_HEADER
+        captcha_request_header_name:
           type:
           - string
           - 'null'
-          minLength: 26
-          maxLength: 26
+          maxLength: 191
+        captcha_request_header_value:
+          type:
+          - string
+          - 'null'
+          maxLength: 191
+        captcha_response_header_name:
+          type:
+          - string
+          - 'null'
+          maxLength: 191
+        session_policy:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
       required:
       - expected_version
       example:
@@ -32388,6 +33247,11 @@ components:
       example:
         data:
           login_strategy_id: 01J00000000000000000000000
+          project_id: 01J00000000000000000000001
+          automation_asset_id: 01J00000000000000000000002
+          local_storage_presets: []
+          refresh_after_local_storage: false
+          captcha_policy: NONE
           row_version: 0
           created_at: '2026-08-06T06:46:00Z'
           updated_at: '2026-08-06T06:46:00Z'

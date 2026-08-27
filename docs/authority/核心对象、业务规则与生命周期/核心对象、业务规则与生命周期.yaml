@@ -1333,8 +1333,8 @@ objects:
   object_type: CONFIGURATION_ENTITY
   domain: DOM-005
   bounded_context_id: BC-003
-  definition: 客户端、管理端、PDA端等逻辑Web终端定义。
-  business_purpose: 客户端、管理端、PDA端等逻辑Web终端定义。
+  definition: 环境下客户端、管理端、PDA端等逻辑Web终端定义；每个终端持有自己的当前已发布Terminal Access Revision指针。
+  business_purpose: 以终端级Revision所有权稳定表达Web终端身份及其当前已发布访问配置。
   scope_level: ENVIRONMENT_LEVEL
   aggregate_id: AGG-004
   is_aggregate_root: false
@@ -1587,15 +1587,15 @@ objects:
   object_type: VERSION_ENTITY
   domain: DOM-005
   bounded_context_id: BC-003
-  definition: 环境下某业务终端访问地址、登录前置和网络要求的不可变修订。
-  business_purpose: 环境下某业务终端访问地址、登录前置和网络要求的不可变修订。
+  definition: 某业务终端访问地址、登录前置和网络要求的不可变修订，并引用OBJ-048登录策略。
+  business_purpose: 以终端拥有的单调Revision保留访问配置发布历史；Environment不持有单一当前Revision指针。
   scope_level: ENVIRONMENT_LEVEL
   aggregate_id: AGG-004
   is_aggregate_root: false
-  identity_rule: 由父对象标识与单调递增版本号共同唯一确定。
+  identity_rule: 由business_terminal_id与单调递增revision_no共同唯一确定。
   technical_identifier: environment_terminal_access_revision_id
   business_unique_keys:
-  - environment_terminal_access_revision_id
+  - business_terminal_id+revision_no
   owner: 环境所属项目
   creator: 具备对应操作权限和数据范围的人工用户或受控系统主体
   manager: 项目负责人或具备对应项目权限的用户
@@ -1604,7 +1604,7 @@ objects:
   lifecycle_id: LC-012
   state_dimensions:
   - STATE-REF-001
-  versioning_rule: 对象本身是不可变版本实体；发布后禁止原地修改，后续变更创建新版本并保留旧版本追溯。
+  versioning_rule: 对象本身是不可变版本实体；DRAFT与BusinessTerminal分开创建，发布后禁止原地修改；发布事务同时更新所属BusinessTerminal当前已发布Revision指针并将旧PUBLISHED修订标记为SUPERSEDED。
   snapshot_rule: 默认不单独生成快照；若被正式执行引用，关键字段通过任务配置快照或专用版本对象固化。
   archive_rule: 不可变保留并可归档；不得覆盖历史。
   delete_rule: 禁止直接物理删除；仅按治理和保留策略归档/受控清理。
@@ -1625,6 +1625,7 @@ objects:
   related_objects:
   - OBJ-009
   - OBJ-011
+  - OBJ-048
   related_scenarios: []
   current_version: IN_SCOPE_MANDATORY
   completion_status: DIRECTLY_SUPPORTED
@@ -5182,8 +5183,8 @@ objects:
   object_type: CONFIGURATION_ENTITY
   domain: DOM-017
   bounded_context_id: BC-005
-  definition: 描述终端登录前置、localStorage、验证码和会话建立方式的版本化资产。
-  business_purpose: 描述终端登录前置、localStorage、验证码和会话建立方式的版本化资产。
+  definition: 描述终端登录前置、localStorage预设、刷新要求、验证码响应头策略和会话建立方式的版本化资产；不保存账号密码、令牌或实时验证码。
+  business_purpose: 为OBJ-012提供可复用且不含Test Account Secret的终端级Web登录策略事实。
   scope_level: PROJECT_LEVEL
   aggregate_id: AGG-017
   is_aggregate_root: false
@@ -5220,6 +5221,7 @@ objects:
   - BR-PERM-0130
   related_objects:
   - OBJ-047
+  - OBJ-012
   related_scenarios: []
   current_version: IN_SCOPE_MANDATORY
   completion_status: DIRECTLY_SUPPORTED
@@ -13442,10 +13444,10 @@ business_unique_keys:
   unresolved_decision_ids: []
 - business_key_id: BUK-012
   object_id: OBJ-012
-  key_name: environment_terminal_access_revision_id
+  key_name: business_terminal_id+revision_no
   data_item_ids:
-  - DI-0070
-  scope: 由对象定义和关联项目/环境范围共同决定
+  - DI-0073
+  scope: 所属BusinessTerminal内
   immutable: true
   coding_status: DATA_CODE_READY_WITH_MAPPING
   source_basis: CURRENT_LIVING_AUTHORITY_FACTS
@@ -19817,29 +19819,6 @@ object_relationships:
   - BR-USER-0009
   - BR-USER-0019
   - BR-USER-0021
-  completion_status: SUPPORTED_BY_MULTIPLE_SOURCES
-- relationship_id: REL-0100
-  source_object_id: OBJ-009
-  relationship_type: REFERENCES
-  target_object_id: OBJ-012
-  direction: SOURCE_TO_TARGET
-  source_cardinality: '1'
-  target_cardinality: 1..*
-  ownership: NONE
-  mandatory: true
-  lifecycle_dependency: false
-  consistency_boundary: 环境通过不可变修订配置各业务终端。
-  delete_behavior: RESTRICT
-  archive_behavior: PRESERVE_REFERENCE
-  version_behavior: 跨聚合只保存稳定标识或不可变快照；聚合内部随聚合根一致变更。
-  snapshot_required: true
-  cross_domain: true
-  rule_ids:
-  - BR-GLOBAL-0138
-  - BR-GLOBAL-0139
-  - BR-GLOBAL-0140
-  - BR-GLOBAL-0141
-  - BR-GLOBAL-0142
   completion_status: SUPPORTED_BY_MULTIPLE_SOURCES
 - relationship_id: REL-0101
   source_object_id: OBJ-012
@@ -47866,8 +47845,8 @@ business_rules:
   - OBJ-012
   trigger: null
   preconditions: []
-  rule_statement: 环境终端访问配置修订的业务唯一键“environment_terminal_access_revision_id”必须在“由对象定义和关联项目/环境范围共同决定”范围内唯一且不可变。
-  required_action: 环境终端访问配置修订的业务唯一键“environment_terminal_access_revision_id”必须在“由对象定义和关联项目/环境范围共同决定”范围内唯一且不可变。
+  rule_statement: 环境终端访问配置修订的业务唯一键“business_terminal_id+revision_no”必须在所属BusinessTerminal内唯一且不可变。
+  required_action: 为每个BusinessTerminal分配单调递增revision_no，并禁止发布后原地修改Revision。
   prohibited_action: null
   allowed_action: null
   expected_result: null

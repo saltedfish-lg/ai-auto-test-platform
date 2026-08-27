@@ -158,7 +158,6 @@ export type EnvironmentResource = {
   updated_at: string;
   project_id?: string | null;
   environment_code?: string | null;
-  environment_terminal_access_revision_id?: string | null;
   lifecycle_status: "CREATED" | "CONFIGURING" | "VALIDATING" | "ACTIVE" | "UNREACHABLE" | "DISABLED" | "RECOVERING" | "ARCHIVED";
   enablement_state: "ENABLED" | "DISABLED";
   accessibility_state: "UNKNOWN" | "REACHABLE" | "UNREACHABLE";
@@ -181,9 +180,11 @@ export type BusinessTerminalResource = {
   row_version: number;
   created_at: string;
   updated_at: string;
-  project_id?: string | null;
-  terminal_code?: string | null;
-  environment_id?: string | null;
+  project_id: string;
+  terminal_code: string;
+  environment_id: string;
+  terminal_type: "MANAGEMENT" | "CLIENT" | "PDA";
+  current_published_revision_id?: string | null;
   lifecycle_status: "CREATED" | "CONFIGURING" | "VALIDATING" | "ACTIVE" | "UNREACHABLE" | "DISABLED" | "RECOVERING" | "ARCHIVED";
 };
 
@@ -193,8 +194,15 @@ export type EnvironmentTerminalAccessRevisionResource = {
   row_version: number;
   created_at: string;
   updated_at: string;
-  environment_id?: string | null;
-  business_terminal_id?: string | null;
+  environment_id: string;
+  business_terminal_id: string;
+  project_id: string;
+  revision_no: number;
+  entry_url: string;
+  login_url?: string | null;
+  login_strategy_id?: string | null;
+  login_prerequisites?: Record<string, unknown> | null;
+  network_requirements?: Record<string, unknown> | null;
   lifecycle_status: "DRAFT" | "VALIDATING" | "PUBLISHED" | "SUPERSEDED" | "RETIRED" | "ARCHIVED";
 };
 
@@ -526,11 +534,19 @@ export type LeaseResource = {
 
 export type AutomationAssetResource = {
   automation_asset_id: string;
+  project_id: string;
   display_name?: string | null;
   row_version: number;
   created_at: string;
   updated_at: string;
   lifecycle_status: "CREATED" | "DRAFT" | "ACTIVE" | "DISABLED" | "RECOVERED" | "ARCHIVED" | "LOGICALLY_DELETED";
+};
+
+export type LocalStoragePreset = {
+  key: string;
+  value: string;
+  scope: "ORIGIN";
+  set_before_login: boolean;
 };
 
 export type LoginStrategyResource = {
@@ -539,7 +555,15 @@ export type LoginStrategyResource = {
   row_version: number;
   created_at: string;
   updated_at: string;
-  automation_asset_id?: string | null;
+  automation_asset_id: string;
+  project_id: string;
+  local_storage_presets: Array<LocalStoragePreset>;
+  refresh_after_local_storage: boolean;
+  captcha_policy: "NONE" | "RESPONSE_HEADER";
+  captcha_request_header_name?: string | null;
+  captcha_request_header_value?: string | null;
+  captcha_response_header_name?: string | null;
+  session_policy?: Record<string, unknown> | null;
   lifecycle_status: "CREATED" | "DRAFT" | "ACTIVE" | "DISABLED" | "RECOVERED" | "ARCHIVED" | "LOGICALLY_DELETED";
 };
 
@@ -1154,7 +1178,6 @@ export type CreateEnvironmentRequest = {
   display_name?: string | null;
   project_id?: string | null;
   environment_code?: string | null;
-  environment_terminal_access_revision_id?: string | null;
   enablement_state?: "ENABLED" | "DISABLED";
   accessibility_state?: "UNKNOWN" | "REACHABLE" | "UNREACHABLE";
 };
@@ -1175,7 +1198,6 @@ export type UpdateEnvironmentRequest = {
   display_name?: string | null;
   project_id?: string | null;
   environment_code?: string | null;
-  environment_terminal_access_revision_id?: string | null;
   enablement_state?: "ENABLED" | "DISABLED";
   accessibility_state?: "UNKNOWN" | "REACHABLE" | "UNREACHABLE";
 };
@@ -1190,14 +1212,23 @@ export type ListBusinessTerminalResponse = {
   page: PageMeta;
 };
 
+export type LifecycleCommandRequest = {
+  expected_version: number;
+  reason: string;
+};
+
+export type PublishTerminalAccessRevisionRequest = {
+  expected_version: number;
+  expected_terminal_version: number;
+  reason: string;
+};
+
 export type CreateBusinessTerminalRequest = {
-  expected_version?: number;
   reason?: string | null;
-  business_terminal_id?: string;
   display_name?: string | null;
-  project_id?: string | null;
-  terminal_code?: string | null;
-  environment_id?: string | null;
+  terminal_code: string;
+  environment_id: string;
+  terminal_type: "MANAGEMENT" | "CLIENT" | "PDA";
 };
 
 export type CreateBusinessTerminalResponse = {
@@ -1214,9 +1245,6 @@ export type UpdateBusinessTerminalRequest = {
   expected_version: number;
   reason?: string | null;
   display_name?: string | null;
-  project_id?: string | null;
-  terminal_code?: string | null;
-  environment_id?: string | null;
 };
 
 export type UpdateBusinessTerminalResponse = {
@@ -1230,12 +1258,14 @@ export type ListEnvironmentTerminalAccessRevisionResponse = {
 };
 
 export type CreateEnvironmentTerminalAccessRevisionRequest = {
-  expected_version?: number;
   reason?: string | null;
-  environment_terminal_access_revision_id?: string;
   display_name?: string | null;
-  environment_id?: string | null;
-  business_terminal_id?: string | null;
+  business_terminal_id: string;
+  entry_url: string;
+  login_url?: string | null;
+  login_strategy_id?: string | null;
+  login_prerequisites?: Record<string, unknown> | null;
+  network_requirements?: Record<string, unknown> | null;
 };
 
 export type CreateEnvironmentTerminalAccessRevisionResponse = {
@@ -1246,14 +1276,6 @@ export type CreateEnvironmentTerminalAccessRevisionResponse = {
 export type GetEnvironmentTerminalAccessRevisionResponse = {
   data: EnvironmentTerminalAccessRevisionResource;
   correlation_id: string;
-};
-
-export type UpdateEnvironmentTerminalAccessRevisionRequest = {
-  expected_version: number;
-  reason?: string | null;
-  display_name?: string | null;
-  environment_id?: string | null;
-  business_terminal_id?: string | null;
 };
 
 export type UpdateEnvironmentTerminalAccessRevisionResponse = {
@@ -2120,9 +2142,9 @@ export type ListAutomationAssetResponse = {
 };
 
 export type CreateAutomationAssetRequest = {
-  expected_version?: number;
   reason?: string | null;
   automation_asset_id?: string;
+  project_id: string;
   display_name?: string | null;
 };
 
@@ -2153,11 +2175,17 @@ export type ListLoginStrategyResponse = {
 };
 
 export type CreateLoginStrategyRequest = {
-  expected_version?: number;
   reason?: string | null;
-  login_strategy_id?: string;
+  project_id: string;
+  automation_asset_id: string;
   display_name?: string | null;
-  automation_asset_id?: string | null;
+  local_storage_presets?: Array<LocalStoragePreset>;
+  refresh_after_local_storage?: boolean;
+  captcha_policy?: "NONE" | "RESPONSE_HEADER";
+  captcha_request_header_name?: string | null;
+  captcha_request_header_value?: string | null;
+  captcha_response_header_name?: string | null;
+  session_policy?: Record<string, unknown> | null;
 };
 
 export type CreateLoginStrategyResponse = {
@@ -2174,7 +2202,13 @@ export type UpdateLoginStrategyRequest = {
   expected_version: number;
   reason?: string | null;
   display_name?: string | null;
-  automation_asset_id?: string | null;
+  local_storage_presets?: Array<LocalStoragePreset>;
+  refresh_after_local_storage?: boolean;
+  captcha_policy?: "NONE" | "RESPONSE_HEADER";
+  captcha_request_header_name?: string | null;
+  captcha_request_header_value?: string | null;
+  captcha_response_header_name?: string | null;
+  session_policy?: Record<string, unknown> | null;
 };
 
 export type UpdateLoginStrategyResponse = {

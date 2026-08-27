@@ -1,4 +1,4 @@
--- Current Living Authority MySQL 8.4 V3 → V4 → V5 → V6 → V7 → V8 → V9 → V10 → V11 → V12 runtime assertions
+-- Current Living Authority MySQL 8.4 V3 → V4 → V5 → V6 → V7 → V8 → V9 → V10 → V11 → V12 → V13 runtime assertions
 DELIMITER //
 CREATE PROCEDURE assert_current_contract()
 BEGIN
@@ -8,8 +8,8 @@ BEGIN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Retired atp_platform_design_baseline_release must not exist at the current migration head';
   END IF;
 
-  IF (SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type='BASE TABLE') <> 92 THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Expected exactly 92 base tables after V3 → V4 → V5 → V6 → V7 → V8 → V9 → V10 → V11 → V12';
+  IF (SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type='BASE TABLE') <> 94 THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Expected exactly 94 base tables after V3 → V4 → V5 → V6 → V7 → V8 → V9 → V10 → V11 → V12 → V13';
   END IF;
   IF EXISTS (
     SELECT 1 FROM information_schema.columns
@@ -204,6 +204,14 @@ SET @model_audit_delete_trigger_count := (
   SELECT COUNT(*) FROM information_schema.triggers
   WHERE trigger_schema = DATABASE() AND trigger_name = 'trg_atp_model_config_audit_no_delete'
 );
+SET @login_strategy_audit_update_trigger_count := (
+  SELECT COUNT(*) FROM information_schema.triggers
+  WHERE trigger_schema = DATABASE() AND trigger_name = 'trg_atp_login_strategy_audit_no_update'
+);
+SET @login_strategy_audit_delete_trigger_count := (
+  SELECT COUNT(*) FROM information_schema.triggers
+  WHERE trigger_schema = DATABASE() AND trigger_name = 'trg_atp_login_strategy_audit_no_delete'
+);
 
 DROP PROCEDURE IF EXISTS assert_auth_audit_triggers;
 DELIMITER $$
@@ -214,6 +222,10 @@ BEGIN
   END IF;
   IF @model_audit_update_trigger_count <> 1 OR @model_audit_delete_trigger_count <> 1 THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Expected append-only model audit triggers';
+  END IF;
+  IF @login_strategy_audit_update_trigger_count <> 1
+     OR @login_strategy_audit_delete_trigger_count <> 1 THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Expected append-only LoginStrategy audit triggers';
   END IF;
 END$$
 DELIMITER ;

@@ -52,6 +52,7 @@ def parse_create_tables(sql: str):
         columns = {}
         pk = []
         uniques = []
+        unique_names = []
         checks = []
         constraint_names = []
         for raw in body.splitlines():
@@ -68,15 +69,15 @@ def parse_create_tables(sql: str):
             if m: pk=[x.strip(" `") for x in m.group(1).split(",")]
             m=re.search(r"CONSTRAINT\s+`?([A-Za-z0-9_]+)`?\s+UNIQUE\s*\(([^)]+)\)",line,re.I)
             if m:
-                constraint_names.append(m.group(1)); uniques.append([x.strip(" `") for x in m.group(2).split(",")])
+                constraint_names.append(m.group(1)); unique_names.append(m.group(1)); uniques.append([x.strip(" `") for x in m.group(2).split(",")])
             m=re.search(r"CONSTRAINT\s+`?([A-Za-z0-9_]+)`?\s+CHECK\s*\((.*)\)",line,re.I)
             if m:
                 constraint_names.append(m.group(1)); checks.append({"name":m.group(1),"expression":m.group(2)})
-        tables[table]={"columns":columns,"pk":pk,"uniques":uniques,"checks":checks,"constraint_names":constraint_names}
+        tables[table]={"columns":columns,"pk":pk,"uniques":uniques,"unique_names":unique_names,"checks":checks,"constraint_names":constraint_names}
     return tables
 
 def apply_alter_table_columns(sql: str, tables: dict[str, dict[str, Any]]) -> None:
-    """Project ALTER ADD/MODIFY columns into the current static table model."""
+    """Project ALTER ADD/MODIFY/DROP columns into the current static table model."""
     alter_rx = re.compile(
         r"ALTER TABLE\s+`?([A-Za-z0-9_]+)`?\s+(.*?);", re.S | re.I
     )
@@ -85,12 +86,41 @@ def apply_alter_table_columns(sql: str, tables: dict[str, dict[str, Any]]) -> No
         r"([A-Z]+(?:\([^)]+\))?)(.*)$",
         re.I,
     )
+    drop_column_rx = re.compile(r"DROP\s+COLUMN\s+`?([A-Za-z0-9_]+)`?", re.I)
+    add_unique_rx = re.compile(
+        r"ADD\s+CONSTRAINT\s+`?([A-Za-z0-9_]+)`?\s+UNIQUE\s*\(([^)]+)\)",
+        re.I | re.S,
+    )
+    drop_unique_rx = re.compile(r"DROP\s+INDEX\s+`?([A-Za-z0-9_]+)`?", re.I)
     for table_name, body in alter_rx.findall(sql):
         table = tables.get(table_name)
         if table is None:
             continue
+        unique_operations = [(match.start(), "DROP", match) for match in drop_unique_rx.finditer(body)]
+        unique_operations.extend(
+            (match.start(), "ADD", match) for match in add_unique_rx.finditer(body)
+        )
+        for _, operation, match in sorted(unique_operations, key=lambda item: item[0]):
+            name = match.group(1)
+            if operation == "DROP":
+                if name in table["unique_names"]:
+                    index = table["unique_names"].index(name)
+                    table["unique_names"].pop(index)
+                    table["uniques"].pop(index)
+                if name in table["constraint_names"]:
+                    table["constraint_names"].remove(name)
+                continue
+            table["unique_names"].append(name)
+            table["uniques"].append(
+                [column.strip(" `") for column in match.group(2).split(",")]
+            )
+            table["constraint_names"].append(name)
         for raw in body.splitlines():
             line = raw.strip().rstrip(",")
+            drop_match = drop_column_rx.match(line)
+            if drop_match is not None:
+                table["columns"].pop(drop_match.group(1), None)
+                continue
             match = column_rx.match(line)
             if match is None:
                 continue
@@ -105,16 +135,33 @@ def apply_alter_table_columns(sql: str, tables: dict[str, dict[str, Any]]) -> No
             }
 
 def parse_fks(sql: str):
-    rx=re.compile(
-      r"ALTER TABLE\s+`?([A-Za-z0-9_]+)`?\s+ADD CONSTRAINT\s+`?([A-Za-z0-9_]+)`?\s+"
-      r"FOREIGN KEY\s*\(`?([A-Za-z0-9_]+)`?\)\s+REFERENCES\s+`?([A-Za-z0-9_]+)`?\s*"
-      r"\(`?([A-Za-z0-9_]+)`?\)(?:\s+ON DELETE\s+([A-Z ]+?))?(?:\s+ON UPDATE\s+([A-Z ]+?))?;",re.I)
-    out=[]
-    for m in rx.finditer(sql):
-        out.append({"child_table":m.group(1),"name":m.group(2),"child_column":m.group(3),
-                    "parent_table":m.group(4),"parent_column":m.group(5),
-                    "on_delete":(m.group(6) or "").strip(),"on_update":(m.group(7) or "").strip()})
-    return out
+    alter_rx = re.compile(r"ALTER TABLE\s+`?([A-Za-z0-9_]+)`?\s+(.*?);", re.I | re.S)
+    add_rx = re.compile(
+        r"ADD\s+CONSTRAINT\s+`?([A-Za-z0-9_]+)`?\s+FOREIGN\s+KEY\s*\(([^)]+)\)\s+"
+        r"REFERENCES\s+`?([A-Za-z0-9_]+)`?\s*\(([^)]+)\)"
+        r"(?:\s+ON DELETE\s+([A-Z ]+?))?(?:\s+ON UPDATE\s+([A-Z ]+?))?(?=,|$)",
+        re.I | re.S,
+    )
+    drop_rx = re.compile(r"DROP\s+FOREIGN\s+KEY\s+`?([A-Za-z0-9_]+)`?", re.I)
+    current = {}
+    for child_table, body in alter_rx.findall(sql):
+        operations = [(m.start(), "DROP", m) for m in drop_rx.finditer(body)]
+        operations.extend((m.start(), "ADD", m) for m in add_rx.finditer(body))
+        for _, operation, match in sorted(operations, key=lambda item: item[0]):
+            name = match.group(1)
+            if operation == "DROP":
+                current.pop(name, None)
+                continue
+            current[name] = {
+                "child_table": child_table,
+                "name": name,
+                "child_column": ",".join(x.strip(" `") for x in match.group(2).split(",")),
+                "parent_table": match.group(3),
+                "parent_column": ",".join(x.strip(" `") for x in match.group(4).split(",")),
+                "on_delete": (match.group(5) or "").strip(),
+                "on_update": (match.group(6) or "").strip(),
+            }
+    return list(current.values())
 
 def local_deref(schema: Any, components: dict[str,Any]):
     if isinstance(schema,dict):
@@ -267,13 +314,22 @@ def main():
         if f["child_table"] not in tables or f["parent_table"] not in tables:
             ddl_errors.append(f"{f['name']} missing table");continue
         ct,pt=tables[f["child_table"]],tables[f["parent_table"]]
-        if f["child_column"] not in ct["columns"] or f["parent_column"] not in pt["columns"]:
+        child_columns = f["child_column"].split(",")
+        parent_columns = f["parent_column"].split(",")
+        if len(child_columns) != len(parent_columns):
+            ddl_errors.append(f"{f['name']} column count mismatch");continue
+        if any(column not in ct["columns"] for column in child_columns) or any(
+            column not in pt["columns"] for column in parent_columns
+        ):
             ddl_errors.append(f"{f['name']} missing column");continue
-        if ct["columns"][f["child_column"]]["type"]!=pt["columns"][f["parent_column"]]["type"]:
+        if any(
+            ct["columns"][child]["type"] != pt["columns"][parent]["type"]
+            for child, parent in zip(child_columns, parent_columns, strict=True)
+        ):
             ddl_errors.append(f"{f['name']} type mismatch")
         candidate=[pt["pk"]]+pt["uniques"]
-        if not any(f["parent_column"] in u and len(u)==1 for u in candidate):
-            ddl_errors.append(f"{f['name']} target not single-column PK/UNIQUE")
+        if parent_columns not in candidate:
+            ddl_errors.append(f"{f['name']} target not PK/UNIQUE")
     # check defaults belong to CHECK enum
     for tn,t in tables.items():
         for c in t["checks"]:

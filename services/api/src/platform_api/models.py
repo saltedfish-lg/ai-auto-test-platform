@@ -8,11 +8,14 @@ from typing import Any
 from sqlalchemy import (
     JSON,
     BigInteger,
+    Boolean,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Integer,
     LargeBinary,
     String,
+    UniqueConstraint,
 )
 from sqlalchemy.dialects.mysql import (
     BIGINT as MySQLBigInteger,
@@ -186,11 +189,8 @@ class Project(Base):
 class Environment(Base):
     __tablename__ = "atp_environment"
     environment_id: Mapped[str] = mapped_column(String(26), primary_key=True)
-    project_id: Mapped[str | None] = mapped_column(
-        String(26), ForeignKey("atp_project.project_id")
-    )
+    project_id: Mapped[str | None] = mapped_column(String(26), ForeignKey("atp_project.project_id"))
     environment_code: Mapped[str | None] = mapped_column(String(191))
-    environment_terminal_access_revision_id: Mapped[str | None] = mapped_column(String(26))
     lifecycle_status: Mapped[str] = mapped_column(String(11))
     enablement_state: Mapped[str] = mapped_column(String(8))
     accessibility_state: Mapped[str] = mapped_column(String(11))
@@ -218,6 +218,193 @@ class EnvironmentAudit(Base):
     scope_decision: Mapped[str] = mapped_column(String(64))
     previous_status: Mapped[str | None] = mapped_column(String(11))
     new_status: Mapped[str | None] = mapped_column(String(11))
+    result_code: Mapped[str] = mapped_column(String(64))
+    reason: Mapped[str | None] = mapped_column(String(1000))
+    before_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    after_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    correlation_id: Mapped[str] = mapped_column(String(128))
+    occurred_at: Mapped[datetime] = mapped_column(DateTime)
+    source_context_hash: Mapped[bytes] = mapped_column(MySQLBinary(32))
+
+
+class BusinessTerminal(Base):
+    __tablename__ = "atp_business_terminal"
+    __table_args__ = (
+        UniqueConstraint(
+            "business_terminal_id",
+            "project_id",
+            "environment_id",
+            name="uq_atp_business_terminal_scope",
+        ),
+        ForeignKeyConstraint(
+            ["current_published_revision_id", "business_terminal_id"],
+            [
+                "atp_environment_terminal_access_revision.environment_terminal_access_revision_id",
+                "atp_environment_terminal_access_revision.business_terminal_id",
+            ],
+            name="fk_atp_business_terminal_current_revision",
+        ),
+    )
+    business_terminal_id: Mapped[str] = mapped_column(String(26), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(26), ForeignKey("atp_project.project_id"))
+    terminal_code: Mapped[str] = mapped_column(String(191))
+    environment_id: Mapped[str] = mapped_column(
+        String(26), ForeignKey("atp_environment.environment_id")
+    )
+    terminal_type: Mapped[str] = mapped_column(String(16))
+    current_published_revision_id: Mapped[str | None] = mapped_column(String(26))
+    lifecycle_status: Mapped[str] = mapped_column(String(11))
+    display_name: Mapped[str | None] = mapped_column(String(255))
+    row_version: Mapped[int] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime] = mapped_column(DateTime)
+    created_by: Mapped[str | None] = mapped_column(String(26))
+    updated_by: Mapped[str | None] = mapped_column(String(26))
+    extension_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+
+
+class AutomationAsset(Base):
+    __tablename__ = "atp_automation_asset"
+    __table_args__ = (
+        UniqueConstraint(
+            "automation_asset_id", "project_id", name="uq_atp_automation_asset_scope"
+        ),
+    )
+    automation_asset_id: Mapped[str] = mapped_column(String(26), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(26), ForeignKey("atp_project.project_id"))
+    lifecycle_status: Mapped[str] = mapped_column(String(17))
+    display_name: Mapped[str | None] = mapped_column(String(255))
+    row_version: Mapped[int] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime] = mapped_column(DateTime)
+    created_by: Mapped[str | None] = mapped_column(String(26))
+    updated_by: Mapped[str | None] = mapped_column(String(26))
+    extension_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+
+
+class LoginStrategy(Base):
+    __tablename__ = "atp_login_strategy"
+    __table_args__ = (
+        UniqueConstraint(
+            "login_strategy_id", "project_id", name="uq_atp_login_strategy_scope"
+        ),
+        ForeignKeyConstraint(
+            ["automation_asset_id", "project_id"],
+            ["atp_automation_asset.automation_asset_id", "atp_automation_asset.project_id"],
+            name="fk_atp_login_strategy_automation_asset_scope",
+        ),
+    )
+    login_strategy_id: Mapped[str] = mapped_column(String(26), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(26), ForeignKey("atp_project.project_id"))
+    automation_asset_id: Mapped[str] = mapped_column(String(26))
+    local_storage_presets: Mapped[list[dict[str, Any]]] = mapped_column(JSON)
+    refresh_after_local_storage: Mapped[bool] = mapped_column(Boolean)
+    captcha_policy: Mapped[str] = mapped_column(String(24))
+    captcha_request_header_name: Mapped[str | None] = mapped_column(String(191))
+    captcha_request_header_value: Mapped[str | None] = mapped_column(String(191))
+    captcha_response_header_name: Mapped[str | None] = mapped_column(String(191))
+    session_policy: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    lifecycle_status: Mapped[str] = mapped_column(String(17))
+    display_name: Mapped[str | None] = mapped_column(String(255))
+    row_version: Mapped[int] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime] = mapped_column(DateTime)
+    created_by: Mapped[str | None] = mapped_column(String(26))
+    updated_by: Mapped[str | None] = mapped_column(String(26))
+    extension_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+
+
+class TerminalAccessRevision(Base):
+    __tablename__ = "atp_environment_terminal_access_revision"
+    __table_args__ = (
+        UniqueConstraint(
+            "business_terminal_id",
+            "revision_no",
+            name="uq_atp_terminal_access_revision_business",
+        ),
+        UniqueConstraint(
+            "environment_terminal_access_revision_id",
+            "business_terminal_id",
+            name="uq_atp_terminal_access_revision_owner",
+        ),
+        ForeignKeyConstraint(
+            ["business_terminal_id", "project_id", "environment_id"],
+            [
+                "atp_business_terminal.business_terminal_id",
+                "atp_business_terminal.project_id",
+                "atp_business_terminal.environment_id",
+            ],
+            name="fk_atp_terminal_access_revision_terminal_scope",
+        ),
+        ForeignKeyConstraint(
+            ["login_strategy_id", "project_id"],
+            ["atp_login_strategy.login_strategy_id", "atp_login_strategy.project_id"],
+            name="fk_atp_terminal_access_revision_login_strategy_scope",
+        ),
+    )
+    environment_terminal_access_revision_id: Mapped[str] = mapped_column(
+        String(26), primary_key=True
+    )
+    project_id: Mapped[str] = mapped_column(String(26), ForeignKey("atp_project.project_id"))
+    environment_id: Mapped[str] = mapped_column(
+        String(26), ForeignKey("atp_environment.environment_id")
+    )
+    business_terminal_id: Mapped[str] = mapped_column(
+        String(26), ForeignKey("atp_business_terminal.business_terminal_id")
+    )
+    revision_no: Mapped[int] = mapped_column(BigInteger)
+    entry_url: Mapped[str] = mapped_column(String(2048))
+    login_url: Mapped[str | None] = mapped_column(String(2048))
+    login_strategy_id: Mapped[str | None] = mapped_column(String(26))
+    login_prerequisites: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    network_requirements: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    lifecycle_status: Mapped[str] = mapped_column(String(10))
+    display_name: Mapped[str | None] = mapped_column(String(255))
+    row_version: Mapped[int] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime] = mapped_column(DateTime)
+    created_by: Mapped[str | None] = mapped_column(String(26))
+    updated_by: Mapped[str | None] = mapped_column(String(26))
+    extension_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+
+
+class BusinessTerminalAudit(Base):
+    __tablename__ = "atp_business_terminal_audit"
+    audit_id: Mapped[str] = mapped_column(String(26), primary_key=True)
+    business_terminal_id: Mapped[str] = mapped_column(
+        String(26), ForeignKey("atp_business_terminal.business_terminal_id")
+    )
+    environment_id: Mapped[str] = mapped_column(String(26))
+    project_id: Mapped[str] = mapped_column(String(26))
+    action: Mapped[str] = mapped_column(String(64))
+    operation_id: Mapped[str] = mapped_column(String(128))
+    actor_user_id: Mapped[str] = mapped_column(String(26), ForeignKey("atp_user.user_id"))
+    required_permission: Mapped[str] = mapped_column(String(128))
+    previous_status: Mapped[str | None] = mapped_column(String(11))
+    new_status: Mapped[str | None] = mapped_column(String(11))
+    result_code: Mapped[str] = mapped_column(String(64))
+    reason: Mapped[str | None] = mapped_column(String(1000))
+    before_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    after_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    correlation_id: Mapped[str] = mapped_column(String(128))
+    occurred_at: Mapped[datetime] = mapped_column(DateTime)
+    source_context_hash: Mapped[bytes] = mapped_column(MySQLBinary(32))
+
+
+class LoginStrategyAudit(Base):
+    __tablename__ = "atp_login_strategy_audit"
+    audit_id: Mapped[str] = mapped_column(String(26), primary_key=True)
+    login_strategy_id: Mapped[str] = mapped_column(
+        String(26), ForeignKey("atp_login_strategy.login_strategy_id")
+    )
+    automation_asset_id: Mapped[str] = mapped_column(String(26))
+    project_id: Mapped[str] = mapped_column(String(26))
+    action: Mapped[str] = mapped_column(String(64))
+    operation_id: Mapped[str] = mapped_column(String(128))
+    actor_user_id: Mapped[str] = mapped_column(String(26), ForeignKey("atp_user.user_id"))
+    required_permission: Mapped[str] = mapped_column(String(128))
+    previous_status: Mapped[str | None] = mapped_column(String(17))
+    new_status: Mapped[str | None] = mapped_column(String(17))
     result_code: Mapped[str] = mapped_column(String(64))
     reason: Mapped[str | None] = mapped_column(String(1000))
     before_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)

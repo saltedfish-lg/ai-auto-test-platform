@@ -84,13 +84,30 @@ def _ddl_current_counts(migrations: list[dict[str, Any]]) -> tuple[int, int]:
     creates = set(re.findall(r"CREATE TABLE\s+`?([A-Za-z0-9_]+)`?", sql, re.I))
     drops = set(re.findall(r"DROP TABLE(?:\s+IF EXISTS)?\s+`?([A-Za-z0-9_]+)`?", sql, re.I))
     current_tables = creates - drops
-    fk_rx = re.compile(
-        r"ALTER TABLE\s+`?([A-Za-z0-9_]+)`?\s+ADD CONSTRAINT\s+`?([A-Za-z0-9_]+)`?\s+"
-        r"FOREIGN KEY\s*\(`?([A-Za-z0-9_]+)`?\)\s+REFERENCES\s+`?([A-Za-z0-9_]+)`?",
-        re.I,
+    current_fks: dict[str, tuple[str, str]] = {}
+    alter_rx = re.compile(r"ALTER TABLE\s+`?([A-Za-z0-9_]+)`?\s+(.*?);", re.I | re.S)
+    add_fk_rx = re.compile(
+        r"ADD\s+CONSTRAINT\s+`?([A-Za-z0-9_]+)`?\s+FOREIGN\s+KEY\s*"
+        r"\([^)]+\)\s+REFERENCES\s+`?([A-Za-z0-9_]+)`?\s*\([^)]+\)",
+        re.I | re.S,
     )
-    foreign_keys = [match.groups() for match in fk_rx.finditer(sql)]
-    current_fks = [fk for fk in foreign_keys if fk[0] in current_tables and fk[3] in current_tables]
+    drop_fk_rx = re.compile(r"DROP\s+FOREIGN\s+KEY\s+`?([A-Za-z0-9_]+)`?", re.I)
+    for child_table, body in alter_rx.findall(sql):
+        operations: list[tuple[int, str, str | None]] = []
+        operations.extend((match.start(), "DROP", match.group(1)) for match in drop_fk_rx.finditer(body))
+        operations.extend((match.start(), "ADD", match.group(1)) for match in add_fk_rx.finditer(body))
+        for _, operation, name in sorted(operations):
+            assert name is not None
+            if operation == "DROP":
+                current_fks.pop(name, None)
+                continue
+            add_match = next(match for match in add_fk_rx.finditer(body) if match.group(1) == name)
+            current_fks[name] = (child_table, add_match.group(2))
+    current_fks = {
+        name: fk
+        for name, fk in current_fks.items()
+        if fk[0] in current_tables and fk[1] in current_tables
+    }
     return len(current_tables), len(current_fks)
 
 

@@ -8,8 +8,14 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 EnvironmentLifecycleStatus = Literal[
-    "CREATED", "CONFIGURING", "VALIDATING", "ACTIVE", "UNREACHABLE",
-    "DISABLED", "RECOVERING", "ARCHIVED",
+    "CREATED",
+    "CONFIGURING",
+    "VALIDATING",
+    "ACTIVE",
+    "UNREACHABLE",
+    "DISABLED",
+    "RECOVERING",
+    "ARCHIVED",
 ]
 EnablementState = Literal["ENABLED", "DISABLED"]
 AccessibilityState = Literal["UNKNOWN", "REACHABLE", "UNREACHABLE"]
@@ -25,9 +31,6 @@ class EnvironmentResource(BaseModel):
     updated_at: datetime
     project_id: str = Field(min_length=26, max_length=26)
     environment_code: str = Field(min_length=1, max_length=191)
-    environment_terminal_access_revision_id: str | None = Field(
-        default=None, min_length=26, max_length=26
-    )
     lifecycle_status: EnvironmentLifecycleStatus
     enablement_state: EnablementState
     accessibility_state: AccessibilityState
@@ -42,9 +45,6 @@ class CreateEnvironmentRequest(BaseModel):
     display_name: str | None = Field(default=None, max_length=255)
     project_id: str | None = Field(default=None, min_length=26, max_length=26)
     environment_code: str | None = Field(default=None, min_length=1, max_length=191)
-    environment_terminal_access_revision_id: str | None = Field(
-        default=None, min_length=26, max_length=26
-    )
     enablement_state: EnablementState | None = None
     accessibility_state: AccessibilityState | None = None
 
@@ -56,7 +56,7 @@ class CreateEnvironmentRequest(BaseModel):
         return value
 
     @model_validator(mode="after")
-    def require_business_identity(self) -> "CreateEnvironmentRequest":
+    def require_business_identity(self) -> CreateEnvironmentRequest:
         if self.project_id is None or self.environment_code is None:
             raise ValueError("project_id and environment_code are required")
         if self.environment_id is not None:
@@ -72,9 +72,6 @@ class UpdateEnvironmentRequest(BaseModel):
     display_name: str | None = Field(default=None, max_length=255)
     project_id: str | None = Field(default=None, min_length=26, max_length=26)
     environment_code: str | None = Field(default=None, min_length=1, max_length=191)
-    environment_terminal_access_revision_id: str | None = Field(
-        default=None, min_length=26, max_length=26
-    )
     enablement_state: EnablementState | None = None
     accessibility_state: AccessibilityState | None = None
 

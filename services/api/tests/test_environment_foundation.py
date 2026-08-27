@@ -4,9 +4,6 @@ from types import SimpleNamespace
 
 import pytest
 from jsonschema import Draft202012Validator
-from pydantic import ValidationError
-from sqlalchemy.exc import IntegrityError
-
 from platform_api.environment_router import router
 from platform_api.environment_schemas import CreateEnvironmentRequest, UpdateEnvironmentRequest
 from platform_api.environment_service import (
@@ -16,6 +13,8 @@ from platform_api.environment_service import (
     _parse_filter,
 )
 from platform_api.errors import PlatformError
+from pydantic import ValidationError
+from sqlalchemy.exc import IntegrityError
 
 
 def test_environment_operations_match_formal_openapi_contract() -> None:
@@ -32,13 +31,13 @@ def test_environment_operations_match_formal_openapi_contract() -> None:
     }
 
 
-def test_create_environment_accepts_no_terminal_revision_and_rejects_future_fields() -> None:
-    request = CreateEnvironmentRequest(
+def test_environment_contract_has_no_terminal_revision_owner_pointer() -> None:
+    CreateEnvironmentRequest(
         project_id="P" * 26,
         environment_code="TEST",
         display_name="测试环境",
     )
-    assert request.environment_terminal_access_revision_id is None
+    assert "environment_terminal_access_revision_id" not in CreateEnvironmentRequest.model_fields
     with pytest.raises(ValidationError):
         CreateEnvironmentRequest.model_validate(
             {"project_id": "P" * 26, "environment_code": "TEST", "base_url": "https://x"}
@@ -66,11 +65,10 @@ def test_environment_filter_is_explicitly_project_scoped() -> None:
     assert raised.value.code == "ENVIRONMENT_FILTER_INVALID"
 
 
-def test_environment_migration_resolves_nullable_revision_and_project_uniqueness() -> None:
+def test_environment_migration_resolves_project_uniqueness_and_drops_pointer() -> None:
     root = Path(__file__).resolve().parents[3]
     migration = (
-        root
-        / "docs/authority/编码权威事实/DATABASE_DDL/V12__environment_management_foundation.sql"
+        root / "docs/authority/编码权威事实/DATABASE_DDL/V12__environment_management_foundation.sql"
     ).read_text(encoding="utf-8")
     assert "environment_terminal_access_revision_id VARCHAR(26) NULL" in migration
     assert "environment_id VARCHAR(26) NULL" in migration
@@ -81,9 +79,15 @@ def test_environment_migration_resolves_nullable_revision_and_project_uniqueness
     assert "trg_atp_environment_audit_no_delete" in migration
     assert "base_url" not in migration
 
-    schema = (
-        root / "docs/authority/编码权威事实/DATABASE_DDL/database-schema.yaml"
+    terminal_migration = (
+        root / "docs/authority/编码权威事实/DATABASE_DDL/V13__business_terminal_foundation.sql"
     ).read_text(encoding="utf-8")
+    assert "DROP COLUMN environment_terminal_access_revision_id" in terminal_migration
+    assert "current_published_revision_id" in terminal_migration
+
+    schema = (root / "docs/authority/编码权威事实/DATABASE_DDL/database-schema.yaml").read_text(
+        encoding="utf-8"
+    )
     assert "object_id: OBJ-009-AUDIT" not in schema
 
 
@@ -181,19 +185,28 @@ def test_environment_outbox_payload_matches_formal_event_contract() -> None:
     Draft202012Validator(json.loads(contract)).validate(payload)
 
 
-def test_environment_service_has_no_terminal_access_table_dependency() -> None:
+def test_environment_service_has_no_terminal_access_ownership_dependency() -> None:
     root = Path(__file__).resolve().parents[3]
-    source = (
-        root / "services/api/src/platform_api/environment_service.py"
-    ).read_text(encoding="utf-8")
+    source = (root / "services/api/src/platform_api/environment_service.py").read_text(
+        encoding="utf-8"
+    )
     assert "atp_environment_terminal_access_revision" not in source
+    assert "environment_terminal_access_revision_id" not in source
 
 
 @pytest.mark.parametrize(
     ("vendor_code", "vendor_message", "expected_code"),
     [
-        (1062, "Duplicate entry for key 'uq_atp_environment_business'", "ENVIRONMENT_CODE_CONFLICT"),
-        (1062, "Duplicate entry for key 'uq_atp_outbox_event_aggregate_sequence'", "INTERNAL_ERROR"),
+        (
+            1062,
+            "Duplicate entry for key 'uq_atp_environment_business'",
+            "ENVIRONMENT_CODE_CONFLICT",
+        ),
+        (
+            1062,
+            "Duplicate entry for key 'uq_atp_outbox_event_aggregate_sequence'",
+            "INTERNAL_ERROR",
+        ),
         (1452, "Cannot add or update a child row", "INTERNAL_ERROR"),
     ],
 )
