@@ -391,6 +391,114 @@ class BusinessTerminalAudit(Base):
     source_context_hash: Mapped[bytes] = mapped_column(MySQLBinary(32))
 
 
+class TestAccount(Base):
+    __tablename__ = "atp_test_account"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["environment_id", "project_id"],
+            ["atp_environment.environment_id", "atp_environment.project_id"],
+            name="fk_atp_test_account_environment_scope",
+        ),
+    )
+    test_account_id: Mapped[str] = mapped_column(String(26), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(26), ForeignKey("atp_project.project_id"))
+    environment_id: Mapped[str] = mapped_column(String(26))
+    account_identifier: Mapped[str] = mapped_column(String(191))
+    sso_identity_id: Mapped[str | None] = mapped_column(String(26))
+    login_qualification_id: Mapped[str | None] = mapped_column(String(26))
+    lifecycle_status: Mapped[str] = mapped_column(String(18))
+    credential_state: Mapped[str] = mapped_column(String(8))
+    display_name: Mapped[str | None] = mapped_column(String(255))
+    row_version: Mapped[int] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime] = mapped_column(DateTime)
+    created_by: Mapped[str | None] = mapped_column(String(26))
+    updated_by: Mapped[str | None] = mapped_column(String(26))
+    extension_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+
+
+class CredentialRevision(Base):
+    __tablename__ = "atp_credential_revision"
+    credential_revision_id: Mapped[str] = mapped_column(String(26), primary_key=True)
+    test_account_id: Mapped[str] = mapped_column(
+        String(26), ForeignKey("atp_test_account.test_account_id")
+    )
+    project_id: Mapped[str] = mapped_column(String(26), ForeignKey("atp_project.project_id"))
+    revision_no: Mapped[int] = mapped_column(BigInteger)
+    secret_ref: Mapped[str] = mapped_column(String(255))
+    published_at: Mapped[datetime | None] = mapped_column(DateTime)
+    superseded_by_revision_id: Mapped[str | None] = mapped_column(String(26))
+    lifecycle_status: Mapped[str] = mapped_column(String(10))
+    display_name: Mapped[str | None] = mapped_column(String(255))
+    row_version: Mapped[int] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime] = mapped_column(DateTime)
+    created_by: Mapped[str | None] = mapped_column(String(26))
+    updated_by: Mapped[str | None] = mapped_column(String(26))
+    extension_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+
+
+class TestAccountSecret(Base):
+    """Encrypted credential bytes; never projected through the public API."""
+
+    __tablename__ = "atp_test_account_secret"
+    credential_revision_id: Mapped[str] = mapped_column(
+        String(26), ForeignKey("atp_credential_revision.credential_revision_id"), primary_key=True
+    )
+    encrypted_secret: Mapped[bytes] = mapped_column(LargeBinary(16412))
+    key_id: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime] = mapped_column(DateTime)
+
+
+class AccountMappingRevision(Base):
+    __tablename__ = "atp_account_mapping_revision"
+    account_mapping_revision_id: Mapped[str] = mapped_column(String(26), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(26), ForeignKey("atp_project.project_id"))
+    test_account_id: Mapped[str] = mapped_column(
+        String(26), ForeignKey("atp_test_account.test_account_id")
+    )
+    environment_id: Mapped[str] = mapped_column(
+        String(26), ForeignKey("atp_environment.environment_id")
+    )
+    business_terminal_id: Mapped[str] = mapped_column(
+        String(26), ForeignKey("atp_business_terminal.business_terminal_id")
+    )
+    lifecycle_status: Mapped[str] = mapped_column(String(10))
+    display_name: Mapped[str | None] = mapped_column(String(255))
+    row_version: Mapped[int] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime] = mapped_column(DateTime)
+    created_by: Mapped[str | None] = mapped_column(String(26))
+    updated_by: Mapped[str | None] = mapped_column(String(26))
+    extension_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+
+
+class TestAccountAudit(Base):
+    __tablename__ = "atp_test_account_audit"
+    audit_id: Mapped[str] = mapped_column(String(26), primary_key=True)
+    test_account_id: Mapped[str] = mapped_column(
+        String(26), ForeignKey("atp_test_account.test_account_id")
+    )
+    project_id: Mapped[str] = mapped_column(String(26))
+    environment_id: Mapped[str] = mapped_column(String(26))
+    business_terminal_ids: Mapped[list[str]] = mapped_column(JSON)
+    action: Mapped[str] = mapped_column(String(64))
+    operation_id: Mapped[str] = mapped_column(String(128))
+    actor_user_id: Mapped[str] = mapped_column(String(26), ForeignKey("atp_user.user_id"))
+    required_permission: Mapped[str] = mapped_column(String(128))
+    previous_status: Mapped[str | None] = mapped_column(String(18))
+    new_status: Mapped[str | None] = mapped_column(String(18))
+    result_code: Mapped[str] = mapped_column(String(64))
+    reason: Mapped[str | None] = mapped_column(String(1000))
+    before_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    after_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    credential_changed: Mapped[bool] = mapped_column(Boolean)
+    correlation_id: Mapped[str] = mapped_column(String(128))
+    occurred_at: Mapped[datetime] = mapped_column(DateTime)
+    source_context_hash: Mapped[bytes] = mapped_column(MySQLBinary(32))
+
+
 class LoginStrategyAudit(Base):
     __tablename__ = "atp_login_strategy_audit"
     audit_id: Mapped[str] = mapped_column(String(26), primary_key=True)

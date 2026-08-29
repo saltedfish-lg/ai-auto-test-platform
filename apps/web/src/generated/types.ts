@@ -206,19 +206,28 @@ export type EnvironmentTerminalAccessRevisionResource = {
   lifecycle_status: "DRAFT" | "VALIDATING" | "PUBLISHED" | "SUPERSEDED" | "RETIRED" | "ARCHIVED";
 };
 
+export type TestAccountTerminalResource = {
+  business_terminal_id: string;
+  terminal_code: string;
+  display_name?: string | null;
+  terminal_type: "MANAGEMENT" | "CLIENT" | "PDA";
+};
+
 export type TestAccountResource = {
   test_account_id: string;
   display_name?: string | null;
   row_version: number;
   created_at: string;
   updated_at: string;
-  project_id?: string | null;
-  environment_id?: string | null;
-  account_identifier?: string | null;
+  project_id: string;
+  environment_id: string;
+  account_identifier: string;
   sso_identity_id?: string | null;
   login_qualification_id?: string | null;
   lifecycle_status: "CREATED" | "CONFIGURING" | "VALIDATING" | "ACTIVE" | "CREDENTIAL_EXPIRED" | "DISABLED" | "RECOVERING" | "ARCHIVED";
   credential_state: "VALID" | "EXPIRING" | "EXPIRED" | "REVOKED";
+  credential_revision_no: number;
+  business_terminals: Array<TestAccountTerminalResource>;
 };
 
 export type CredentialRevisionResource = {
@@ -1289,16 +1298,12 @@ export type ListTestAccountResponse = {
 };
 
 export type CreateTestAccountRequest = {
-  expected_version?: number;
-  reason?: string | null;
-  test_account_id?: string;
+  reason: string;
   display_name?: string | null;
-  project_id?: string | null;
-  environment_id?: string | null;
-  account_identifier?: string | null;
-  sso_identity_id?: string | null;
-  login_qualification_id?: string | null;
-  credential_state?: "VALID" | "EXPIRING" | "EXPIRED" | "REVOKED";
+  environment_id: string;
+  account_identifier: string;
+  business_terminal_ids: Array<string>;
+  secret_value: string;
 };
 
 export type CreateTestAccountResponse = {
@@ -1313,14 +1318,19 @@ export type GetTestAccountResponse = {
 
 export type UpdateTestAccountRequest = {
   expected_version: number;
-  reason?: string | null;
+  reason: string;
   display_name?: string | null;
-  project_id?: string | null;
-  environment_id?: string | null;
-  account_identifier?: string | null;
-  sso_identity_id?: string | null;
-  login_qualification_id?: string | null;
-  credential_state?: "VALID" | "EXPIRING" | "EXPIRED" | "REVOKED";
+};
+
+export type RotateTestAccountSecretRequest = {
+  expected_version: number;
+  secret_value: string;
+  reason: string;
+};
+
+export type TestAccountLifecycleRequest = {
+  expected_version: number;
+  reason: string;
 };
 
 export type UpdateTestAccountResponse = {

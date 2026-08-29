@@ -17,7 +17,7 @@ tables:
     default: null
   - name: project_id
     type: VARCHAR(26)
-    nullable: true
+    nullable: false
     primary_key: false
     default: null
   - name: test_account_id
@@ -106,7 +106,39 @@ tables:
     referenced_column: project_id
     on_delete: RESTRICT
     on_update: RESTRICT
-  indexes: []
+  - name: fk_atp_account_mapping_test_account_scope
+    columns:
+    - test_account_id
+    - project_id
+    - environment_id
+    referenced_table: atp_test_account
+    referenced_columns:
+    - test_account_id
+    - project_id
+    - environment_id
+    on_delete: RESTRICT
+    on_update: RESTRICT
+  - name: fk_atp_account_mapping_terminal_scope
+    columns:
+    - business_terminal_id
+    - project_id
+    - environment_id
+    referenced_table: atp_business_terminal
+    referenced_columns:
+    - business_terminal_id
+    - project_id
+    - environment_id
+    on_delete: RESTRICT
+    on_update: RESTRICT
+  indexes:
+  - name: ix_atp_account_mapping_account_status
+    columns:
+    - test_account_id
+    - lifecycle_status
+  - name: ix_atp_account_mapping_terminal_status
+    columns:
+    - business_terminal_id
+    - lifecycle_status
   delete_behavior: DECLARED_PER_FOREIGN_KEY
   data_owner: DOMAIN_OR_TECHNICAL_OWNER
   idempotency_and_audit: ROW_VERSION_OR_TECHNICAL_TABLE_RULE
@@ -2369,7 +2401,22 @@ tables:
     referenced_column: credential_revision_id
     on_delete: SET NULL
     on_update: RESTRICT
-  indexes: []
+  - name: fk_atp_credential_revision_account_scope
+    columns:
+    - test_account_id
+    - project_id
+    referenced_table: atp_test_account
+    referenced_columns:
+    - test_account_id
+    - project_id
+    on_delete: RESTRICT
+    on_update: RESTRICT
+  indexes:
+  - name: ix_atp_credential_revision_account_status
+    columns:
+    - test_account_id
+    - lifecycle_status
+    - revision_no
   delete_behavior: DECLARED_PER_FOREIGN_KEY
   data_owner: DOMAIN_OR_TECHNICAL_OWNER
   idempotency_and_audit: ROW_VERSION_OR_TECHNICAL_TABLE_RULE
@@ -7841,27 +7888,27 @@ tables:
     default: null
   - name: project_id
     type: VARCHAR(26)
-    nullable: true
+    nullable: false
     primary_key: false
     default: null
   - name: environment_id
     type: VARCHAR(26)
-    nullable: true
+    nullable: false
     primary_key: false
     default: null
   - name: account_identifier
     type: VARCHAR(191)
-    nullable: true
+    nullable: false
     primary_key: false
     default: null
   - name: sso_identity_id
     type: VARCHAR(26)
-    nullable: false
+    nullable: true
     primary_key: false
     default: null
   - name: login_qualification_id
     type: VARCHAR(26)
-    nullable: false
+    nullable: true
     primary_key: false
     default: null
   - name: lifecycle_status
@@ -7914,8 +7961,18 @@ tables:
   unique_keys:
   - name: uq_atp_test_account_business
     columns:
+    - project_id
     - environment_id
     - account_identifier
+  - name: uq_atp_test_account_project_scope
+    columns:
+    - test_account_id
+    - project_id
+  - name: uq_atp_test_account_environment_scope
+    columns:
+    - test_account_id
+    - project_id
+    - environment_id
   check_constraints:
   - name: ck_atp_test_account_lifecycle_status
     expression: (lifecycle_status IN ('CREATED', 'CONFIGURING', 'VALIDATING', 'ACTIVE', 'CREDENTIAL_EXPIRED', 'DISABLED',
@@ -7923,6 +7980,16 @@ tables:
   - name: ck_atp_test_account_credential_state
     expression: (credential_state IN ('VALID', 'EXPIRING', 'EXPIRED', 'REVOKED'))
   foreign_keys:
+  - name: fk_atp_test_account_environment_scope
+    columns:
+    - environment_id
+    - project_id
+    referenced_table: atp_environment
+    referenced_columns:
+    - environment_id
+    - project_id
+    on_delete: RESTRICT
+    on_update: RESTRICT
   - name: fk_atp_test_account_project_id
     column: project_id
     referenced_table: atp_project
@@ -7941,7 +8008,12 @@ tables:
     referenced_column: login_qualification_id
     on_delete: RESTRICT
     on_update: RESTRICT
-  indexes: []
+  indexes:
+  - name: ix_atp_test_account_project_environment_status
+    columns:
+    - project_id
+    - environment_id
+    - lifecycle_status
   delete_behavior: DECLARED_PER_FOREIGN_KEY
   data_owner: DOMAIN_OR_TECHNICAL_OWNER
   idempotency_and_audit: ROW_VERSION_OR_TECHNICAL_TABLE_RULE
@@ -7952,9 +8024,174 @@ tables:
   - credential_state
   relationship_fields:
   - project_id
+  - environment_id
   - sso_identity_id
   - login_qualification_id
   extension_json_rule: NON_CONTRACT_EXTENSIONS_ONLY
+- table_name: atp_test_account_audit
+  columns:
+  - name: audit_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: true
+    default: null
+  - name: test_account_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: project_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: environment_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: business_terminal_ids
+    type: JSON
+    nullable: false
+    primary_key: false
+    default: null
+  - name: action
+    type: VARCHAR(64)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: operation_id
+    type: VARCHAR(128)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: actor_user_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: required_permission
+    type: VARCHAR(128)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: previous_status
+    type: VARCHAR(18)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: new_status
+    type: VARCHAR(18)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: result_code
+    type: VARCHAR(64)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: reason
+    type: VARCHAR(1000)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: before_json
+    type: JSON
+    nullable: true
+    primary_key: false
+    default: null
+  - name: after_json
+    type: JSON
+    nullable: true
+    primary_key: false
+    default: null
+  - name: credential_changed
+    type: BOOLEAN
+    nullable: false
+    primary_key: false
+    default: 'FALSE'
+  - name: correlation_id
+    type: VARCHAR(128)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: occurred_at
+    type: DATETIME(6)
+    nullable: false
+    primary_key: false
+    default: CURRENT_TIMESTAMP(6)
+  - name: source_context_hash
+    type: BINARY(32)
+    nullable: false
+    primary_key: false
+    default: null
+  primary_key:
+  - audit_id
+  unique_keys: []
+  check_constraints: []
+  foreign_keys:
+  - name: fk_atp_test_account_audit_test_account
+    column: test_account_id
+    referenced_table: atp_test_account
+    referenced_column: test_account_id
+    on_delete: RESTRICT
+    on_update: RESTRICT
+  - name: fk_atp_test_account_audit_actor
+    column: actor_user_id
+    referenced_table: atp_user
+    referenced_column: user_id
+    on_delete: RESTRICT
+    on_update: RESTRICT
+  indexes:
+  - name: ix_atp_test_account_audit_account_time
+    columns:
+    - test_account_id
+    - occurred_at
+  delete_behavior: APPEND_ONLY_TRIGGER_PROTECTED
+  data_owner: TEST_ACCOUNT_AGGREGATE
+  idempotency_and_audit: APPEND_ONLY_AUDIT
+- table_name: atp_test_account_secret
+  columns:
+  - name: credential_revision_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: true
+    default: null
+  - name: encrypted_secret
+    type: VARBINARY(16412)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: key_id
+    type: VARCHAR(64)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: created_at
+    type: DATETIME(6)
+    nullable: false
+    primary_key: false
+    default: CURRENT_TIMESTAMP(6)
+  - name: updated_at
+    type: DATETIME(6)
+    nullable: false
+    primary_key: false
+    default: CURRENT_TIMESTAMP(6)
+  primary_key:
+  - credential_revision_id
+  unique_keys: []
+  check_constraints: []
+  foreign_keys:
+  - name: fk_atp_test_account_secret_credential_revision
+    column: credential_revision_id
+    referenced_table: atp_credential_revision
+    referenced_column: credential_revision_id
+    on_delete: RESTRICT
+    on_update: RESTRICT
+  indexes: []
+  delete_behavior: DECLARED_PER_FOREIGN_KEY
+  data_owner: TEST_ACCOUNT_AGGREGATE
+  idempotency_and_audit: ENCRYPTED_CREDENTIAL_REVISION_ONLY
 - table_name: atp_test_artifact
   columns:
   - name: test_artifact_id

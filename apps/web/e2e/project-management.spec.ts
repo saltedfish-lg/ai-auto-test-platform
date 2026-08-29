@@ -281,6 +281,108 @@ test("project management browser closure", async ({ page, request }) => {
   await page.getByRole("dialog", { name: "业务终端详情" }).locator(".el-dialog__headerbtn").click();
   await page.getByRole("button", { name: /返回项目详情/ }).click();
 
+  await page.getByRole("button", { name: "测试账号" }).click();
+  await expect(page).toHaveURL(new RegExp(`/projects/${projectId}/test-accounts$`));
+  await page.getByRole("button", { name: "新建测试账号" }).click();
+  const accountDialog = page.getByRole("dialog", { name: "新建测试账号" });
+  await accountDialog
+    .locator(".el-form-item", { hasText: "环境" })
+    .locator(".el-select__wrapper")
+    .click();
+  await page.getByRole("option", { name: "真实事务更新环境" }).click();
+  await accountDialog.getByLabel("账号标识").fill(`qa-${projectCode}`);
+  await accountDialog.getByLabel("显示名称").fill("浏览器验收测试账号");
+  await accountDialog
+    .locator(".el-form-item", { hasText: "适用业务终端" })
+    .locator(".el-select__wrapper")
+    .click();
+  await page.getByRole("option", { name: /浏览器验收管理端 \/ MANAGEMENT/ }).click();
+  const initialAccountSecret = `initial-test-account-${projectCode}`;
+  await accountDialog.getByLabel("登录凭据").fill(initialAccountSecret);
+  await accountDialog.getByLabel("创建原因").fill("验证 TestAccount 加密与范围闭环");
+  const accountCreated = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/api/v1/test-account") && response.request().method() === "POST",
+  );
+  await accountDialog.getByRole("button", { name: "创建" }).click();
+  const accountCreatedResponse = await accountCreated;
+  const accountCreatedPayload = await accountCreatedResponse.json();
+  expect(
+    accountCreatedResponse.status(),
+    JSON.stringify({
+      code: accountCreatedPayload.code,
+      title: accountCreatedPayload.title,
+      detail: accountCreatedPayload.detail,
+    }),
+  ).toBe(201);
+  expect(JSON.stringify(accountCreatedPayload)).not.toContain(initialAccountSecret);
+  expect(accountCreatedPayload.data).not.toHaveProperty("secret_value");
+  const accountId = accountCreatedPayload.data.test_account_id as string;
+  await expect(page.getByText(`qa-${projectCode}`, { exact: true })).toBeVisible();
+  expect(await page.locator("body").textContent()).not.toContain(initialAccountSecret);
+
+  let accountRow = page.getByRole("row").filter({
+    has: page.getByText(`qa-${projectCode}`, { exact: true }),
+  });
+  await accountRow.getByRole("button", { name: "编辑" }).click();
+  const accountEditDialog = page.getByRole("dialog", { name: "编辑测试账号" });
+  await accountEditDialog.getByLabel("显示名称").fill("浏览器验收测试账号（已更新）");
+  await accountEditDialog.getByLabel("修改原因").fill("验证非敏感字段独立修改");
+  const accountUpdated = page.waitForResponse(
+    (response) =>
+      response.url().endsWith(`/api/v1/test-account/${accountId}`) &&
+      response.request().method() === "PATCH",
+  );
+  await accountEditDialog.getByRole("button", { name: "保存" }).click();
+  expect((await accountUpdated).status()).toBe(200);
+  await expect(page.getByText("浏览器验收测试账号（已更新）", { exact: true })).toBeVisible();
+
+  accountRow = page.getByRole("row").filter({
+    has: page.getByText(`qa-${projectCode}`, { exact: true }),
+  });
+  await accountRow.getByRole("button", { name: "更新凭据" }).click();
+  const secretDialog = page.getByRole("dialog", { name: "更新登录凭据" });
+  const rotatedAccountSecret = `rotated-test-account-${projectCode}`;
+  const secretInput = secretDialog.getByLabel("新凭据");
+  await secretInput.fill(rotatedAccountSecret);
+  await secretDialog.getByLabel("轮换原因").fill("验证独立 Secret rotate command");
+  const secretRotated = page.waitForResponse(
+    (response) =>
+      response.url().endsWith(`/api/v1/test-account/${accountId}/credential-rotate`) &&
+      response.request().method() === "POST",
+  );
+  await secretDialog.getByRole("button", { name: "安全更新" }).click();
+  const secretRotatedResponse = await secretRotated;
+  expect(secretRotatedResponse.status()).toBe(200);
+  expect(JSON.stringify(await secretRotatedResponse.json())).not.toContain(rotatedAccountSecret);
+  await expect(secretInput).toHaveValue("");
+  expect(await page.locator("body").textContent()).not.toContain(rotatedAccountSecret);
+
+  accountRow = page.getByRole("row").filter({
+    has: page.getByText(`qa-${projectCode}`, { exact: true }),
+  });
+  await accountRow.getByRole("button", { name: "状态操作" }).click();
+  await page.getByText("提交校验", { exact: true }).click();
+  const lifecycleDialog = page.getByRole("dialog", { name: "提交校验" });
+  await lifecycleDialog.getByLabel("操作原因").fill("验证 LC-013 显式生命周期命令");
+  const accountValidated = page.waitForResponse(
+    (response) =>
+      response.url().endsWith(`/api/v1/test-account/${accountId}/validate`) &&
+      response.request().method() === "POST",
+  );
+  await lifecycleDialog.getByRole("button", { name: "确认" }).click();
+  expect((await accountValidated).status()).toBe(200);
+  await expect(accountRow.getByText("VALIDATING", { exact: true })).toBeVisible();
+  const accountRead = await request.get(`/api/v1/test-account/${accountId}`, {
+    headers: authorizedHeaders,
+  });
+  expect(accountRead.status()).toBe(200);
+  const accountReadText = await accountRead.text();
+  expect(accountReadText).not.toContain(initialAccountSecret);
+  expect(accountReadText).not.toContain(rotatedAccountSecret);
+  expect(accountReadText).not.toContain("secret_value");
+  await page.getByRole("button", { name: /返回项目详情/ }).click();
+
   await page.getByRole("button", { name: /返回项目列表/ }).click();
   await expect(page.getByText(projectCode, { exact: true })).toBeVisible();
   const projectRow = page.getByRole("row").filter({

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
 import secrets
@@ -63,12 +64,36 @@ from platform_api.security import PasswordService, new_ulid  # noqa: E402
 GATE_ID = "REAL_ACCEPTANCE_GATE"
 
 
+def _write_test_account_secret_key_ring(directory: Path) -> Path:
+    path = directory / "test-account-secret-key-ring.json"
+    path.write_text(
+        json.dumps(
+            {
+                "active_key_id": "project-browser-test-account-active",
+                "keys": [
+                    {
+                        "key_id": "project-browser-test-account-active",
+                        "key_material": base64.urlsafe_b64encode(secrets.token_bytes(32))
+                        .rstrip(b"=")
+                        .decode("ascii"),
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
 def _database_evidence(database: str, project_code: str) -> dict[str, object]:
     retry_code = f"RETRY-{project_code}"
     denied_code = f"DENIED-{project_code}"
     service_account_code = f"SERVICE-{project_code}"
     environment_code = f"ENV-{project_code}"
     terminal_code = f"ADMIN-{project_code}"
+    account_identifier = f"qa-{project_code}"
+    initial_account_secret = f"initial-test-account-{project_code}".encode("utf-8")
+    rotated_account_secret = f"rotated-test-account-{project_code}".encode("utf-8")
     with _connection(database) as connection, connection.cursor() as cursor:
         cursor.execute(
             "SELECT project_id, display_name, lifecycle_status, row_version "
@@ -290,6 +315,51 @@ def _database_evidence(database: str, project_code: str) -> dict[str, object]:
         login_strategy_event_types = {
             str(event_type): int(count) for event_type, count in cursor.fetchall()
         }
+        cursor.execute(
+            "SELECT test_account_id,display_name,lifecycle_status,credential_state,row_version "
+            "FROM atp_test_account WHERE project_id=%s AND environment_id=%s "
+            "AND account_identifier=%s",
+            (project_id, environment_id, account_identifier),
+        )
+        account = cursor.fetchone()
+        if account is None:
+            raise RuntimeError("browser-created TestAccount was not persisted")
+        (
+            test_account_id,
+            test_account_display_name,
+            test_account_status,
+            credential_state,
+            test_account_row_version,
+        ) = account
+        cursor.execute(
+            "SELECT c.revision_no,c.lifecycle_status,c.secret_ref,s.encrypted_secret,s.key_id "
+            "FROM atp_credential_revision c JOIN atp_test_account_secret s "
+            "ON s.credential_revision_id=c.credential_revision_id "
+            "WHERE c.test_account_id=%s ORDER BY c.revision_no",
+            (test_account_id,),
+        )
+        credential_rows = list(cursor.fetchall())
+        cursor.execute(
+            "SELECT business_terminal_id,lifecycle_status "
+            "FROM atp_account_mapping_revision WHERE test_account_id=%s",
+            (test_account_id,),
+        )
+        mapping_rows = list(cursor.fetchall())
+        cursor.execute(
+            "SELECT action,business_terminal_ids,before_json,after_json,credential_changed,"
+            "correlation_id,OCTET_LENGTH(source_context_hash) "
+            "FROM atp_test_account_audit WHERE test_account_id=%s ORDER BY occurred_at",
+            (test_account_id,),
+        )
+        test_account_audit_rows = list(cursor.fetchall())
+        test_account_audit_actions = {str(row[0]) for row in test_account_audit_rows}
+        cursor.execute(
+            "SELECT event_type,payload_json FROM atp_outbox_event "
+            "WHERE aggregate_id=%s ORDER BY sequence",
+            (test_account_id,),
+        )
+        test_account_event_rows = list(cursor.fetchall())
+        test_account_event_types = {str(row[0]) for row in test_account_event_rows}
 
     required_audits = {
         "PROJECT_CREATED",
@@ -467,6 +537,64 @@ def _database_evidence(database: str, project_code: str) -> dict[str, object]:
         login_strategy_event_types
     ):
         raise RuntimeError("LoginStrategy lifecycle outbox evidence is incomplete")
+    if (
+        test_account_display_name != "浏览器验收测试账号（已更新）"  # noqa: RUF001
+        or test_account_status != "VALIDATING"
+        or credential_state != "VALID"
+        or int(test_account_row_version) != 4
+    ):
+        raise RuntimeError("TestAccount persistence does not match the browser workflow")
+    if len(mapping_rows) != 1 or (
+        str(mapping_rows[0][0]) != str(terminal_id)
+        or str(mapping_rows[0][1]) != "PUBLISHED"
+    ):
+        raise RuntimeError("TestAccount terminal mapping scope is inconsistent")
+    if len(credential_rows) != 2:
+        raise RuntimeError("TestAccount credential rotation did not retain two revisions")
+    for index, row in enumerate(credential_rows, start=1):
+        revision_number, revision_status_value, secret_ref, encrypted_secret, key_id = row
+        expected_status = "SUPERSEDED" if index == 1 else "PUBLISHED"
+        ciphertext = bytes(encrypted_secret)
+        if (
+            int(revision_number) != index
+            or str(revision_status_value) != expected_status
+            or not str(secret_ref).startswith("test-account-secret:")
+            or not str(key_id)
+            or len(ciphertext) <= 28
+            or initial_account_secret in ciphertext
+            or rotated_account_secret in ciphertext
+        ):
+            raise RuntimeError("TestAccount credential encryption evidence is invalid")
+    required_test_account_audits = {
+        "TEST_ACCOUNT_CREATED",
+        "TEST_ACCOUNT_UPDATED",
+        "TEST_ACCOUNT_CREDENTIAL_ROTATED",
+        "TEST_ACCOUNT_VALIDATING",
+    }
+    if not required_test_account_audits.issubset(test_account_audit_actions):
+        raise RuntimeError("TestAccount append-only audit evidence is incomplete")
+    if sum(bool(row[4]) for row in test_account_audit_rows) != 2 or any(
+        not row[5] or int(row[6] or 0) != 32 for row in test_account_audit_rows
+    ):
+        raise RuntimeError("TestAccount audit security fields are incomplete")
+    required_test_account_events = {
+        "test_account.configuring",
+        "test_account.updated",
+        "test_account.credential_rotated",
+        "test_account.validating",
+    }
+    if not required_test_account_events.issubset(test_account_event_types):
+        raise RuntimeError("TestAccount outbox evidence is incomplete")
+    sensitive_evidence = json.dumps(
+        {
+            "audit": test_account_audit_rows,
+            "events": test_account_event_rows,
+        },
+        ensure_ascii=False,
+        default=str,
+    ).encode("utf-8")
+    if initial_account_secret in sensitive_evidence or rotated_account_secret in sensitive_evidence:
+        raise RuntimeError("TestAccount secret leaked into audit or outbox evidence")
     return {
         "project_status": lifecycle_status,
         "project_row_version": int(row_version),
@@ -498,6 +626,14 @@ def _database_evidence(database: str, project_code: str) -> dict[str, object]:
         "business_terminal_audit_actions": terminal_audit_actions,
         "business_terminal_outbox_event_types": terminal_event_types,
         "terminal_access_revision_outbox_event_types": revision_event_types,
+        "test_account_status": test_account_status,
+        "test_account_row_version": int(test_account_row_version),
+        "test_account_mapping_count": len(mapping_rows),
+        "test_account_credential_revision_count": len(credential_rows),
+        "test_account_secret_encrypted": True,
+        "test_account_audit_actions": sorted(test_account_audit_actions),
+        "test_account_outbox_event_types": sorted(test_account_event_types),
+        "test_account_secret_absent_from_audit_and_outbox": True,
     }
 
 
@@ -763,9 +899,11 @@ def main() -> int:
         gate_source=Path(__file__),
         gate_capabilities=[
             "PROJECT_MANAGEMENT_FOUNDATION",
+            "TEST_ACCOUNT_FOUNDATION",
             "BROWSER_RUNTIME",
             "RBAC_RUNTIME",
             "MYSQL_PERSISTENCE",
+            "TEST_ACCOUNT_SECRET_ENCRYPTION",
             "ISOLATED_RUNTIME_CLEANUP",
         ],
     )
@@ -831,6 +969,7 @@ def main() -> int:
             runtime_directory / "keys", kid="project-browser-rs256-v1"
         )
         hmac_key_ring = _write_hmac_key_ring(runtime_directory)
+        test_account_secret_key_ring = _write_test_account_secret_key_ring(runtime_directory)
         engine = create_database_engine(database_url)
         factory = create_session_factory(engine)
         passwords = PasswordService()
@@ -883,6 +1022,7 @@ def main() -> int:
                 "API_PORT": str(api_port),
                 "ATP_JWT_KEY_RING_FILE": str(key_ring.manifest_file),
                 "ATP_AUTH_HMAC_MASTER_KEY_FILE": str(hmac_key_ring),
+                "ATP_MODEL_SECRET_KEY_RING_FILE": str(test_account_secret_key_ring),
             }
         )
         stage = "api_startup"
@@ -1075,7 +1215,7 @@ def main() -> int:
             },
             "test_runner": "playwright",
             "test_cases": [
-                "apps/web/e2e/project-management.spec.ts::project management browser closure"
+                "apps/web/e2e/project-management.spec.ts::project and Test Account browser closure"
             ],
             "browser_exit_code": browser_exit,
             "checks": {

@@ -40,6 +40,8 @@ from platform_api.secret_store import AesGcmSecretProtector, UnavailableSecretPr
 from platform_api.schema_preflight import SchemaPreflightFailure, run_schema_preflight
 from platform_api.security import JwtKeyRing, JwtService, PasswordService
 from platform_api.session_service import SessionService
+from platform_api.test_account_router import router as test_account_router
+from platform_api.test_account_service import TestAccountService
 from platform_api.user_admin_router import router as user_admin_router
 from platform_api.user_admin_service import UserAdministrationService
 
@@ -166,6 +168,12 @@ def create_app(settings: ApiSettings) -> FastAPI:
             dynamic_credentials_enabled=settings.litellm_dynamic_credentials_enabled,
         ),
     )
+    app.state.test_account_service = TestAccountService(
+        app.state.session_factory,
+        app.state.auth_service,
+        idempotency,
+        secret_protector,
+    )
     app.state.ai_exploration_service = AIExplorationService(
         app.state.session_factory,
         app.state.auth_service,
@@ -178,6 +186,7 @@ def create_app(settings: ApiSettings) -> FastAPI:
     app.include_router(project_router)
     app.include_router(environment_router)
     app.include_router(business_terminal_router)
+    app.include_router(test_account_router)
     app.include_router(model_configuration_router)
     app.include_router(ai_exploration_router)
 

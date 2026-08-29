@@ -112,6 +112,13 @@ async function submitTransition(): Promise<void> {
             业务终端
           </el-button>
         </PermissionGate>
+        <PermissionGate permission="PROJECT_VIEW">
+          <el-button
+            @click="router.push({ name: 'projects.test-accounts', params: { projectId } })"
+          >
+            测试账号
+          </el-button>
+        </PermissionGate>
         <PermissionGate permission="PROJECT_EDIT">
           <el-button
             v-if="projects.current.lifecycle_status === 'ACTIVE'"

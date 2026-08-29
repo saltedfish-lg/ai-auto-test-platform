@@ -1,4 +1,4 @@
--- Current Living Authority MySQL 8.4 V3 → V4 → V5 → V6 → V7 → V8 → V9 → V10 → V11 → V12 → V13 runtime assertions
+-- Current Living Authority MySQL 8.4 V3 → V4 → V5 → V6 → V7 → V8 → V9 → V10 → V11 → V12 → V13 → V14 runtime assertions
 DELIMITER //
 CREATE PROCEDURE assert_current_contract()
 BEGIN
@@ -8,8 +8,8 @@ BEGIN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Retired atp_platform_design_baseline_release must not exist at the current migration head';
   END IF;
 
-  IF (SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type='BASE TABLE') <> 94 THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Expected exactly 94 base tables after V3 → V4 → V5 → V6 → V7 → V8 → V9 → V10 → V11 → V12 → V13';
+  IF (SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type='BASE TABLE') <> 96 THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Expected exactly 96 base tables after V3 → V4 → V5 → V6 → V7 → V8 → V9 → V10 → V11 → V12 → V13 → V14';
   END IF;
   IF EXISTS (
     SELECT 1 FROM information_schema.columns
@@ -83,6 +83,19 @@ BEGIN
     SELECT 1 FROM information_schema.referential_constraints
     WHERE constraint_schema=DATABASE() AND constraint_name='fk_atp_auth_refresh_session_credential'
   ) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Refresh session credential FK missing'; END IF;
+  IF (SELECT COUNT(*) FROM information_schema.key_column_usage
+      WHERE constraint_schema=DATABASE() AND table_name='atp_test_account'
+        AND constraint_name='fk_atp_test_account_environment_scope') <> 2
+     OR (SELECT COUNT(*) FROM information_schema.key_column_usage
+         WHERE constraint_schema=DATABASE() AND table_name='atp_test_account'
+           AND constraint_name='fk_atp_test_account_environment_scope'
+           AND referenced_table_name='atp_environment'
+           AND ((ordinal_position=1 AND column_name='environment_id'
+                 AND referenced_column_name='environment_id')
+             OR (ordinal_position=2 AND column_name='project_id'
+                 AND referenced_column_name='project_id'))) <> 2 THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='TestAccount environment-project scope FK mismatch';
+  END IF;
 
   INSERT INTO atp_user
     (user_id,username,lifecycle_status,row_version,created_at,updated_at)

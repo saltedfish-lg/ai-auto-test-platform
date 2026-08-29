@@ -49,6 +49,14 @@ list_test_account,GET,/api/v1/test-account,PROJECT_VIEW,CURRENT_LIVING_AUTHORITY
 create_test_account,POST,/api/v1/test-account,PROJECT_EDIT,CURRENT_LIVING_AUTHORITY
 get_test_account,GET,/api/v1/test-account/{id},PROJECT_VIEW,CURRENT_LIVING_AUTHORITY
 update_test_account,PATCH,/api/v1/test-account/{id},PROJECT_EDIT,CURRENT_LIVING_AUTHORITY
+rotate_test_account_secret,POST,/api/v1/test-account/{id}/credential-rotate,PROJECT_EDIT,CURRENT_LIVING_AUTHORITY
+validate_test_account,POST,/api/v1/test-account/{id}/validate,PROJECT_EDIT,CURRENT_LIVING_AUTHORITY
+reconfigure_test_account,POST,/api/v1/test-account/{id}/reconfigure,PROJECT_EDIT,CURRENT_LIVING_AUTHORITY
+activate_test_account,POST,/api/v1/test-account/{id}/activate,PROJECT_EDIT,CURRENT_LIVING_AUTHORITY
+mark_credential_expired_test_account,POST,/api/v1/test-account/{id}/mark-credential-expired,PROJECT_EDIT,CURRENT_LIVING_AUTHORITY
+recover_test_account,POST,/api/v1/test-account/{id}/recover,PROJECT_EDIT,CURRENT_LIVING_AUTHORITY
+disable_test_account,POST,/api/v1/test-account/{id}/disable,PROJECT_EDIT,CURRENT_LIVING_AUTHORITY
+archive_test_account,POST,/api/v1/test-account/{id}/archive,PROJECT_EDIT,CURRENT_LIVING_AUTHORITY
 list_credential_revision,GET,/api/v1/credential-revision,PROJECT_VIEW,CURRENT_LIVING_AUTHORITY
 create_credential_revision,POST,/api/v1/credential-revision,PROJECT_EDIT,CURRENT_LIVING_AUTHORITY
 get_credential_revision,GET,/api/v1/credential-revision/{id},PROJECT_VIEW,CURRENT_LIVING_AUTHORITY

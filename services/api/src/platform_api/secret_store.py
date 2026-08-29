@@ -28,6 +28,14 @@ class SecretProtector(Protocol):
 
     def decrypt(self, model_config_id: str, ciphertext: bytes, key_id: str) -> str: ...
 
+    def encrypt_scoped(
+        self, scope: str, owner_id: str, secret_value: str
+    ) -> EncryptedSecret: ...
+
+    def decrypt_scoped(
+        self, scope: str, owner_id: str, ciphertext: bytes, key_id: str
+    ) -> str: ...
+
 
 class AesGcmSecretProtector:
     """AES-256-GCM key-ring protector with model identity bound as AAD."""
@@ -67,10 +75,15 @@ class AesGcmSecretProtector:
             raise SecretStoreError("The model secret key ring could not be loaded.") from error
 
     @staticmethod
-    def _associated_data(model_config_id: str) -> bytes:
-        return f"atp:model-config-secret:v1:{model_config_id}".encode()
+    def _associated_data(scope: str, owner_id: str) -> bytes:
+        return f"atp:{scope}:v1:{owner_id}".encode()
 
     def encrypt(self, model_config_id: str, secret_value: str) -> EncryptedSecret:
+        return self.encrypt_scoped("model-config-secret", model_config_id, secret_value)
+
+    def encrypt_scoped(
+        self, scope: str, owner_id: str, secret_value: str
+    ) -> EncryptedSecret:
         if not secret_value:
             raise SecretStoreError("An empty model credential cannot be encrypted.")
         nonce = os.urandom(12)
@@ -78,11 +91,16 @@ class AesGcmSecretProtector:
         ciphertext = nonce + AESGCM(key).encrypt(
             nonce,
             secret_value.encode("utf-8"),
-            self._associated_data(model_config_id),
+            self._associated_data(scope, owner_id),
         )
         return EncryptedSecret(ciphertext=ciphertext, key_id=self._active_key_id)
 
     def decrypt(self, model_config_id: str, ciphertext: bytes, key_id: str) -> str:
+        return self.decrypt_scoped("model-config-secret", model_config_id, ciphertext, key_id)
+
+    def decrypt_scoped(
+        self, scope: str, owner_id: str, ciphertext: bytes, key_id: str
+    ) -> str:
         key = self._keys.get(key_id)
         if key is None or len(ciphertext) < 29:
             raise SecretStoreError("The model credential cannot be decrypted.")
@@ -90,7 +108,7 @@ class AesGcmSecretProtector:
             plaintext = AESGCM(key).decrypt(
                 ciphertext[:12],
                 ciphertext[12:],
-                self._associated_data(model_config_id),
+                self._associated_data(scope, owner_id),
             )
             return plaintext.decode("utf-8")
         except (InvalidTag, ValueError, UnicodeDecodeError) as error:
@@ -107,3 +125,15 @@ class UnavailableSecretProtector:
     def decrypt(self, model_config_id: str, ciphertext: bytes, key_id: str) -> str:
         del model_config_id, ciphertext, key_id
         raise SecretStoreError("The model secret store is not configured.")
+
+    def encrypt_scoped(
+        self, scope: str, owner_id: str, secret_value: str
+    ) -> EncryptedSecret:
+        del scope, owner_id, secret_value
+        raise SecretStoreError("The secret store is not configured.")
+
+    def decrypt_scoped(
+        self, scope: str, owner_id: str, ciphertext: bytes, key_id: str
+    ) -> str:
+        del scope, owner_id, ciphertext, key_id
+        raise SecretStoreError("The secret store is not configured.")

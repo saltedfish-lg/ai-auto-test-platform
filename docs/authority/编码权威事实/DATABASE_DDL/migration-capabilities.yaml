@@ -18,3 +18,5 @@ capabilities:
     migration_name: V12__environment_management_foundation.sql
   BUSINESS_TERMINAL_FOUNDATION_SCHEMA:
     migration_name: V13__business_terminal_foundation.sql
+  TEST_ACCOUNT_FOUNDATION_SCHEMA:
+    migration_name: V14__test_account_foundation.sql

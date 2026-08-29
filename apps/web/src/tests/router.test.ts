@@ -60,4 +60,16 @@ describe("认证路由守卫（组件/路由层测试）", () => {
 
     expect(router.currentRoute.value.name).toBe("models.configurations");
   });
+
+  it("registers the project-scoped Test Account route", async () => {
+    vi.spyOn(apiClient, "refresh_platform_session").mockResolvedValue(
+      authenticationResponse(currentUser({ permissions: ["PROJECT_VIEW"] })),
+    );
+    const router = createPlatformRouter(createMemoryHistory());
+
+    await router.push(`/projects/${"P".repeat(26)}/test-accounts`);
+    await router.isReady();
+
+    expect(router.currentRoute.value.name).toBe("projects.test-accounts");
+  });
 });

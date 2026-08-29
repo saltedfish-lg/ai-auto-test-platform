@@ -3975,6 +3975,174 @@ paths:
       x-permission-code: PROJECT_EDIT
       security:
       - BearerAuth: []
+  /api/v1/test-account/{id}/credential-rotate:
+    post:
+      operationId: rotate_test_account_secret
+      summary: 轮换测试账号凭据
+      tags:
+      - 测试账号
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 26
+          maxLength: 26
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RotateTestAccountSecretRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateTestAccountResponse'
+        '401':
+          description: Unauthenticated
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          $ref: '#/components/responses/RequestValidationFailed'
+        '503':
+          description: Service unavailable
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+      x-permission-code: PROJECT_EDIT
+      security:
+      - BearerAuth: []
+  /api/v1/test-account/{id}/validate:
+    post: &test_account_lifecycle_operation
+      operationId: validate_test_account
+      summary: 提交测试账号校验
+      tags:
+      - 测试账号
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 26
+          maxLength: 26
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TestAccountLifecycleRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateTestAccountResponse'
+        '401':
+          description: Unauthenticated
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          $ref: '#/components/responses/RequestValidationFailed'
+      x-permission-code: PROJECT_EDIT
+      security:
+      - BearerAuth: []
+  /api/v1/test-account/{id}/reconfigure:
+    post:
+      <<: *test_account_lifecycle_operation
+      operationId: reconfigure_test_account
+      summary: 退回测试账号配置
+  /api/v1/test-account/{id}/activate:
+    post:
+      <<: *test_account_lifecycle_operation
+      operationId: activate_test_account
+      summary: 激活测试账号
+  /api/v1/test-account/{id}/mark-credential-expired:
+    post:
+      <<: *test_account_lifecycle_operation
+      operationId: mark_credential_expired_test_account
+      summary: 标记测试账号凭据失效
+  /api/v1/test-account/{id}/recover:
+    post:
+      <<: *test_account_lifecycle_operation
+      operationId: recover_test_account
+      summary: 恢复测试账号
+  /api/v1/test-account/{id}/disable:
+    post:
+      <<: *test_account_lifecycle_operation
+      operationId: disable_test_account
+      summary: 停用测试账号
+  /api/v1/test-account/{id}/archive:
+    post:
+      <<: *test_account_lifecycle_operation
+      operationId: archive_test_account
+      summary: 归档测试账号
   /api/v1/credential-revision:
     get:
       operationId: list_credential_revision
@@ -24163,6 +24331,33 @@ components:
         created_at: '2026-08-06T06:46:00Z'
         updated_at: '2026-08-06T06:46:00Z'
         lifecycle_status: DRAFT
+    TestAccountTerminalResource:
+      type: object
+      additionalProperties: false
+      required:
+      - business_terminal_id
+      - terminal_code
+      - terminal_type
+      properties:
+        business_terminal_id:
+          type: string
+          minLength: 26
+          maxLength: 26
+        terminal_code:
+          type: string
+          minLength: 1
+          maxLength: 191
+        display_name:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+        terminal_type:
+          type: string
+          enum:
+          - MANAGEMENT
+          - CLIENT
+          - PDA
     TestAccountResource:
       type: object
       additionalProperties: false
@@ -24186,20 +24381,16 @@ components:
           type: string
           format: date-time
         project_id:
-          type:
-          - string
-          - 'null'
+          type: string
           minLength: 26
           maxLength: 26
         environment_id:
-          type:
-          - string
-          - 'null'
-          maxLength: 191
+          type: string
+          minLength: 26
+          maxLength: 26
         account_identifier:
-          type:
-          - string
-          - 'null'
+          type: string
+          minLength: 1
           maxLength: 191
         sso_identity_id:
           type:
@@ -24231,20 +24422,38 @@ components:
           - EXPIRING
           - EXPIRED
           - REVOKED
+        credential_revision_no:
+          type: integer
+          minimum: 1
+        business_terminals:
+          type: array
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/TestAccountTerminalResource'
       required:
       - test_account_id
+      - project_id
+      - environment_id
+      - account_identifier
       - row_version
       - created_at
       - updated_at
       - lifecycle_status
       - credential_state
+      - credential_revision_no
+      - business_terminals
       example:
         test_account_id: 01J00000000000000000000000
+        project_id: 01J00000000000000000000001
+        environment_id: 01J00000000000000000000002
+        account_identifier: qa-user
         row_version: 0
         created_at: '2026-08-06T06:46:00Z'
         updated_at: '2026-08-06T06:46:00Z'
         lifecycle_status: CREATED
         credential_state: VALID
+        credential_revision_no: 1
+        business_terminals: []
     CredentialRevisionResource:
       type: object
       additionalProperties: false
@@ -29517,61 +29726,50 @@ components:
       type: object
       additionalProperties: false
       properties:
-        expected_version:
-          type: integer
-          minimum: 0
         reason:
-          type:
-          - string
-          - 'null'
-          maxLength: 1000
-        test_account_id:
           type: string
-          minLength: 26
-          maxLength: 26
+          minLength: 1
+          maxLength: 1000
         display_name:
           type:
           - string
           - 'null'
           maxLength: 255
-        project_id:
-          type:
-          - string
-          - 'null'
-          minLength: 26
-          maxLength: 26
         environment_id:
-          type:
-          - string
-          - 'null'
-          maxLength: 191
-        account_identifier:
-          type:
-          - string
-          - 'null'
-          maxLength: 191
-        sso_identity_id:
-          type:
-          - string
-          - 'null'
-          minLength: 26
-          maxLength: 26
-        login_qualification_id:
-          type:
-          - string
-          - 'null'
-          minLength: 26
-          maxLength: 26
-        credential_state:
           type: string
-          enum:
-          - VALID
-          - EXPIRING
-          - EXPIRED
-          - REVOKED
-      required: []
+          minLength: 26
+          maxLength: 26
+        account_identifier:
+          type: string
+          minLength: 1
+          maxLength: 191
+        business_terminal_ids:
+          type: array
+          minItems: 1
+          maxItems: 50
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 26
+            maxLength: 26
+        secret_value:
+          type: string
+          minLength: 1
+          maxLength: 4096
+          writeOnly: true
+      required:
+      - environment_id
+      - account_identifier
+      - business_terminal_ids
+      - secret_value
+      - reason
       example:
-        project_id: 01J00000000000000000000001
+        environment_id: 01J00000000000000000000002
+        account_identifier: qa-user
+        business_terminal_ids:
+        - 01J00000000000000000000003
+        secret_value: REDACTED_INPUT_ONLY
+        reason: 创建测试账号
     CreateTestAccountResponse:
       type: object
       additionalProperties: false
@@ -29586,11 +29784,16 @@ components:
       example:
         data:
           test_account_id: 01J00000000000000000000000
+          project_id: 01J00000000000000000000001
+          environment_id: 01J00000000000000000000002
+          account_identifier: qa-user
           row_version: 0
           created_at: '2026-08-06T06:46:00Z'
           updated_at: '2026-08-06T06:46:00Z'
           lifecycle_status: CREATED
           credential_state: VALID
+          credential_revision_no: 1
+          business_terminals: []
         correlation_id: example
     GetTestAccountResponse:
       type: object
@@ -29606,11 +29809,16 @@ components:
       example:
         data:
           test_account_id: 01J00000000000000000000000
+          project_id: 01J00000000000000000000001
+          environment_id: 01J00000000000000000000002
+          account_identifier: qa-user
           row_version: 0
           created_at: '2026-08-06T06:46:00Z'
           updated_at: '2026-08-06T06:46:00Z'
           lifecycle_status: CREATED
           credential_state: VALID
+          credential_revision_no: 1
+          business_terminals: []
         correlation_id: example
     UpdateTestAccountRequest:
       type: object
@@ -29620,54 +29828,58 @@ components:
           type: integer
           minimum: 0
         reason:
-          type:
-          - string
-          - 'null'
+          type: string
+          minLength: 1
           maxLength: 1000
         display_name:
           type:
           - string
           - 'null'
           maxLength: 255
-        project_id:
-          type:
-          - string
-          - 'null'
-          minLength: 26
-          maxLength: 26
-        environment_id:
-          type:
-          - string
-          - 'null'
-          maxLength: 191
-        account_identifier:
-          type:
-          - string
-          - 'null'
-          maxLength: 191
-        sso_identity_id:
-          type:
-          - string
-          - 'null'
-          minLength: 26
-          maxLength: 26
-        login_qualification_id:
-          type:
-          - string
-          - 'null'
-          minLength: 26
-          maxLength: 26
-        credential_state:
-          type: string
-          enum:
-          - VALID
-          - EXPIRING
-          - EXPIRED
-          - REVOKED
       required:
       - expected_version
+      - reason
       example:
         expected_version: 0
+        reason: 更新展示名称
+    RotateTestAccountSecretRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - expected_version
+      - secret_value
+      - reason
+      properties:
+        expected_version:
+          type: integer
+          minimum: 0
+        secret_value:
+          type: string
+          minLength: 1
+          maxLength: 4096
+          writeOnly: true
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 1000
+      example:
+        expected_version: 1
+        secret_value: REDACTED_INPUT_ONLY
+        reason: 定期轮换凭据
+    TestAccountLifecycleRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - expected_version
+      - reason
+      properties:
+        expected_version:
+          type: integer
+          minimum: 0
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 1000
     UpdateTestAccountResponse:
       type: object
       additionalProperties: false
@@ -29682,11 +29894,16 @@ components:
       example:
         data:
           test_account_id: 01J00000000000000000000000
+          project_id: 01J00000000000000000000001
+          environment_id: 01J00000000000000000000002
+          account_identifier: qa-user
           row_version: 0
           created_at: '2026-08-06T06:46:00Z'
           updated_at: '2026-08-06T06:46:00Z'
           lifecycle_status: CREATED
           credential_state: VALID
+          credential_revision_no: 1
+          business_terminals: []
         correlation_id: example
     ListCredentialRevisionResponse:
       type: object
