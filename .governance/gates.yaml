@@ -16,7 +16,7 @@ gates:
     - tools/governance/governance_contract_test.py
     - --root
     - .
-    timeout_seconds: 900
+    timeout_seconds: 1800
   openapi_client_check:
     command:
     - python

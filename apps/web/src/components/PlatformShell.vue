@@ -42,6 +42,17 @@ async function logout(): Promise<void> {
           项目管理
         </RouterLink>
         <RouterLink
+          v-if="
+            session.hasPermission('RUNNER_REGISTER') || session.hasPermission('RUNNER_BIND')
+          "
+          class="nav-item"
+          active-class="active"
+          :to="{ name: 'runners.manage' }"
+        >
+          <span aria-hidden="true">▣</span>
+          Runner 管理
+        </RouterLink>
+        <RouterLink
           v-if="session.hasPermission('AI_TASK_CREATE')"
           class="nav-item"
           active-class="active"

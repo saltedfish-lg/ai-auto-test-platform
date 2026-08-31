@@ -71,7 +71,7 @@ def test_model_capability_paths_require_and_route_to_dedicated_browser_gate(
         cleanup_task(ROOT, task_id)
 
 
-def test_ambiguous_acceptance_routes_are_reported_structurally(tmp_path: Path) -> None:
+def test_multiple_acceptance_routes_use_a_stable_tie_breaker(tmp_path: Path) -> None:
     governance = tmp_path / ".governance"
     governance.mkdir()
     (governance / "project.yaml").write_text(
@@ -122,6 +122,8 @@ def test_ambiguous_acceptance_routes_are_reported_structurally(tmp_path: Path) -
         path = tmp_path / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("probe\n", encoding="utf-8")
+    (tmp_path / "auth_gate.py").write_text("raise SystemExit(0)\n", encoding="utf-8")
+    (tmp_path / "model_gate.py").write_text("raise SystemExit(0)\n", encoding="utf-8")
     save_workspace_snapshot(tmp_path, "AMBIGUOUS_ACCEPTANCE")
     save_context(
         tmp_path,
@@ -137,9 +139,9 @@ def test_ambiguous_acceptance_routes_are_reported_structurally(tmp_path: Path) -
         },
     )
     report = required_gate_runner.run_required(tmp_path, "AMBIGUOUS_ACCEPTANCE")
-    assert report["status"] == "BLOCKED"
-    assert report["results"][0]["status"] == "BLOCKED"
-    assert report["results"][0]["reason"] == "INVALID_GATE_CONFIGURATION"
+    assert report["status"] == "PASS"
+    assert report["results"][0]["status"] == "PASS"
+    assert report["results"][0]["command"].endswith("auth_gate.py")
 
 
 def test_cleanup_steps_continue_and_report_only_safe_metadata() -> None:

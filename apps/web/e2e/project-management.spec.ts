@@ -30,6 +30,9 @@ test("project management browser closure", async ({ page, request }) => {
   const unauthorizedPassword = requiredEnvironment("ATP_PROJECT_E2E_UNAUTHORIZED_PASSWORD");
   const platformAdminUsername = requiredEnvironment("ATP_PROJECT_E2E_PLATFORM_ADMIN_USERNAME");
   const platformAdminPassword = requiredEnvironment("ATP_PROJECT_E2E_PLATFORM_ADMIN_PASSWORD");
+  const runnerAdminUsername = requiredEnvironment("ATP_PROJECT_E2E_RUNNER_ADMIN_USERNAME");
+  const runnerAdminPassword = requiredEnvironment("ATP_PROJECT_E2E_RUNNER_ADMIN_PASSWORD");
+  const runnerProjectId = requiredEnvironment("ATP_PROJECT_E2E_RUNNER_PROJECT_ID");
   const eligibleOwnerId = requiredEnvironment("ATP_PROJECT_E2E_ELIGIBLE_OWNER_ID");
   const ineligibleOwnerId = requiredEnvironment("ATP_PROJECT_E2E_INELIGIBLE_OWNER_ID");
   const projectCode = requiredEnvironment("ATP_PROJECT_E2E_CODE");
@@ -76,6 +79,214 @@ test("project management browser closure", async ({ page, request }) => {
   await expect(lifecycle(page)).toContainText("ACTIVE");
   await expect(page.getByText("Owner ALL 仅限当前 project_id，不代表全平台范围。")).toBeVisible();
 
+  const directAuthorizedLogin = await request.post("/api/v1/auth/login", {
+    data: { username: authorizedUsername, password: authorizedPassword },
+  });
+  expect(directAuthorizedLogin.status()).toBe(200);
+  const directAuthorizedToken = (await directAuthorizedLogin.json()).data.access_token as string;
+  const authorizedHeaders = { Authorization: `Bearer ${directAuthorizedToken}` };
+
+  const directRunnerAdminLogin = await request.post("/api/v1/auth/login", {
+    data: { username: runnerAdminUsername, password: runnerAdminPassword },
+  });
+  expect(directRunnerAdminLogin.status()).toBe(200);
+  const directRunnerAdminToken = (await directRunnerAdminLogin.json()).data.access_token as string;
+  const runnerAdminHeaders = { Authorization: `Bearer ${directRunnerAdminToken}` };
+
+  await page.getByRole("button", { name: "退出登录" }).click();
+  await expect(page).toHaveURL(/\/login(?:\?|$)/);
+  const runnerAdminLogin = await login(page, runnerAdminUsername, runnerAdminPassword);
+  expect(runnerAdminLogin.status()).toBe(200);
+  await page.goto(`/projects/${runnerProjectId}/runners`);
+  await expect(page).toHaveURL(new RegExp(`/projects/${runnerProjectId}/runners$`));
+  await page.getByRole("button", { name: "创建 Enrollment" }).click();
+  const enrollmentDialog = page.getByRole("dialog", {
+    name: "创建 Project-scoped Enrollment",
+  });
+  const runnerCode = `RUNNER-${projectCode}`;
+  await enrollmentDialog.getByLabel("Runner Code").fill(runnerCode);
+  await enrollmentDialog.getByLabel("显示名称").fill("浏览器验收 Runner");
+  await enrollmentDialog.getByLabel("原因").fill("验证 project-scoped 一次性 enrollment");
+  const enrollmentResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/api/v1/runner-enrollments") &&
+      response.request().method() === "POST",
+  );
+  await enrollmentDialog.getByRole("button", { name: "创建" }).click();
+  const issuedEnrollmentResponse = await enrollmentResponse;
+  expect(issuedEnrollmentResponse.status()).toBe(201);
+  const issuedEnrollment = (await issuedEnrollmentResponse.json()).data;
+  const enrollmentCredential = issuedEnrollment.enrollment_credential as string;
+  expect(issuedEnrollment.project_id).toBe(runnerProjectId);
+  expect(issuedEnrollment.runner_code).toBe(runnerCode);
+  const enrollmentCredentialDialog = page.getByRole("dialog", {
+    name: "一次性 Enrollment Credential",
+  });
+  await expect(enrollmentCredentialDialog.locator("textarea")).toHaveValue(
+    enrollmentCredential,
+  );
+  await expect(page.getByText(/平台无法恢复明文/)).toBeVisible();
+  await page.getByRole("button", { name: "我已安全保存" }).click();
+
+  const registeredResponse = await request.post("/api/v1/runners/register", {
+    headers: { "Idempotency-Key": `runner-register-${projectCode}` },
+    data: {
+      enrollment_credential: enrollmentCredential,
+      machine_fingerprint: `machine-${projectCode}`,
+      agent_version: "1.0.0-e2e",
+      runtime_metadata: { os: "Windows", architecture: "x86_64" },
+      capabilities: [
+        {
+          capability_code: "AGENT_VERSION",
+          availability_status: "CONFIGURED",
+          observed_version: "1.0.0-e2e",
+          observed_metadata: null,
+        },
+      ],
+    },
+  });
+  expect(registeredResponse.status()).toBe(201);
+  const registered = (await registeredResponse.json()).data;
+  const runnerId = registered.runner.runner_id as string;
+  const firstAgentToken = registered.agent_token as string;
+  expect(registered.runner.project_id).toBe(runnerProjectId);
+  expect(registered.runner.project_binding_status).toBe("BOUND");
+  expect(registered.runner.lifecycle_status).toBe("REGISTERED");
+  expect(registered.runner.enable_status).toBe("DISABLED");
+
+  const consumedEnrollment = await request.post("/api/v1/runners/register", {
+    headers: { "Idempotency-Key": `runner-register-replay-${projectCode}` },
+    data: {
+      enrollment_credential: enrollmentCredential,
+      machine_fingerprint: `machine-${projectCode}`,
+      agent_version: "1.0.0-e2e",
+      runtime_metadata: null,
+      capabilities: [],
+    },
+  });
+  expect(consumedEnrollment.status()).toBe(401);
+  expect((await consumedEnrollment.json()).code).toBe("RUNNER_AGENT_UNAUTHENTICATED");
+
+  const firstHeartbeat = await request.post(`/api/v1/runners/${runnerId}/heartbeat`, {
+    headers: { "X-Runner-Agent-Token": firstAgentToken },
+    data: {
+      health_status: "HEALTHY",
+      agent_version: "1.0.0-e2e",
+      runtime_metadata: { os: "Windows", architecture: "x86_64" },
+      capabilities: null,
+    },
+  });
+  expect(firstHeartbeat.status()).toBe(200);
+  const heartbeatRunner = (await firstHeartbeat.json()).data;
+  expect(heartbeatRunner.connection_status).toBe("ONLINE");
+  expect(heartbeatRunner.health_status).toBe("HEALTHY");
+  expect(heartbeatRunner.lifecycle_status).toBe("REGISTERED");
+  expect(heartbeatRunner.enable_status).toBe("DISABLED");
+
+  const capabilityResponse = await request.post(`/api/v1/runners/${runnerId}/capabilities`, {
+    headers: { "X-Runner-Agent-Token": firstAgentToken },
+    data: {
+      capabilities: [
+        {
+          capability_code: "AGENT_VERSION",
+          availability_status: "CONFIGURED",
+          observed_version: "1.0.0-e2e",
+          observed_metadata: null,
+        },
+        {
+          capability_code: "BROWSER_CHROMIUM",
+          availability_status: "CONFIGURED",
+          observed_version: "143",
+          observed_metadata: { channel: "chromium" },
+        },
+        {
+          capability_code: "CONTEXT_ISOLATION",
+          availability_status: "CONFIGURED",
+          observed_version: null,
+          observed_metadata: null,
+        },
+      ],
+    },
+  });
+  expect(capabilityResponse.status()).toBe(200);
+  const capabilityRunner = (await capabilityResponse.json()).data;
+  expect(capabilityRunner.capabilities).toHaveLength(3);
+
+  await page.reload();
+  const runnerRow = page.getByRole("row").filter({
+    has: page.getByText(runnerCode, { exact: true }),
+  });
+  await expect(runnerRow).toContainText("ONLINE / HEALTHY");
+  await expect(runnerRow).toContainText("BROWSER_CHROMIUM");
+  await expect(runnerRow).toContainText("CONTEXT_ISOLATION");
+
+  const rotatedResponse = await request.post(`/api/v1/runner/${runnerId}/agent-token/rotate`, {
+    headers: {
+      ...runnerAdminHeaders,
+      "Idempotency-Key": `runner-token-rotate-${projectCode}`,
+    },
+    data: {
+      expected_version: capabilityRunner.row_version,
+      reason: "验证 opaque Agent token rotate",
+    },
+  });
+  expect(rotatedResponse.status()).toBe(200);
+  const rotated = (await rotatedResponse.json()).data;
+  const rotatedAgentToken = rotated.agent_token as string;
+  expect(rotatedAgentToken).not.toBe(firstAgentToken);
+  expect(rotated.token_version).toBe(2);
+
+  const oldTokenHeartbeat = await request.post(`/api/v1/runners/${runnerId}/heartbeat`, {
+    headers: { "X-Runner-Agent-Token": firstAgentToken },
+    data: {
+      health_status: "HEALTHY",
+      agent_version: "1.0.0-e2e",
+      runtime_metadata: null,
+      capabilities: null,
+    },
+  });
+  expect(oldTokenHeartbeat.status()).toBe(401);
+
+  const rotatedTokenHeartbeat = await request.post(`/api/v1/runners/${runnerId}/heartbeat`, {
+    headers: { "X-Runner-Agent-Token": rotatedAgentToken },
+    data: {
+      health_status: "HEALTHY",
+      agent_version: "1.0.0-e2e",
+      runtime_metadata: null,
+      capabilities: null,
+    },
+  });
+  expect(rotatedTokenHeartbeat.status()).toBe(200);
+  const rotatedHeartbeatRunner = (await rotatedTokenHeartbeat.json()).data;
+
+  const revokedResponse = await request.post(`/api/v1/runner/${runnerId}/agent-token/revoke`, {
+    headers: {
+      ...runnerAdminHeaders,
+      "Idempotency-Key": `runner-token-revoke-${projectCode}`,
+    },
+    data: {
+      expected_version: rotatedHeartbeatRunner.row_version,
+      reason: "验证 opaque Agent token revoke",
+    },
+  });
+  expect(revokedResponse.status()).toBe(200);
+  expect((await revokedResponse.json()).data.registration_status).toBe("REGISTERED");
+  const revokedTokenHeartbeat = await request.post(`/api/v1/runners/${runnerId}/heartbeat`, {
+    headers: { "X-Runner-Agent-Token": rotatedAgentToken },
+    data: {
+      health_status: "HEALTHY",
+      agent_version: "1.0.0-e2e",
+      runtime_metadata: null,
+      capabilities: null,
+    },
+  });
+  expect(revokedTokenHeartbeat.status()).toBe(401);
+  await page.getByRole("button", { name: "退出登录" }).click();
+  await expect(page).toHaveURL(/\/login(?:\?|$)/);
+  const restoredAuthorizedLogin = await login(page, authorizedUsername, authorizedPassword);
+  expect(restoredAuthorizedLogin.status()).toBe(200);
+  await page.goto(`/projects/${projectId}`);
+
   await page.getByRole("button", { name: "环境管理" }).click();
   await expect(page).toHaveURL(new RegExp(`/projects/${projectId}/environments$`));
   await page.getByRole("button", { name: "创建环境" }).click();
@@ -95,12 +306,6 @@ test("project management browser closure", async ({ page, request }) => {
   expect(createdEnvironment.environment_terminal_access_revision_id).toBeUndefined();
   const environmentId = createdEnvironment.environment_id as string;
 
-  const directAuthorizedLogin = await request.post("/api/v1/auth/login", {
-    data: { username: authorizedUsername, password: authorizedPassword },
-  });
-  expect(directAuthorizedLogin.status()).toBe(200);
-  const directAuthorizedToken = (await directAuthorizedLogin.json()).data.access_token as string;
-  const authorizedHeaders = { Authorization: `Bearer ${directAuthorizedToken}` };
   const environmentUpdateKey = `environment-update-${projectCode}`;
   const environmentUpdateBody = {
     expected_version: 1,
@@ -383,8 +588,18 @@ test("project management browser closure", async ({ page, request }) => {
   expect(accountReadText).not.toContain("secret_value");
   await page.getByRole("button", { name: /返回项目详情/ }).click();
 
+  const projectListLoaded = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === "/api/v1/project" &&
+      response.request().method() === "GET",
+  );
   await page.getByRole("button", { name: /返回项目列表/ }).click();
-  await expect(page.getByText(projectCode, { exact: true })).toBeVisible();
+  const projectListResponse = await projectListLoaded;
+  expect(projectListResponse.status()).toBe(200);
+  expect((await projectListResponse.json()).items).toEqual(
+    expect.arrayContaining([expect.objectContaining({ project_code: projectCode })]),
+  );
+  await expect(page.getByText(projectCode, { exact: true })).toBeVisible({ timeout: 10_000 });
   const projectRow = page.getByRole("row").filter({
     has: page.getByText(projectCode, { exact: true }),
   });

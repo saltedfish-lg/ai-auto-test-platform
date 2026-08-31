@@ -72,4 +72,28 @@ describe("认证路由守卫（组件/路由层测试）", () => {
 
     expect(router.currentRoute.value.name).toBe("projects.test-accounts");
   });
+
+  it("registers the project-scoped Runner management route", async () => {
+    vi.spyOn(apiClient, "refresh_platform_session").mockResolvedValue(
+      authenticationResponse(currentUser({ permissions: ["PROJECT_VIEW"] })),
+    );
+    const router = createPlatformRouter(createMemoryHistory());
+
+    await router.push(`/projects/${"P".repeat(26)}/runners`);
+    await router.isReady();
+
+    expect(router.currentRoute.value.name).toBe("projects.runners");
+  });
+
+  it("registers the Runner administrator entry route", async () => {
+    vi.spyOn(apiClient, "refresh_platform_session").mockResolvedValue(
+      authenticationResponse(currentUser({ permissions: ["RUNNER_REGISTER"] })),
+    );
+    const router = createPlatformRouter(createMemoryHistory());
+
+    await router.push("/runners");
+    await router.isReady();
+
+    expect(router.currentRoute.value.name).toBe("runners.manage");
+  });
 });

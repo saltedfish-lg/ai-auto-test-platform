@@ -20,6 +20,7 @@ _BOOTSTRAP_ROOT = Path(__file__).resolve().parents[2]
 if str(_BOOTSTRAP_ROOT) not in sys.path:
     sys.path.insert(0, str(_BOOTSTRAP_ROOT))
 
+from tools.database.flyway import FlywayBlocked, run_flyway  # noqa: E402
 from tools.environment import get_env, load_project_environment, project_environment  # noqa: E402
 from tools.gates.auth_browser_gate import (  # noqa: E402
     _available_loopback_port,
@@ -42,7 +43,6 @@ from tools.gates.auth_mysql_gate import (  # noqa: E402
     _new_database_name,
     _test_database_url,
 )
-from tools.database.flyway import FlywayBlocked, run_flyway  # noqa: E402
 from tools.governance.runtime_gate_result import (  # noqa: E402
     finalize_runtime_result,
     runtime_result_base,
@@ -85,15 +85,17 @@ def _write_test_account_secret_key_ring(directory: Path) -> Path:
     return path
 
 
-def _database_evidence(database: str, project_code: str) -> dict[str, object]:
+def _database_evidence(
+    database: str, project_code: str, runner_project_id: str
+) -> dict[str, object]:
     retry_code = f"RETRY-{project_code}"
     denied_code = f"DENIED-{project_code}"
     service_account_code = f"SERVICE-{project_code}"
     environment_code = f"ENV-{project_code}"
     terminal_code = f"ADMIN-{project_code}"
     account_identifier = f"qa-{project_code}"
-    initial_account_secret = f"initial-test-account-{project_code}".encode("utf-8")
-    rotated_account_secret = f"rotated-test-account-{project_code}".encode("utf-8")
+    initial_account_secret = f"initial-test-account-{project_code}".encode()
+    rotated_account_secret = f"rotated-test-account-{project_code}".encode()
     with _connection(database) as connection, connection.cursor() as cursor:
         cursor.execute(
             "SELECT project_id, display_name, lifecycle_status, row_version "
@@ -132,13 +134,9 @@ def _database_evidence(database: str, project_code: str) -> dict[str, object]:
             "('CREATED','CONFIGURING','VALIDATING')"
         )
         intermediate_project_count = int(cursor.fetchone()[0])
-        cursor.execute(
-            "SELECT COUNT(*) FROM atp_project WHERE project_code=%s", (retry_code,)
-        )
+        cursor.execute("SELECT COUNT(*) FROM atp_project WHERE project_code=%s", (retry_code,))
         corrected_retry_project_count = int(cursor.fetchone()[0])
-        cursor.execute(
-            "SELECT COUNT(*) FROM atp_project WHERE project_code=%s", (denied_code,)
-        )
+        cursor.execute("SELECT COUNT(*) FROM atp_project WHERE project_code=%s", (denied_code,))
         denied_project_count = int(cursor.fetchone()[0])
         cursor.execute(
             "SELECT COUNT(*) FROM atp_project WHERE project_code=%s", (service_account_code,)
@@ -213,9 +211,7 @@ def _database_evidence(database: str, project_code: str) -> dict[str, object]:
             "GROUP BY action",
             (project_id, environment_code),
         )
-        environment_audit_actions = {
-            str(action): int(count) for action, count in cursor.fetchall()
-        }
+        environment_audit_actions = {str(action): int(count) for action, count in cursor.fetchall()}
         cursor.execute(
             "SELECT COUNT(*) FROM atp_environment_audit "
             "WHERE project_id=%s AND environment_code=%s "
@@ -274,9 +270,7 @@ def _database_evidence(database: str, project_code: str) -> dict[str, object]:
             "WHERE business_terminal_id=%s AND result_code='SUCCESS' GROUP BY action",
             (terminal_id,),
         )
-        terminal_audit_actions = {
-            str(action): int(count) for action, count in cursor.fetchall()
-        }
+        terminal_audit_actions = {str(action): int(count) for action, count in cursor.fetchall()}
         cursor.execute(
             "SELECT event_type,COUNT(*) FROM atp_outbox_event "
             "WHERE aggregate_id=%s GROUP BY event_type",
@@ -360,6 +354,79 @@ def _database_evidence(database: str, project_code: str) -> dict[str, object]:
         )
         test_account_event_rows = list(cursor.fetchall())
         test_account_event_types = {str(row[0]) for row in test_account_event_rows}
+        runner_code = f"RUNNER-{project_code}"
+        cursor.execute(
+            "SELECT runner_id,lifecycle_status,registration_status,connection_status,"
+            "health_status,enable_status,project_binding_status,scheduling_status,row_version "
+            "FROM atp_runner WHERE project_id=%s AND runner_code=%s",
+            (runner_project_id, runner_code),
+        )
+        runner = cursor.fetchone()
+        if runner is None:
+            raise RuntimeError("browser-created Runner was not persisted")
+        (
+            runner_id,
+            runner_lifecycle_status,
+            runner_registration_status,
+            runner_connection_status,
+            runner_health_status,
+            runner_enable_status,
+            runner_binding_status,
+            runner_scheduling_status,
+            runner_row_version,
+        ) = runner
+        cursor.execute(
+            "SELECT enrollment_id,enrollment_status,consumed_runner_id,"
+            "OCTET_LENGTH(credential_hash) FROM atp_runner_enrollment "
+            "WHERE project_id=%s AND runner_code=%s",
+            (runner_project_id, runner_code),
+        )
+        enrollment = cursor.fetchone()
+        if enrollment is None:
+            raise RuntimeError("Runner enrollment evidence is missing")
+        enrollment_id, enrollment_status, consumed_runner_id, enrollment_hash_length = enrollment
+        cursor.execute(
+            "SELECT token_status,token_version,OCTET_LENGTH(token_hash),"
+            "OCTET_LENGTH(machine_fingerprint_hash),lifecycle_status "
+            "FROM atp_runner_agent WHERE runner_id=%s",
+            (runner_id,),
+        )
+        runner_agent = cursor.fetchone()
+        if runner_agent is None:
+            raise RuntimeError("Runner Agent identity evidence is missing")
+        (
+            agent_token_status,
+            agent_token_version,
+            agent_token_hash_length,
+            machine_fingerprint_hash_length,
+            agent_lifecycle_status,
+        ) = runner_agent
+        cursor.execute(
+            "SELECT capability_code FROM atp_runner_capability "
+            "WHERE runner_id=%s AND availability_status='CONFIGURED' "
+            "AND lifecycle_status='ACTIVE'",
+            (runner_id,),
+        )
+        runner_capabilities = {str(row[0]) for row in cursor.fetchall()}
+        cursor.execute(
+            "SELECT action,actor_type,required_permission,credential_changed "
+            "FROM atp_runner_audit WHERE runner_id=%s OR enrollment_id=%s",
+            (runner_id, enrollment_id),
+        )
+        runner_audit_rows = list(cursor.fetchall())
+        runner_audit_actions = {str(row[0]) for row in runner_audit_rows}
+        cursor.execute(
+            "SELECT event_type FROM atp_outbox_event WHERE aggregate_id IN (%s,%s)",
+            (runner_id, enrollment_id),
+        )
+        runner_event_types = {str(row[0]) for row in cursor.fetchall()}
+        cursor.execute(
+            "SELECT COUNT(*) FROM information_schema.columns "
+            "WHERE table_schema=DATABASE() "
+            "AND table_name IN ('atp_runner_enrollment','atp_runner_agent') "
+            "AND column_name IN ('enrollment_credential','agent_token')"
+        )
+        runner_plaintext_secret_column_count = int(cursor.fetchone()[0])
 
     required_audits = {
         "PROJECT_CREATED",
@@ -418,12 +485,16 @@ def _database_evidence(database: str, project_code: str) -> dict[str, object]:
             occurred_at,
         ) = row
         expected = expected_audit_fields.get(str(action))
-        if expected is None or (
-            required_permission,
-            scope_decision,
-            previous_status,
-            new_status,
-        ) != expected:
+        if (
+            expected is None
+            or (
+                required_permission,
+                scope_decision,
+                previous_status,
+                new_status,
+            )
+            != expected
+        ):
             raise RuntimeError("successful ProjectAudit authorization fields are inaccurate")
         expected_participant = owner_user_id if action == "PROJECT_CREATED" else None
         if (
@@ -489,9 +560,7 @@ def _database_evidence(database: str, project_code: str) -> dict[str, object]:
         or int(environment_row_version) != 2
     ):
         raise RuntimeError("Environment persistence does not match the browser/API workflow")
-    if not {"ENVIRONMENT_CREATED", "ENVIRONMENT_UPDATED"}.issubset(
-        environment_audit_actions
-    ):
+    if not {"ENVIRONMENT_CREATED", "ENVIRONMENT_UPDATED"}.issubset(environment_audit_actions):
         raise RuntimeError("Environment success audit evidence is incomplete")
     if environment_failed_audits < 2:
         raise RuntimeError("Environment failure audit evidence is incomplete")
@@ -520,11 +589,14 @@ def _database_evidence(database: str, project_code: str) -> dict[str, object]:
         raise RuntimeError("BusinessTerminal audit evidence is incomplete")
     if terminal_event_types.get("business_terminal.configuring") != 1:
         raise RuntimeError("BusinessTerminal aggregate outbox evidence is incomplete")
-    if not {
-        "environment_terminal_access_revision.draft",
-        "environment_terminal_access_revision.validating",
-        "environment_terminal_access_revision.published",
-    }.issubset(revision_event_types) or revision_event_identity_count != 3:
+    if (
+        not {
+            "environment_terminal_access_revision.draft",
+            "environment_terminal_access_revision.validating",
+            "environment_terminal_access_revision.published",
+        }.issubset(revision_event_types)
+        or revision_event_identity_count != 3
+    ):
         raise RuntimeError("Terminal Access Revision outbox identity evidence is incomplete")
     if not {
         "LOGIN_STRATEGY_CREATED",
@@ -533,9 +605,7 @@ def _database_evidence(database: str, project_code: str) -> dict[str, object]:
         "LOGIN_STRATEGY_ACTIVE",
     }.issubset(login_strategy_audit_actions):
         raise RuntimeError("LoginStrategy audit evidence is incomplete")
-    if not {"login_strategy.draft", "login_strategy.active"}.issubset(
-        login_strategy_event_types
-    ):
+    if not {"login_strategy.draft", "login_strategy.active"}.issubset(login_strategy_event_types):
         raise RuntimeError("LoginStrategy lifecycle outbox evidence is incomplete")
     if (
         test_account_display_name != "浏览器验收测试账号（已更新）"  # noqa: RUF001
@@ -545,8 +615,7 @@ def _database_evidence(database: str, project_code: str) -> dict[str, object]:
     ):
         raise RuntimeError("TestAccount persistence does not match the browser workflow")
     if len(mapping_rows) != 1 or (
-        str(mapping_rows[0][0]) != str(terminal_id)
-        or str(mapping_rows[0][1]) != "PUBLISHED"
+        str(mapping_rows[0][0]) != str(terminal_id) or str(mapping_rows[0][1]) != "PUBLISHED"
     ):
         raise RuntimeError("TestAccount terminal mapping scope is inconsistent")
     if len(credential_rows) != 2:
@@ -585,6 +654,55 @@ def _database_evidence(database: str, project_code: str) -> dict[str, object]:
     }
     if not required_test_account_events.issubset(test_account_event_types):
         raise RuntimeError("TestAccount outbox evidence is incomplete")
+    if (
+        runner_lifecycle_status != "REGISTERED"
+        or runner_registration_status != "REGISTERED"
+        or runner_connection_status != "OFFLINE"
+        or runner_health_status != "HEALTHY"
+        or runner_enable_status != "DISABLED"
+        or runner_binding_status != "BOUND"
+        or runner_scheduling_status != "UNSCHEDULABLE"
+        or int(runner_row_version) != 6
+    ):
+        raise RuntimeError("Runner separated state persistence is inconsistent")
+    if (
+        enrollment_status != "CONSUMED"
+        or consumed_runner_id != runner_id
+        or int(enrollment_hash_length or 0) != 32
+        or agent_token_status != "REVOKED"
+        or int(agent_token_version) != 2
+        or int(agent_token_hash_length or 0) != 32
+        or int(machine_fingerprint_hash_length or 0) != 32
+        or agent_lifecycle_status != "REVOKED"
+        or runner_plaintext_secret_column_count != 0
+    ):
+        raise RuntimeError("Runner one-time credential or Agent token hash evidence is invalid")
+    if runner_capabilities != {"AGENT_VERSION", "BROWSER_CHROMIUM", "CONTEXT_ISOLATION"}:
+        raise RuntimeError("Runner capability snapshot evidence is incomplete")
+    if not {
+        "CREATE_ENROLLMENT",
+        "REGISTER",
+        "REPORT_CAPABILITIES",
+        "ROTATE_AGENT_TOKEN",
+        "REVOKE_AGENT_TOKEN",
+    }.issubset(runner_audit_actions):
+        raise RuntimeError("Runner append-only audit evidence is incomplete")
+    runner_audit_by_action = {str(row[0]): row for row in runner_audit_rows}
+    if (
+        runner_audit_by_action["CREATE_ENROLLMENT"][1:3] != ("HUMAN", "RUNNER_BIND")
+        or runner_audit_by_action["REPORT_CAPABILITIES"][1:3] != ("AGENT", None)
+        or runner_audit_by_action["ROTATE_AGENT_TOKEN"][1:3] != ("HUMAN", "RUNNER_REGISTER")
+        or runner_audit_by_action["REVOKE_AGENT_TOKEN"][1:3] != ("HUMAN", "RUNNER_REGISTER")
+        or sum(bool(row[3]) for row in runner_audit_rows) < 4
+    ):
+        raise RuntimeError("Runner human and machine audit semantics are not separated")
+    if not {
+        "runner.enrollment_created",
+        "runner.registered",
+        "runner.agent_token_rotated",
+        "runner.agent_token_revoked",
+    }.issubset(runner_event_types):
+        raise RuntimeError("Runner outbox evidence is incomplete")
     sensitive_evidence = json.dumps(
         {
             "audit": test_account_audit_rows,
@@ -634,6 +752,21 @@ def _database_evidence(database: str, project_code: str) -> dict[str, object]:
         "test_account_audit_actions": sorted(test_account_audit_actions),
         "test_account_outbox_event_types": sorted(test_account_event_types),
         "test_account_secret_absent_from_audit_and_outbox": True,
+        "runner_lifecycle_status": runner_lifecycle_status,
+        "runner_registration_status": runner_registration_status,
+        "runner_connection_status": runner_connection_status,
+        "runner_health_status": runner_health_status,
+        "runner_enable_status": runner_enable_status,
+        "runner_binding_status": runner_binding_status,
+        "runner_scheduling_status": runner_scheduling_status,
+        "runner_row_version": int(runner_row_version),
+        "runner_enrollment_status": enrollment_status,
+        "runner_agent_token_status": agent_token_status,
+        "runner_agent_token_version": int(agent_token_version),
+        "runner_hash_only_credentials": True,
+        "runner_capabilities": sorted(runner_capabilities),
+        "runner_audit_actions": sorted(runner_audit_actions),
+        "runner_outbox_event_types": sorted(runner_event_types),
     }
 
 
@@ -847,9 +980,7 @@ def _audit_unavailable_probe(
     token = str(dict(login["data"])["access_token"])
     probe_code = f"AUDIT-UNAVAILABLE-{project_code}"
     with _connection(database) as connection, connection.cursor() as cursor:
-        cursor.execute(
-            "RENAME TABLE atp_project_audit TO atp_project_audit_unavailable_probe"
-        )
+        cursor.execute("RENAME TABLE atp_project_audit TO atp_project_audit_unavailable_probe")
     try:
         status, problem = _post_json(
             f"http://127.0.0.1:{api_port}/api/v1/project",
@@ -861,9 +992,7 @@ def _audit_unavailable_probe(
         )
     finally:
         with _connection(database) as connection, connection.cursor() as cursor:
-            cursor.execute(
-                "RENAME TABLE atp_project_audit_unavailable_probe TO atp_project_audit"
-            )
+            cursor.execute("RENAME TABLE atp_project_audit_unavailable_probe TO atp_project_audit")
     with _connection(database) as connection, connection.cursor() as cursor:
         cursor.execute("SELECT COUNT(*) FROM atp_project WHERE project_code=%s", (probe_code,))
         project_count = int(cursor.fetchone()[0])
@@ -985,8 +1114,15 @@ def main() -> int:
         owner_username, owner_password = _create_user(
             factory, passwords, lifecycle="ACTIVE", role_code="ROLE-PROJECT-OWNER-DUTY"
         )
+        runner_admin_username, runner_admin_password = _create_user(
+            factory, passwords, lifecycle="ACTIVE", role_code="ROLE-RUNNER-ADMIN"
+        )
+        runner_owner_username, _runner_owner_password = _create_user(
+            factory, passwords, lifecycle="ACTIVE", role_code="ROLE-PROJECT-OWNER-DUTY"
+        )
         engine.dispose()
         project_code = f"browser-project-{secrets.token_hex(6)}"
+        runner_project_id = new_ulid()
         with _connection(database) as connection, connection.cursor() as cursor:
             cursor.execute(
                 "SELECT user_id FROM atp_user WHERE username=%s", (unauthorized_username,)
@@ -1005,6 +1141,68 @@ def main() -> int:
                 "(grant_id,binding_id,scope_type,scope_id,permission_code,created_at) "
                 "VALUES (%s,%s,'PLATFORM_ALL',NULL,NULL,CURRENT_TIMESTAMP(6))",
                 (new_ulid(), platform_admin_binding_id),
+            )
+            cursor.execute(
+                "SELECT u.user_id,b.binding_id,b.role_id FROM atp_user u "
+                "JOIN atp_user_role_binding b ON b.user_id=u.user_id "
+                "JOIN atp_role r ON r.role_id=b.role_id "
+                "WHERE u.username=%s AND r.role_code='ROLE-RUNNER-ADMIN'",
+                (runner_admin_username,),
+            )
+            runner_admin_user_id, runner_admin_binding_id, runner_admin_role_id = cursor.fetchone()
+            cursor.execute(
+                "SELECT u.user_id,b.role_id FROM atp_user u "
+                "JOIN atp_user_role_binding b ON b.user_id=u.user_id "
+                "JOIN atp_role r ON r.role_id=b.role_id "
+                "WHERE u.username=%s AND r.role_code='ROLE-PROJECT-OWNER-DUTY'",
+                (runner_owner_username,),
+            )
+            runner_owner_user_id, runner_owner_role_id = cursor.fetchone()
+            cursor.execute(
+                "INSERT INTO atp_project "
+                "(project_id,project_code,lifecycle_status,display_name,row_version,"
+                "created_by,updated_by) VALUES (%s,%s,'ACTIVE',%s,1,%s,%s)",
+                (
+                    runner_project_id,
+                    f"runner-scope-{project_code}",
+                    "Runner Admin Browser Scope",
+                    runner_owner_user_id,
+                    runner_owner_user_id,
+                ),
+            )
+            cursor.execute(
+                "INSERT INTO atp_project_member "
+                "(project_member_id,project_id,user_id,role_id,lifecycle_status,display_name,"
+                "row_version,created_by,updated_by) VALUES (%s,%s,%s,%s,'ACTIVE',%s,1,%s,%s)",
+                (
+                    new_ulid(),
+                    runner_project_id,
+                    runner_owner_user_id,
+                    runner_owner_role_id,
+                    "Runner Browser Scope Owner",
+                    runner_owner_user_id,
+                    runner_owner_user_id,
+                ),
+            )
+            cursor.execute(
+                "INSERT INTO atp_project_member "
+                "(project_member_id,project_id,user_id,role_id,lifecycle_status,display_name,"
+                "row_version,created_by,updated_by) VALUES (%s,%s,%s,%s,'ACTIVE',%s,1,%s,%s)",
+                (
+                    new_ulid(),
+                    runner_project_id,
+                    runner_admin_user_id,
+                    runner_admin_role_id,
+                    "Runner Admin Browser Member",
+                    runner_admin_user_id,
+                    runner_admin_user_id,
+                ),
+            )
+            cursor.execute(
+                "INSERT INTO atp_data_scope_grant "
+                "(grant_id,binding_id,scope_type,scope_id,permission_code,created_at) "
+                "VALUES (%s,%s,'AUTHORIZED_PROJECT_ACTIVE',%s,NULL,CURRENT_TIMESTAMP(6))",
+                (new_ulid(), runner_admin_binding_id, runner_project_id),
             )
 
         api_port = _available_loopback_port()
@@ -1086,6 +1284,9 @@ def main() -> int:
                 "ATP_PROJECT_E2E_UNAUTHORIZED_PASSWORD": unauthorized_password,
                 "ATP_PROJECT_E2E_PLATFORM_ADMIN_USERNAME": platform_admin_username,
                 "ATP_PROJECT_E2E_PLATFORM_ADMIN_PASSWORD": platform_admin_password,
+                "ATP_PROJECT_E2E_RUNNER_ADMIN_USERNAME": runner_admin_username,
+                "ATP_PROJECT_E2E_RUNNER_ADMIN_PASSWORD": runner_admin_password,
+                "ATP_PROJECT_E2E_RUNNER_PROJECT_ID": runner_project_id,
                 "ATP_PROJECT_E2E_ELIGIBLE_OWNER_ID": eligible_owner_id,
                 "ATP_PROJECT_E2E_INELIGIBLE_OWNER_ID": ineligible_owner_id,
                 "ATP_PROJECT_E2E_CODE": project_code,
@@ -1104,8 +1305,11 @@ def main() -> int:
                 args.task_id,
             ]
         else:
-            playwright = ROOT / "node_modules" / ".bin" / (
-                "playwright.cmd" if sys.platform == "win32" else "playwright"
+            playwright = (
+                ROOT
+                / "node_modules"
+                / ".bin"
+                / ("playwright.cmd" if sys.platform == "win32" else "playwright")
             )
             if not playwright.is_file():
                 raise GateBlocked("Playwright is required for REAL_ACCEPTANCE_GATE")
@@ -1150,7 +1354,7 @@ def main() -> int:
                 project_code,
             )
             stage = "database_evidence"
-            database_evidence = _database_evidence(database, project_code)
+            database_evidence = _database_evidence(database, project_code, runner_project_id)
         status = "PASS"
         exit_code = 0
     except (GateBlocked, FlywayBlocked) as exc:
@@ -1225,9 +1429,7 @@ def main() -> int:
                 "audit_unavailable_fail_closed": (
                     "PASS" if audit_unavailable_evidence else "NOT_RUN"
                 ),
-                "dynamic_owner_revocation": (
-                    "PASS" if dynamic_owner_evidence else "NOT_RUN"
-                ),
+                "dynamic_owner_revocation": ("PASS" if dynamic_owner_evidence else "NOT_RUN"),
                 "cleanup": "PASS" if cleanup_success else "FAIL",
             },
             "database_evidence": database_evidence,

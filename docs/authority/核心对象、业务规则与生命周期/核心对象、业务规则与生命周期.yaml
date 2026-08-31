@@ -11860,7 +11860,7 @@ object_identifiers:
   object_id: OBJ-052
   identifier_name: runner_code
   identifier_kind: TECHNICAL_PRIMARY_OR_REFERENCE
-  uniqueness_scope: 由字段校验规则和所属对象决定
+  uniqueness_scope: PROJECT_SCOPED(project_id,runner_code)
   globally_unique: false
   externally_exposed: 由API契约决定
   immutable: true
@@ -13848,7 +13848,7 @@ business_unique_keys:
   key_name: runner_code
   data_item_ids:
   - DI-0330
-  scope: 由对象定义和关联项目/环境范围共同决定
+  scope: PROJECT_SCOPED(project_id,runner_code)
   immutable: true
   coding_status: DATA_CODE_READY_WITH_MAPPING
   source_basis: CURRENT_LIVING_AUTHORITY_FACTS
@@ -43658,7 +43658,7 @@ business_rules:
   trigger: null
   preconditions:
   - 具备对应独立权限
-  rule_statement: Runner管理员执行高风险操作“Runner绑定/解绑、升级、人工调度状态变更”时必须满足独立权限和审计要求。
+  rule_statement: Runner管理员执行高风险操作“project-scoped enrollment创建、Agent token升级、人工调度状态变更”时必须满足独立权限和审计要求。
   required_action: null
   prohibited_action: null
   allowed_action: null
@@ -89482,7 +89482,7 @@ business_rules:
   preconditions:
   - 安装包和注册凭证有效
   - 平台注册入口可用
-  rule_statement: 注册仅作用于Runner自身平台技术范围；注册结果必须为UNBOUND，不产生任何项目成员关系或项目绑定。
+  rule_statement: 注册仅接受管理员预创建的project-scoped enrollment；project_id由enrollment确定，注册成功立即BOUND，Agent不得指定或变更Project。
   required_action: null
   prohibited_action: null
   allowed_action: null
@@ -89495,7 +89495,7 @@ business_rules:
     rank: 90
     name: 权限与数据范围
   permission_requirements:
-  - 注册仅作用于Runner自身平台技术范围；注册结果必须为UNBOUND，不产生任何项目成员关系或项目绑定。
+  - 注册仅接受管理员预创建的project-scoped enrollment；project_id由enrollment确定，注册成功立即BOUND，Agent不得指定或变更Project。
   state_requirements: []
   concurrency_requirements: []
   audit_requirements: []
@@ -90404,11 +90404,11 @@ business_rules:
   preconditions:
   - 安装包和注册凭证有效
   - 平台注册入口可用
-  rule_statement: Runner获得唯一服务身份、认证和能力快照且保持UNBOUND；USR-SCN-021是唯一项目绑定入口。
+  rule_statement: Runner通过project-scoped enrollment获得唯一服务身份、Agent token和能力快照，注册成功即绑定enrollment预定Project；不支持UNBOUND。
   required_action: null
   prohibited_action: null
   allowed_action: null
-  expected_result: Runner获得唯一服务身份、认证和能力快照且保持UNBOUND；USR-SCN-021是唯一项目绑定入口。
+  expected_result: Runner通过project-scoped enrollment获得唯一服务身份、Agent token和能力快照，注册成功即绑定enrollment预定Project；不支持UNBOUND。
   failure_result: null
   exception_conditions: []
   exception_behavior: null
@@ -90476,7 +90476,7 @@ business_rules:
   - UF-026479
   blocks_full_code_ready: false
 - rule_id: BR-RUNNER-0030
-  rule_name: Runner绑定项目替代流程1
+  rule_name: 创建Runner project-scoped enrollment替代流程1
   rule_category: PROCESS_RULE
   domain: DOM-018
   subject: ROLE-RUNNER-ADMIN
@@ -90484,16 +90484,16 @@ business_rules:
   - OBJ-052
   - OBJ-007
   - OBJ-035
-  trigger: 发起Runner绑定项目
+  trigger: 发起创建Runner project-scoped enrollment
   preconditions:
   - Runner已注册且无活动绑定冲突
   - 目标项目有效
   - 发起人具备Runner和项目范围
-  rule_statement: 先受控解绑旧项目，再绑定新项目
-  required_action: 先受控解绑旧项目，再绑定新项目
+  rule_statement: 创建时已确定project_id的project-scoped enrollment；不提供普通解绑或rebind
+  required_action: 创建时已确定project_id的project-scoped enrollment；不提供普通解绑或rebind
   prohibited_action: null
   allowed_action: null
-  expected_result: 动作“先受控解绑旧项目，再绑定新项目”完成并形成可追溯结果。
+  expected_result: 动作“创建时已确定project_id的project-scoped enrollment；不提供普通解绑或rebind”完成并形成可追溯结果。
   failure_result: null
   exception_conditions: []
   exception_behavior: null
@@ -90516,7 +90516,7 @@ business_rules:
   - UF-022464
   blocks_full_code_ready: false
 - rule_id: BR-RUNNER-0031
-  rule_name: Runner绑定项目审计1
+  rule_name: 创建Runner project-scoped enrollment审计1
   rule_category: AUDIT_RULE
   domain: DOM-018
   subject: ROLE-RUNNER-ADMIN
@@ -90524,13 +90524,13 @@ business_rules:
   - OBJ-052
   - OBJ-007
   - OBJ-035
-  trigger: 发起Runner绑定项目
+  trigger: 发起创建Runner project-scoped enrollment
   preconditions:
   - Runner已注册且无活动绑定冲突
   - 目标项目有效
   - 发起人具备Runner和项目范围
-  rule_statement: 记录“Runner绑定项目”的发起主体、参与主体、对象ID、权限与数据范围判定、状态前后值、结果/原因码和时间。
-  required_action: 记录“Runner绑定项目”的发起主体、参与主体、对象ID、权限与数据范围判定、状态前后值、结果/原因码和时间。
+  rule_statement: 记录“创建Runner project-scoped enrollment”的发起主体、参与主体、对象ID、权限与数据范围判定、状态前后值、结果/原因码和时间。
+  required_action: 记录“创建Runner project-scoped enrollment”的发起主体、参与主体、对象ID、权限与数据范围判定、状态前后值、结果/原因码和时间。
   prohibited_action: null
   allowed_action: null
   expected_result: null
@@ -90545,7 +90545,7 @@ business_rules:
   state_requirements: []
   concurrency_requirements: []
   audit_requirements:
-  - 记录“Runner绑定项目”的发起主体、参与主体、对象ID、权限与数据范围判定、状态前后值、结果/原因码和时间。
+  - 记录“创建Runner project-scoped enrollment”的发起主体、参与主体、对象ID、权限与数据范围判定、状态前后值、结果/原因码和时间。
   lifecycle_stage: WHEN_TRIGGERED
   related_scenarios:
   - USR-SCN-021
@@ -90558,7 +90558,7 @@ business_rules:
   - UF-022483
   blocks_full_code_ready: false
 - rule_id: BR-RUNNER-0032
-  rule_name: Runner绑定项目审计2
+  rule_name: 创建Runner project-scoped enrollment审计2
   rule_category: AUDIT_RULE
   domain: DOM-018
   subject: ROLE-RUNNER-ADMIN
@@ -90566,12 +90566,12 @@ business_rules:
   - OBJ-052
   - OBJ-007
   - OBJ-035
-  trigger: 发起Runner绑定项目
+  trigger: 发起创建Runner project-scoped enrollment
   preconditions:
   - Runner已注册且无活动绑定冲突
   - 目标项目有效
   - 发起人具备Runner和项目范围
-  rule_statement: 在“Runner绑定项目”中，审计必须满足：本地状态变化、不可变事件和审计在同一原子提交边界内完成；提交前审计失败则不提交或回滚本地变化。。
+  rule_statement: 在“创建Runner project-scoped enrollment”中，审计必须满足：本地状态变化、不可变事件和审计在同一原子提交边界内完成；提交前审计失败则不提交或回滚本地变化。。
   required_action: 本地状态变化、不可变事件和审计在同一原子提交边界内完成；提交前审计失败则不提交或回滚本地变化。
   prohibited_action: null
   allowed_action: null
@@ -90601,7 +90601,7 @@ business_rules:
   - UF-031931
   blocks_full_code_ready: false
 - rule_id: BR-RUNNER-0033
-  rule_name: Runner绑定项目并发校验1
+  rule_name: 创建Runner project-scoped enrollment并发校验1
   rule_category: CONCURRENCY_RULE
   domain: DOM-018
   subject: ROLE-RUNNER-ADMIN
@@ -90609,12 +90609,12 @@ business_rules:
   - OBJ-052
   - OBJ-007
   - OBJ-035
-  trigger: 发起Runner绑定项目
+  trigger: 发起创建Runner project-scoped enrollment
   preconditions:
   - Runner已注册且无活动绑定冲突
   - 目标项目有效
   - 发起人具备Runner和项目范围
-  rule_statement: 绑定关系唯一；绑定/解绑使用CAS与资源门禁
+  rule_statement: project-scoped enrollment绑定关系唯一；本阶段不提供普通解绑或rebind
   required_action: null
   prohibited_action: null
   allowed_action: null
@@ -90629,7 +90629,7 @@ business_rules:
   permission_requirements: []
   state_requirements: []
   concurrency_requirements:
-  - 绑定关系唯一；绑定/解绑使用CAS与资源门禁
+  - project-scoped enrollment绑定关系唯一；本阶段不提供普通解绑或rebind
   audit_requirements: []
   lifecycle_stage: WHEN_TRIGGERED
   related_scenarios:
@@ -90647,7 +90647,7 @@ business_rules:
   - UF-028633
   blocks_full_code_ready: false
 - rule_id: BR-RUNNER-0034
-  rule_name: Runner绑定项目数据范围1
+  rule_name: 创建Runner project-scoped enrollment数据范围1
   rule_category: DATA_SCOPE_RULE
   domain: DOM-018
   subject: ROLE-RUNNER-ADMIN
@@ -90655,12 +90655,12 @@ business_rules:
   - OBJ-052
   - OBJ-007
   - OBJ-035
-  trigger: 发起Runner绑定项目
+  trigger: 发起创建Runner project-scoped enrollment
   preconditions:
   - Runner已注册且无活动绑定冲突
   - 目标项目有效
   - 发起人具备Runner和项目范围
-  rule_statement: “Runner绑定项目”的读取、写入和历史查询仅作用于明确授权项目及active_scope/history_read_scope；敏感数据另行校验独立权限。
+  rule_statement: “创建Runner project-scoped enrollment”的读取、写入和历史查询仅作用于明确授权项目及active_scope/history_read_scope；敏感数据另行校验独立权限。
   required_action: null
   prohibited_action: null
   allowed_action: null
@@ -90673,7 +90673,7 @@ business_rules:
     rank: 90
     name: 权限与数据范围
   permission_requirements:
-  - “Runner绑定项目”的读取、写入和历史查询仅作用于明确授权项目及active_scope/history_read_scope；敏感数据另行校验独立权限。
+  - “创建Runner project-scoped enrollment”的读取、写入和历史查询仅作用于明确授权项目及active_scope/history_read_scope；敏感数据另行校验独立权限。
   state_requirements: []
   concurrency_requirements: []
   audit_requirements: []
@@ -90695,7 +90695,7 @@ business_rules:
   - UF-028296
   blocks_full_code_ready: false
 - rule_id: BR-RUNNER-0035
-  rule_name: Runner绑定项目异常流程1
+  rule_name: 创建Runner project-scoped enrollment异常流程1
   rule_category: EXCEPTION_RULE
   domain: DOM-018
   subject: ROLE-RUNNER-ADMIN
@@ -90703,7 +90703,7 @@ business_rules:
   - OBJ-052
   - OBJ-007
   - OBJ-035
-  trigger: 发起Runner绑定项目
+  trigger: 发起创建Runner project-scoped enrollment
   preconditions:
   - Runner已注册且无活动绑定冲突
   - 目标项目有效
@@ -90739,7 +90739,7 @@ business_rules:
   - UF-026507
   blocks_full_code_ready: false
 - rule_id: BR-RUNNER-0036
-  rule_name: Runner绑定项目失败判定2
+  rule_name: 创建Runner project-scoped enrollment失败判定2
   rule_category: VALIDATION_RULE
   domain: DOM-018
   subject: ROLE-RUNNER-ADMIN
@@ -90747,12 +90747,12 @@ business_rules:
   - OBJ-052
   - OBJ-007
   - OBJ-035
-  trigger: 发起Runner绑定项目
+  trigger: 发起创建Runner project-scoped enrollment
   preconditions:
   - Runner已注册且无活动绑定冲突
   - 目标项目有效
   - 发起人具备Runner和项目范围
-  rule_statement: 在“Runner绑定项目”中，失败判定必须满足：事务/补偿策略：LOCAL_TRANSACTION。。
+  rule_statement: 在“创建Runner project-scoped enrollment”中，失败判定必须满足：事务/补偿策略：LOCAL_TRANSACTION。。
   required_action: null
   prohibited_action: null
   allowed_action: null
@@ -90780,7 +90780,7 @@ business_rules:
   - UF-022486
   blocks_full_code_ready: false
 - rule_id: BR-RUNNER-0037
-  rule_name: Runner绑定项目主流程1
+  rule_name: 创建Runner project-scoped enrollment主流程1
   rule_category: PROCESS_RULE
   domain: DOM-018
   subject: ROLE-RUNNER-ADMIN
@@ -90788,12 +90788,12 @@ business_rules:
   - OBJ-052
   - OBJ-007
   - OBJ-035
-  trigger: 发起Runner绑定项目
+  trigger: 发起创建Runner project-scoped enrollment
   preconditions:
   - Runner已注册且无活动绑定冲突
   - 目标项目有效
   - 发起人具备Runner和项目范围
-  rule_statement: 在“Runner绑定项目”中，主流程必须满足：选择Runner和目标项目。
+  rule_statement: 在“创建Runner project-scoped enrollment”中，主流程必须满足：选择Runner和目标项目。
   required_action: 选择Runner和目标项目
   prohibited_action: null
   allowed_action: null
@@ -90829,7 +90829,7 @@ business_rules:
   - UF-026489
   blocks_full_code_ready: false
 - rule_id: BR-RUNNER-0038
-  rule_name: Runner绑定项目主流程2
+  rule_name: 创建Runner project-scoped enrollment主流程2
   rule_category: PROCESS_RULE
   domain: DOM-018
   subject: ROLE-RUNNER-ADMIN
@@ -90837,7 +90837,7 @@ business_rules:
   - OBJ-052
   - OBJ-007
   - OBJ-035
-  trigger: 发起Runner绑定项目
+  trigger: 发起创建Runner project-scoped enrollment
   preconditions:
   - Runner已注册且无活动绑定冲突
   - 目标项目有效
@@ -90878,7 +90878,7 @@ business_rules:
   - UF-026490
   blocks_full_code_ready: false
 - rule_id: BR-RUNNER-0039
-  rule_name: Runner绑定项目主流程3
+  rule_name: 创建Runner project-scoped enrollment主流程3
   rule_category: PROCESS_RULE
   domain: DOM-018
   subject: ROLE-RUNNER-ADMIN
@@ -90886,7 +90886,7 @@ business_rules:
   - OBJ-052
   - OBJ-007
   - OBJ-035
-  trigger: 发起Runner绑定项目
+  trigger: 发起创建Runner project-scoped enrollment
   preconditions:
   - Runner已注册且无活动绑定冲突
   - 目标项目有效
@@ -90927,7 +90927,7 @@ business_rules:
   - UF-026491
   blocks_full_code_ready: false
 - rule_id: BR-RUNNER-0040
-  rule_name: Runner绑定项目主流程4
+  rule_name: 创建Runner project-scoped enrollment主流程4
   rule_category: PROCESS_RULE
   domain: DOM-018
   subject: ROLE-RUNNER-ADMIN
@@ -90935,7 +90935,7 @@ business_rules:
   - OBJ-052
   - OBJ-007
   - OBJ-035
-  trigger: 发起Runner绑定项目
+  trigger: 发起创建Runner project-scoped enrollment
   preconditions:
   - Runner已注册且无活动绑定冲突
   - 目标项目有效
@@ -90976,7 +90976,7 @@ business_rules:
   - UF-026492
   blocks_full_code_ready: false
 - rule_id: BR-RUNNER-0041
-  rule_name: Runner绑定项目主流程5
+  rule_name: 创建Runner project-scoped enrollment主流程5
   rule_category: PROCESS_RULE
   domain: DOM-018
   subject: ROLE-RUNNER-ADMIN
@@ -90984,7 +90984,7 @@ business_rules:
   - OBJ-052
   - OBJ-007
   - OBJ-035
-  trigger: 发起Runner绑定项目
+  trigger: 发起创建Runner project-scoped enrollment
   preconditions:
   - Runner已注册且无活动绑定冲突
   - 目标项目有效
@@ -91025,7 +91025,7 @@ business_rules:
   - UF-026493
   blocks_full_code_ready: false
 - rule_id: BR-RUNNER-0042
-  rule_name: Runner绑定项目权限校验1
+  rule_name: 创建Runner project-scoped enrollment权限校验1
   rule_category: AUTHORIZATION_RULE
   domain: DOM-018
   subject: ROLE-RUNNER-ADMIN
@@ -91033,12 +91033,12 @@ business_rules:
   - OBJ-052
   - OBJ-007
   - OBJ-035
-  trigger: 发起Runner绑定项目
+  trigger: 发起创建Runner project-scoped enrollment
   preconditions:
   - Runner已注册且无活动绑定冲突
   - 目标项目有效
   - 发起人具备Runner和项目范围
-  rule_statement: ROLE-RUNNER-ADMIN发起“Runner绑定项目”前必须具备对应菜单、操作或服务授权；系统主体只按自身服务身份执行；越权时拒绝且不产生业务写入。
+  rule_statement: ROLE-RUNNER-ADMIN发起“创建Runner project-scoped enrollment”前必须具备对应菜单、操作或服务授权；系统主体只按自身服务身份执行；越权时拒绝且不产生业务写入。
   required_action: null
   prohibited_action: null
   allowed_action: null
@@ -91051,7 +91051,7 @@ business_rules:
     rank: 90
     name: 权限与数据范围
   permission_requirements:
-  - ROLE-RUNNER-ADMIN发起“Runner绑定项目”前必须具备对应菜单、操作或服务授权；系统主体只按自身服务身份执行；越权时拒绝且不产生业务写入。
+  - ROLE-RUNNER-ADMIN发起“创建Runner project-scoped enrollment”前必须具备对应菜单、操作或服务授权；系统主体只按自身服务身份执行；越权时拒绝且不产生业务写入。
   state_requirements: []
   concurrency_requirements: []
   audit_requirements: []
@@ -91073,7 +91073,7 @@ business_rules:
   - UF-028955
   blocks_full_code_ready: false
 - rule_id: BR-RUNNER-0043
-  rule_name: Runner绑定项目前置条件1
+  rule_name: 创建Runner project-scoped enrollment前置条件1
   rule_category: ELIGIBILITY_RULE
   domain: DOM-018
   subject: ROLE-RUNNER-ADMIN
@@ -91081,7 +91081,7 @@ business_rules:
   - OBJ-052
   - OBJ-007
   - OBJ-035
-  trigger: 发起Runner绑定项目
+  trigger: 发起创建Runner project-scoped enrollment
   preconditions:
   - Runner已注册且无活动绑定冲突
   rule_statement: Runner已注册且无活动绑定冲突
@@ -91113,7 +91113,7 @@ business_rules:
   - UF-022457
   blocks_full_code_ready: false
 - rule_id: BR-RUNNER-0044
-  rule_name: Runner绑定项目前置条件2
+  rule_name: 创建Runner project-scoped enrollment前置条件2
   rule_category: ELIGIBILITY_RULE
   domain: DOM-018
   subject: ROLE-RUNNER-ADMIN
@@ -91121,10 +91121,10 @@ business_rules:
   - OBJ-052
   - OBJ-007
   - OBJ-035
-  trigger: 发起Runner绑定项目
+  trigger: 发起创建Runner project-scoped enrollment
   preconditions:
   - 目标项目有效
-  rule_statement: 在“Runner绑定项目”中，前置条件必须满足：目标项目有效。
+  rule_statement: 在“创建Runner project-scoped enrollment”中，前置条件必须满足：目标项目有效。
   required_action: null
   prohibited_action: null
   allowed_action: null
@@ -91153,7 +91153,7 @@ business_rules:
   - UF-022457
   blocks_full_code_ready: false
 - rule_id: BR-RUNNER-0045
-  rule_name: Runner绑定项目前置条件3
+  rule_name: 创建Runner project-scoped enrollment前置条件3
   rule_category: ELIGIBILITY_RULE
   domain: DOM-018
   subject: ROLE-RUNNER-ADMIN
@@ -91161,10 +91161,10 @@ business_rules:
   - OBJ-052
   - OBJ-007
   - OBJ-035
-  trigger: 发起Runner绑定项目
+  trigger: 发起创建Runner project-scoped enrollment
   preconditions:
   - 发起人具备Runner和项目范围
-  rule_statement: 在“Runner绑定项目”中，前置条件必须满足：发起人具备Runner和项目范围。
+  rule_statement: 在“创建Runner project-scoped enrollment”中，前置条件必须满足：发起人具备Runner和项目范围。
   required_action: null
   prohibited_action: null
   allowed_action: null
@@ -91193,7 +91193,7 @@ business_rules:
   - UF-022457
   blocks_full_code_ready: false
 - rule_id: BR-RUNNER-0046
-  rule_name: Runner绑定项目恢复2
+  rule_name: 创建Runner project-scoped enrollment恢复2
   rule_category: RECOVERY_RULE
   domain: DOM-018
   subject: ROLE-RUNNER-ADMIN
@@ -91201,20 +91201,20 @@ business_rules:
   - OBJ-052
   - OBJ-007
   - OBJ-035
-  trigger: 发起Runner绑定项目
+  trigger: 发起创建Runner project-scoped enrollment
   preconditions:
   - Runner已注册且无活动绑定冲突
   - 目标项目有效
   - 发起人具备Runner和项目范围
-  rule_statement: 等待任务终态和租约释放后重新解绑/绑定
-  required_action: 等待任务终态和租约释放后重新解绑/绑定
+  rule_statement: 本阶段不支持普通解绑或rebind；如未来需要须走独立正式业务规则
+  required_action: 本阶段不支持普通解绑或rebind；如未来需要须走独立正式业务规则
   prohibited_action: null
   allowed_action: null
   expected_result: null
   failure_result: null
   exception_conditions:
   - 场景失败或中断
-  exception_behavior: 等待任务终态和租约释放后重新解绑/绑定
+  exception_behavior: 本阶段不支持普通解绑或rebind；如未来需要须走独立正式业务规则
   priority:
     level: P6
     rank: 50
@@ -91240,7 +91240,7 @@ business_rules:
   - UF-031932
   blocks_full_code_ready: false
 - rule_id: BR-RUNNER-0047
-  rule_name: Runner绑定项目状态流转1
+  rule_name: 创建Runner project-scoped enrollment状态流转1
   rule_category: STATE_TRANSITION_RULE
   domain: DOM-018
   subject: ROLE-RUNNER-ADMIN
@@ -91248,16 +91248,16 @@ business_rules:
   - OBJ-052
   - OBJ-007
   - OBJ-035
-  trigger: 发起Runner绑定项目
+  trigger: 发起创建Runner project-scoped enrollment
   preconditions:
   - Runner已注册且无活动绑定冲突
   - 目标项目有效
   - 发起人具备Runner和项目范围
-  rule_statement: 'Runner绑定状态: UNBOUND→BOUND；解绑反向但需门禁'
+  rule_statement: 'Runner绑定状态: 注册成功即BOUND；本阶段不提供普通解绑或rebind'
   required_action: null
   prohibited_action: null
   allowed_action: null
-  expected_result: 'Runner绑定状态: UNBOUND→BOUND；解绑反向但需门禁'
+  expected_result: 'Runner绑定状态: 注册成功即BOUND；本阶段不提供普通解绑或rebind'
   failure_result: null
   exception_conditions: []
   exception_behavior: null
@@ -91285,7 +91285,7 @@ business_rules:
   - UF-028456
   blocks_full_code_ready: false
 - rule_id: BR-RUNNER-0048
-  rule_name: Runner绑定项目成功判定1
+  rule_name: 创建Runner project-scoped enrollment成功判定1
   rule_category: VALIDATION_RULE
   domain: DOM-018
   subject: ROLE-RUNNER-ADMIN
@@ -91293,7 +91293,7 @@ business_rules:
   - OBJ-052
   - OBJ-007
   - OBJ-035
-  trigger: 发起Runner绑定项目
+  trigger: 发起创建Runner project-scoped enrollment
   preconditions:
   - Runner已注册且无活动绑定冲突
   - 目标项目有效
@@ -91326,7 +91326,7 @@ business_rules:
   - UF-026487
   blocks_full_code_ready: false
 - rule_id: BR-RUNNER-0049
-  rule_name: Runner绑定项目触发规则
+  rule_name: 创建Runner project-scoped enrollment触发规则
   rule_category: PROCESS_RULE
   domain: DOM-018
   subject: ROLE-RUNNER-ADMIN
@@ -91334,12 +91334,12 @@ business_rules:
   - OBJ-052
   - OBJ-007
   - OBJ-035
-  trigger: 发起Runner绑定项目
+  trigger: 发起创建Runner project-scoped enrollment
   preconditions:
   - Runner已注册且无活动绑定冲突
   - 目标项目有效
   - 发起人具备Runner和项目范围
-  rule_statement: 当“发起Runner绑定项目”发生时，ROLE-RUNNER-ADMIN可以发起“Runner绑定项目”；发起后必须先完成本场景前置、权限、范围、资源和并发门禁。
+  rule_statement: 当“发起创建Runner project-scoped enrollment”发生时，ROLE-RUNNER-ADMIN可以发起“创建Runner project-scoped enrollment”；发起后必须先完成本场景前置、权限、范围、资源和并发门禁。
   required_action: 先执行场景门禁，再进入首个业务副作用。
   prohibited_action: null
   allowed_action: null
@@ -112157,7 +112157,7 @@ rule_conditions:
 - condition_id: COND-002536
   rule_id: BR-RUNNER-0009
   condition_type: CONDITION_EXPRESSION
-  expression: 注册仅作用于Runner自身平台技术范围；注册结果必须为UNBOUND，不产生任何项目成员关系或项目绑定。
+  expression: 注册仅接受管理员预创建的project-scoped enrollment；project_id由enrollment确定，注册成功立即BOUND，Agent不得指定或变更Project。
   evaluation_order: 2536
 - condition_id: COND-002537
   rule_id: BR-RUNNER-0010
@@ -112497,7 +112497,7 @@ rule_conditions:
 - condition_id: COND-002604
   rule_id: BR-RUNNER-0028
   condition_type: CONDITION_EXPRESSION
-  expression: Runner获得唯一服务身份、认证和能力快照且保持UNBOUND；USR-SCN-021是唯一项目绑定入口。
+  expression: Runner通过project-scoped enrollment获得唯一服务身份、Agent token和能力快照，注册成功即绑定enrollment预定Project；不支持UNBOUND。
   evaluation_order: 2604
 - condition_id: COND-002605
   rule_id: BR-RUNNER-0029
@@ -112517,7 +112517,7 @@ rule_conditions:
 - condition_id: COND-002608
   rule_id: BR-RUNNER-0030
   condition_type: TRIGGER
-  expression: 发起Runner绑定项目
+  expression: 发起创建Runner project-scoped enrollment
   evaluation_order: 2608
 - condition_id: COND-002609
   rule_id: BR-RUNNER-0030
@@ -112537,7 +112537,7 @@ rule_conditions:
 - condition_id: COND-002612
   rule_id: BR-RUNNER-0031
   condition_type: TRIGGER
-  expression: 发起Runner绑定项目
+  expression: 发起创建Runner project-scoped enrollment
   evaluation_order: 2612
 - condition_id: COND-002613
   rule_id: BR-RUNNER-0031
@@ -112557,7 +112557,7 @@ rule_conditions:
 - condition_id: COND-002616
   rule_id: BR-RUNNER-0032
   condition_type: TRIGGER
-  expression: 发起Runner绑定项目
+  expression: 发起创建Runner project-scoped enrollment
   evaluation_order: 2616
 - condition_id: COND-002617
   rule_id: BR-RUNNER-0032
@@ -112577,7 +112577,7 @@ rule_conditions:
 - condition_id: COND-002620
   rule_id: BR-RUNNER-0033
   condition_type: TRIGGER
-  expression: 发起Runner绑定项目
+  expression: 发起创建Runner project-scoped enrollment
   evaluation_order: 2620
 - condition_id: COND-002621
   rule_id: BR-RUNNER-0033
@@ -112597,12 +112597,12 @@ rule_conditions:
 - condition_id: COND-002624
   rule_id: BR-RUNNER-0033
   condition_type: CONDITION_EXPRESSION
-  expression: 绑定关系唯一；绑定/解绑使用CAS与资源门禁
+  expression: project-scoped enrollment绑定关系唯一；本阶段不提供普通解绑或rebind
   evaluation_order: 2624
 - condition_id: COND-002625
   rule_id: BR-RUNNER-0034
   condition_type: TRIGGER
-  expression: 发起Runner绑定项目
+  expression: 发起创建Runner project-scoped enrollment
   evaluation_order: 2625
 - condition_id: COND-002626
   rule_id: BR-RUNNER-0034
@@ -112622,12 +112622,12 @@ rule_conditions:
 - condition_id: COND-002629
   rule_id: BR-RUNNER-0034
   condition_type: CONDITION_EXPRESSION
-  expression: “Runner绑定项目”的读取、写入和历史查询仅作用于明确授权项目及active_scope/history_read_scope；敏感数据另行校验独立权限。
+  expression: “创建Runner project-scoped enrollment”的读取、写入和历史查询仅作用于明确授权项目及active_scope/history_read_scope；敏感数据另行校验独立权限。
   evaluation_order: 2629
 - condition_id: COND-002630
   rule_id: BR-RUNNER-0035
   condition_type: TRIGGER
-  expression: 发起Runner绑定项目
+  expression: 发起创建Runner project-scoped enrollment
   evaluation_order: 2630
 - condition_id: COND-002631
   rule_id: BR-RUNNER-0035
@@ -112647,7 +112647,7 @@ rule_conditions:
 - condition_id: COND-002634
   rule_id: BR-RUNNER-0036
   condition_type: TRIGGER
-  expression: 发起Runner绑定项目
+  expression: 发起创建Runner project-scoped enrollment
   evaluation_order: 2634
 - condition_id: COND-002635
   rule_id: BR-RUNNER-0036
@@ -112672,7 +112672,7 @@ rule_conditions:
 - condition_id: COND-002639
   rule_id: BR-RUNNER-0037
   condition_type: TRIGGER
-  expression: 发起Runner绑定项目
+  expression: 发起创建Runner project-scoped enrollment
   evaluation_order: 2639
 - condition_id: COND-002640
   rule_id: BR-RUNNER-0037
@@ -112692,7 +112692,7 @@ rule_conditions:
 - condition_id: COND-002643
   rule_id: BR-RUNNER-0038
   condition_type: TRIGGER
-  expression: 发起Runner绑定项目
+  expression: 发起创建Runner project-scoped enrollment
   evaluation_order: 2643
 - condition_id: COND-002644
   rule_id: BR-RUNNER-0038
@@ -112712,7 +112712,7 @@ rule_conditions:
 - condition_id: COND-002647
   rule_id: BR-RUNNER-0039
   condition_type: TRIGGER
-  expression: 发起Runner绑定项目
+  expression: 发起创建Runner project-scoped enrollment
   evaluation_order: 2647
 - condition_id: COND-002648
   rule_id: BR-RUNNER-0039
@@ -112732,7 +112732,7 @@ rule_conditions:
 - condition_id: COND-002651
   rule_id: BR-RUNNER-0040
   condition_type: TRIGGER
-  expression: 发起Runner绑定项目
+  expression: 发起创建Runner project-scoped enrollment
   evaluation_order: 2651
 - condition_id: COND-002652
   rule_id: BR-RUNNER-0040
@@ -112752,7 +112752,7 @@ rule_conditions:
 - condition_id: COND-002655
   rule_id: BR-RUNNER-0041
   condition_type: TRIGGER
-  expression: 发起Runner绑定项目
+  expression: 发起创建Runner project-scoped enrollment
   evaluation_order: 2655
 - condition_id: COND-002656
   rule_id: BR-RUNNER-0041
@@ -112772,7 +112772,7 @@ rule_conditions:
 - condition_id: COND-002659
   rule_id: BR-RUNNER-0042
   condition_type: TRIGGER
-  expression: 发起Runner绑定项目
+  expression: 发起创建Runner project-scoped enrollment
   evaluation_order: 2659
 - condition_id: COND-002660
   rule_id: BR-RUNNER-0042
@@ -112792,12 +112792,12 @@ rule_conditions:
 - condition_id: COND-002663
   rule_id: BR-RUNNER-0042
   condition_type: CONDITION_EXPRESSION
-  expression: ROLE-RUNNER-ADMIN发起“Runner绑定项目”前必须具备对应菜单、操作或服务授权；系统主体只按自身服务身份执行；越权时拒绝且不产生业务写入。
+  expression: ROLE-RUNNER-ADMIN发起“创建Runner project-scoped enrollment”前必须具备对应菜单、操作或服务授权；系统主体只按自身服务身份执行；越权时拒绝且不产生业务写入。
   evaluation_order: 2663
 - condition_id: COND-002664
   rule_id: BR-RUNNER-0043
   condition_type: TRIGGER
-  expression: 发起Runner绑定项目
+  expression: 发起创建Runner project-scoped enrollment
   evaluation_order: 2664
 - condition_id: COND-002665
   rule_id: BR-RUNNER-0043
@@ -112812,7 +112812,7 @@ rule_conditions:
 - condition_id: COND-002667
   rule_id: BR-RUNNER-0044
   condition_type: TRIGGER
-  expression: 发起Runner绑定项目
+  expression: 发起创建Runner project-scoped enrollment
   evaluation_order: 2667
 - condition_id: COND-002668
   rule_id: BR-RUNNER-0044
@@ -112827,7 +112827,7 @@ rule_conditions:
 - condition_id: COND-002670
   rule_id: BR-RUNNER-0045
   condition_type: TRIGGER
-  expression: 发起Runner绑定项目
+  expression: 发起创建Runner project-scoped enrollment
   evaluation_order: 2670
 - condition_id: COND-002671
   rule_id: BR-RUNNER-0045
@@ -112842,7 +112842,7 @@ rule_conditions:
 - condition_id: COND-002673
   rule_id: BR-RUNNER-0046
   condition_type: TRIGGER
-  expression: 发起Runner绑定项目
+  expression: 发起创建Runner project-scoped enrollment
   evaluation_order: 2673
 - condition_id: COND-002674
   rule_id: BR-RUNNER-0046
@@ -112862,7 +112862,7 @@ rule_conditions:
 - condition_id: COND-002677
   rule_id: BR-RUNNER-0047
   condition_type: TRIGGER
-  expression: 发起Runner绑定项目
+  expression: 发起创建Runner project-scoped enrollment
   evaluation_order: 2677
 - condition_id: COND-002678
   rule_id: BR-RUNNER-0047
@@ -112882,7 +112882,7 @@ rule_conditions:
 - condition_id: COND-002681
   rule_id: BR-RUNNER-0048
   condition_type: TRIGGER
-  expression: 发起Runner绑定项目
+  expression: 发起创建Runner project-scoped enrollment
   evaluation_order: 2681
 - condition_id: COND-002682
   rule_id: BR-RUNNER-0048
@@ -112907,7 +112907,7 @@ rule_conditions:
 - condition_id: COND-002686
   rule_id: BR-RUNNER-0049
   condition_type: TRIGGER
-  expression: 发起Runner绑定项目
+  expression: 发起创建Runner project-scoped enrollment
   evaluation_order: 2686
 - condition_id: COND-002687
   rule_id: BR-RUNNER-0049
@@ -116583,7 +116583,7 @@ rule_exceptions:
 - exception_id: EXC-000093
   rule_id: BR-RUNNER-0046
   condition: 场景失败或中断
-  behavior: 等待任务终态和租约释放后重新解绑/绑定
+  behavior: 本阶段不支持普通解绑或rebind；如未来需要须走独立正式业务规则
   priority_over_base_rule: true
 - exception_id: EXC-000094
   rule_id: BR-RUNNER-0055
@@ -118674,17 +118674,12 @@ lifecycles:
   object_id: OBJ-052
   lifecycle_name: Runner生命周期
   profile: RUNNER
-  initial_stage: REGISTERING
+  initial_stage: REGISTERED
   active_stages:
-  - ONLINE
-  - DEGRADED
+  - ACTIVE
   suspended_stages:
-  - DRAINING
   - DISABLED
-  exception_stages:
-  - UNHEALTHY
-  - OFFLINE
-  - RECOVERING
+  exception_stages: []
   terminal_stages:
   - ARCHIVED
   transition_ids:
@@ -118693,33 +118688,30 @@ lifecycles:
   - LCT-00462
   - LCT-00463
   - LCT-00464
-  - LCT-00465
-  - LCT-00466
-  - LCT-00467
-  - LCT-00468
-  - LCT-00469
-  - LCT-00470
-  - LCT-00471
-  - LCT-00472
-  - LCT-00473
-  - LCT-00474
-  - LCT-00475
-  - LCT-00476
   state_dimensions:
   - R3-LS-006
-  allowed_operations: 按阶段定义的允许操作执行；任何写操作均需权限、数据范围和审计校验。
-  prohibited_operations: 禁止跳过前置阶段、绕过聚合根、覆盖不可变版本或删除仍被引用对象。
-  reference_constraints: 变更前检查活动引用；历史执行引用通过稳定标识、版本或快照继续可追溯。
+  orthogonal_runtime_dimensions:
+  - RSTATE-001
+  - RSTATE-002
+  - RSTATE-003
+  - RSTATE-004
+  - RSTATE-005
+  - RSTATE-006
+  - RSTATE-007
+  - RSTATE-008
+  allowed_operations: 注册时直接建立REGISTERED生命周期；enable、disable和archive必须走显式命令，普通PATCH不得修改生命周期或运行状态。
+  prohibited_operations: 禁止heartbeat改变lifecycle或enablement；禁止UNBOUND、普通PATCH rebind、跳过停用直接归档或修改runner_code。
+  reference_constraints: 归档前检查活动引用；历史执行继续通过稳定runner_id和runner_code快照追溯。
   permission_constraints:
-  - 由项目成员关系、角色权限点和数据范围交集派生。
+  - 人工生命周期管理要求RUNNER_REGISTER及实时Project数据范围；机器身份无权执行人工生命周期命令。
   concurrency_constraints:
-  - 修改时校验版本号或等价乐观锁，冲突时拒绝覆盖并返回当前版本。
-  archive_rule: 归档后禁止新写入，保留历史查询和引用完整性。
-  delete_rule: 存在有效引用时禁止物理删除；先停用或归档，清理由受控请求执行。
-  recovery_rule: 异常状态必须保留恢复所需状态、进度和证据；恢复失败转入终态并保留审计，不覆盖原历史。
-  audit_rule: 创建、状态变化、权限变化、归档、删除、恢复和强制操作必须形成审计记录。
-  historical_trace_rule: 对象进入停用、归档或删除状态后，历史任务、报告、制品和审计仍显示稳定标识与必要快照。
-  completion_status: VALID_LIFECYCLE_COMPLETION
+  - 修改时校验row_version，冲突时拒绝覆盖并返回当前版本。
+  archive_rule: 仅DISABLED可归档；归档后禁止配置写入和机器心跳，保留历史查询、审计和引用完整性。
+  delete_rule: Runner Foundation不提供物理删除；存在历史引用时始终保留稳定身份。
+  recovery_rule: DISABLED可通过显式enable恢复ACTIVE；ARCHIVED不可恢复。
+  audit_rule: 注册、元数据变化、enable、disable、archive、token rotate/revoke和能力变化必须形成审计记录；普通heartbeat不写高频人工审计。
+  historical_trace_rule: 停用或归档后，历史任务、报告、制品和审计仍显示稳定runner_id、project_id和runner_code。
+  completion_status: USER_APPROVED_RUNNER_FOUNDATION
 - lifecycle_id: LC-053
   object_id: OBJ-053
   lifecycle_name: Runner能力生命周期
@@ -126275,168 +126267,39 @@ lifecycle_stages:
 - stage_id: LCS-0389
   lifecycle_id: LC-052
   object_id: OBJ-052
-  stage_code: REGISTERING
-  stage_name: 注册中
+  stage_code: REGISTERED
+  stage_name: 已注册
   stage_type: INITIAL
   allowed_operations:
   - VIEW
+  - ENABLE
+  - DISABLE
+  - UPDATE_ALLOWED_FIELDS
   prohibited_operations:
-  - PHYSICAL_DELETE_WITHOUT_REFERENCE_CHECK
-  - BYPASS_PERMISSION
-  - BYPASS_AUDIT
-  entry_conditions: 仅通过指向REGISTERING的合法转换进入。
-  exit_conditions: 满足目标转换的权限、状态、引用、并发、锁、租约和幂等条件。
+  - CHANGE_RUNNER_CODE
+  - CHANGE_PROJECT
+  - MACHINE_HEARTBEAT_CHANGES_LIFECYCLE
+  entry_conditions: 仅由有效project-scoped enrollment注册成功原子进入，且Project绑定已建立。
+  exit_conditions: 仅通过显式enable或disable命令并通过权限、Project scope、CAS和审计校验。
 - stage_id: LCS-0390
   lifecycle_id: LC-052
   object_id: OBJ-052
-  stage_code: REGISTERED
-  stage_name: 已注册
+  stage_code: ACTIVE
+  stage_name: 启用
   stage_type: ACTIVE
   allowed_operations:
   - VIEW
+  - UPDATE_ALLOWED_FIELDS
+  - DISABLE
+  - MACHINE_HEARTBEAT
+  - MACHINE_CAPABILITY_REPORT
   prohibited_operations:
-  - PHYSICAL_DELETE_WITHOUT_REFERENCE_CHECK
-  - BYPASS_PERMISSION
-  - BYPASS_AUDIT
-  entry_conditions: 仅通过指向REGISTERED的合法转换进入。
-  exit_conditions: 满足目标转换的权限、状态、引用、并发、锁、租约和幂等条件。
+  - CHANGE_RUNNER_CODE
+  - CHANGE_PROJECT
+  - DIRECT_ARCHIVE
+  entry_conditions: 仅由REGISTERED或DISABLED通过显式enable命令进入。
+  exit_conditions: 仅通过显式disable命令并通过权限、Project scope、CAS和审计校验。
 - stage_id: LCS-0391
-  lifecycle_id: LC-052
-  object_id: OBJ-052
-  stage_code: AUTHENTICATED
-  stage_name: 已认证
-  stage_type: ACTIVE
-  allowed_operations:
-  - VIEW
-  prohibited_operations:
-  - PHYSICAL_DELETE_WITHOUT_REFERENCE_CHECK
-  - BYPASS_PERMISSION
-  - BYPASS_AUDIT
-  entry_conditions: 仅通过指向AUTHENTICATED的合法转换进入。
-  exit_conditions: 满足目标转换的权限、状态、引用、并发、锁、租约和幂等条件。
-- stage_id: LCS-0392
-  lifecycle_id: LC-052
-  object_id: OBJ-052
-  stage_code: BOUND
-  stage_name: 已绑定
-  stage_type: ACTIVE
-  allowed_operations:
-  - VIEW
-  prohibited_operations:
-  - PHYSICAL_DELETE_WITHOUT_REFERENCE_CHECK
-  - BYPASS_PERMISSION
-  - BYPASS_AUDIT
-  entry_conditions: 仅通过指向BOUND的合法转换进入。
-  exit_conditions: 满足目标转换的权限、状态、引用、并发、锁、租约和幂等条件。
-- stage_id: LCS-0393
-  lifecycle_id: LC-052
-  object_id: OBJ-052
-  stage_code: ENABLED
-  stage_name: 已启用
-  stage_type: ACTIVE
-  allowed_operations:
-  - VIEW
-  prohibited_operations:
-  - PHYSICAL_DELETE_WITHOUT_REFERENCE_CHECK
-  - BYPASS_PERMISSION
-  - BYPASS_AUDIT
-  entry_conditions: 仅通过指向ENABLED的合法转换进入。
-  exit_conditions: 满足目标转换的权限、状态、引用、并发、锁、租约和幂等条件。
-- stage_id: LCS-0394
-  lifecycle_id: LC-052
-  object_id: OBJ-052
-  stage_code: ONLINE
-  stage_name: 在线
-  stage_type: ACTIVE
-  allowed_operations:
-  - VIEW
-  - USE
-  - UPDATE_ALLOWED_FIELDS
-  prohibited_operations:
-  - PHYSICAL_DELETE_WITHOUT_REFERENCE_CHECK
-  - BYPASS_PERMISSION
-  - BYPASS_AUDIT
-  entry_conditions: 仅通过指向ONLINE的合法转换进入。
-  exit_conditions: 满足目标转换的权限、状态、引用、并发、锁、租约和幂等条件。
-- stage_id: LCS-0395
-  lifecycle_id: LC-052
-  object_id: OBJ-052
-  stage_code: DEGRADED
-  stage_name: 降级
-  stage_type: ACTIVE
-  allowed_operations:
-  - VIEW
-  - USE
-  - UPDATE_ALLOWED_FIELDS
-  prohibited_operations:
-  - PHYSICAL_DELETE_WITHOUT_REFERENCE_CHECK
-  - BYPASS_PERMISSION
-  - BYPASS_AUDIT
-  entry_conditions: 仅通过指向DEGRADED的合法转换进入。
-  exit_conditions: 满足目标转换的权限、状态、引用、并发、锁、租约和幂等条件。
-- stage_id: LCS-0396
-  lifecycle_id: LC-052
-  object_id: OBJ-052
-  stage_code: UNHEALTHY
-  stage_name: 不健康
-  stage_type: EXCEPTION
-  allowed_operations:
-  - VIEW
-  - RECOVER
-  - RETRY
-  - VIEW_DIAGNOSTICS
-  prohibited_operations:
-  - PHYSICAL_DELETE_WITHOUT_REFERENCE_CHECK
-  - BYPASS_PERMISSION
-  - BYPASS_AUDIT
-  entry_conditions: 仅通过指向UNHEALTHY的合法转换进入。
-  exit_conditions: 满足目标转换的权限、状态、引用、并发、锁、租约和幂等条件。
-- stage_id: LCS-0397
-  lifecycle_id: LC-052
-  object_id: OBJ-052
-  stage_code: OFFLINE
-  stage_name: 离线
-  stage_type: EXCEPTION
-  allowed_operations:
-  - VIEW
-  - RECOVER
-  - RETRY
-  - VIEW_DIAGNOSTICS
-  prohibited_operations:
-  - PHYSICAL_DELETE_WITHOUT_REFERENCE_CHECK
-  - BYPASS_PERMISSION
-  - BYPASS_AUDIT
-  entry_conditions: 仅通过指向OFFLINE的合法转换进入。
-  exit_conditions: 满足目标转换的权限、状态、引用、并发、锁、租约和幂等条件。
-- stage_id: LCS-0398
-  lifecycle_id: LC-052
-  object_id: OBJ-052
-  stage_code: RECOVERING
-  stage_name: 恢复中
-  stage_type: EXCEPTION
-  allowed_operations:
-  - VIEW
-  prohibited_operations:
-  - PHYSICAL_DELETE_WITHOUT_REFERENCE_CHECK
-  - BYPASS_PERMISSION
-  - BYPASS_AUDIT
-  entry_conditions: 仅通过指向RECOVERING的合法转换进入。
-  exit_conditions: 满足目标转换的权限、状态、引用、并发、锁、租约和幂等条件。
-- stage_id: LCS-0399
-  lifecycle_id: LC-052
-  object_id: OBJ-052
-  stage_code: DRAINING
-  stage_name: 排空中
-  stage_type: SUSPENDED
-  allowed_operations:
-  - VIEW
-  prohibited_operations:
-  - PHYSICAL_DELETE_WITHOUT_REFERENCE_CHECK
-  - BYPASS_PERMISSION
-  - BYPASS_AUDIT
-  entry_conditions: 仅通过指向DRAINING的合法转换进入。
-  exit_conditions: 满足目标转换的权限、状态、引用、并发、锁、租约和幂等条件。
-- stage_id: LCS-0400
   lifecycle_id: LC-052
   object_id: OBJ-052
   stage_code: DISABLED
@@ -126444,41 +126307,17 @@ lifecycle_stages:
   stage_type: SUSPENDED
   allowed_operations:
   - VIEW
+  - ENABLE
+  - ARCHIVE
+  - MACHINE_HEARTBEAT
+  - MACHINE_CAPABILITY_REPORT
   prohibited_operations:
-  - PHYSICAL_DELETE_WITHOUT_REFERENCE_CHECK
-  - BYPASS_PERMISSION
-  - BYPASS_AUDIT
-  entry_conditions: 仅通过指向DISABLED的合法转换进入。
-  exit_conditions: 满足目标转换的权限、状态、引用、并发、锁、租约和幂等条件。
-- stage_id: LCS-0401
-  lifecycle_id: LC-052
-  object_id: OBJ-052
-  stage_code: UNBOUND
-  stage_name: 已解绑
-  stage_type: ACTIVE
-  allowed_operations:
-  - VIEW
-  prohibited_operations:
-  - PHYSICAL_DELETE_WITHOUT_REFERENCE_CHECK
-  - BYPASS_PERMISSION
-  - BYPASS_AUDIT
-  entry_conditions: 仅通过指向UNBOUND的合法转换进入。
-  exit_conditions: 满足目标转换的权限、状态、引用、并发、锁、租约和幂等条件。
-- stage_id: LCS-0402
-  lifecycle_id: LC-052
-  object_id: OBJ-052
-  stage_code: DEREGISTERED
-  stage_name: 已撤销注册
-  stage_type: ACTIVE
-  allowed_operations:
-  - VIEW
-  prohibited_operations:
-  - PHYSICAL_DELETE_WITHOUT_REFERENCE_CHECK
-  - BYPASS_PERMISSION
-  - BYPASS_AUDIT
-  entry_conditions: 仅通过指向DEREGISTERED的合法转换进入。
-  exit_conditions: 满足目标转换的权限、状态、引用、并发、锁、租约和幂等条件。
-- stage_id: LCS-0403
+  - CHANGE_RUNNER_CODE
+  - CHANGE_PROJECT
+  - RECEIVE_NEW_TASK
+  entry_conditions: 仅由REGISTERED或ACTIVE通过显式disable命令进入。
+  exit_conditions: 仅通过显式enable或archive命令并通过权限、Project scope、CAS和审计校验。
+- stage_id: LCS-0392
   lifecycle_id: LC-052
   object_id: OBJ-052
   stage_code: ARCHIVED
@@ -126487,12 +126326,12 @@ lifecycle_stages:
   allowed_operations:
   - VIEW_HISTORY
   prohibited_operations:
-  - PHYSICAL_DELETE_WITHOUT_REFERENCE_CHECK
-  - BYPASS_PERMISSION
-  - BYPASS_AUDIT
   - IN_PLACE_MUTATION
-  entry_conditions: 仅通过指向ARCHIVED的合法转换进入。
-  exit_conditions: 满足目标转换的权限、状态、引用、并发、锁、租约和幂等条件。
+  - MACHINE_HEARTBEAT
+  - MACHINE_CAPABILITY_REPORT
+  - CHANGE_PROJECT
+  entry_conditions: 仅由DISABLED通过显式archive命令进入。
+  exit_conditions: 终态不可退出。
 - stage_id: LCS-0404
   lifecycle_id: LC-053
   object_id: OBJ-053
@@ -146664,602 +146503,163 @@ lifecycle_transitions:
 - transition_id: LCT-00460
   lifecycle_id: LC-052
   object_id: OBJ-052
-  from_stage: REGISTERING
-  to_stage: REGISTERED
-  trigger: 注册中转为已注册
-  actor: Runner中心及平台管理员
+  from_stage: REGISTERED
+  to_stage: ACTIVE
+  trigger: 首次启用
+  actor: 具备RUNNER_REGISTER及目标Project数据范围的人工用户
   preconditions:
   - 源阶段匹配
-  - 对象未被并发更新
-  - 关联对象和作用范围有效
+  - expected_version与当前row_version匹配
   permission_requirements:
-  - 由项目成员关系、角色权限点和数据范围交集派生。
+  - RUNNER_REGISTER
   state_requirements:
-  - current_stage=REGISTERING
+  - lifecycle_status=REGISTERED
   reference_checks: []
   concurrency_checks:
-  - 修改时校验版本号或等价乐观锁，冲突时拒绝覆盖并返回当前版本。
+  - 使用row_version乐观锁，冲突时拒绝覆盖。
   required_locks:
-  - 对象更新使用版本号或等价乐观锁。
-  required_leases:
-  - Runner资源租约。
+  - 聚合根行锁与row_version校验。
+  required_leases: []
   actions:
-  - 原子更新生命周期阶段为REGISTERED
+  - 原子更新lifecycle_status为ACTIVE
   - 记录操作者、时间、原因和版本号
   side_effects:
-  - 按对象联动规则更新或阻止下游新操作
-  - 保留历史快照和引用
-  failure_behavior: 保持REGISTERING或进入明确异常阶段，不得部分提交；返回可定位失败原因。
-  idempotency_rule: 以object_id+LCT-00460+request_id作为幂等键，重复请求返回同一转换结果。
+  - 不修改connection_status、health_status或机器凭证状态
+  failure_behavior: 保持REGISTERED且不得部分提交；返回可定位失败原因。
+  idempotency_rule: 以runner_id+LCT-00460+Idempotency-Key作为幂等键，重复请求返回同一转换结果。
   audit_requirements:
-  - 记录转换前后阶段、主体、作用范围、原因、结果和关联请求。
+  - 记录转换前后阶段、人工主体、project_id、原因、结果和关联请求。
   emitted_events:
-  - runner.registered
-  completion_status: VALID_LIFECYCLE_COMPLETION
+  - runner.enabled
+  completion_status: USER_APPROVED_RUNNER_FOUNDATION
 - transition_id: LCT-00461
   lifecycle_id: LC-052
   object_id: OBJ-052
-  from_stage: REGISTERED
-  to_stage: AUTHENTICATED
-  trigger: 已注册转为已认证
-  actor: Runner中心及平台管理员
+  from_stage: ACTIVE
+  to_stage: DISABLED
+  trigger: 停用
+  actor: 具备RUNNER_REGISTER及目标Project数据范围的人工用户
   preconditions:
   - 源阶段匹配
-  - 对象未被并发更新
-  - 关联对象和作用范围有效
+  - expected_version与当前row_version匹配
   permission_requirements:
-  - 由项目成员关系、角色权限点和数据范围交集派生。
+  - RUNNER_REGISTER
   state_requirements:
-  - current_stage=REGISTERED
-  reference_checks: []
+  - lifecycle_status=ACTIVE
+  reference_checks: [归档或停用前检查活动执行引用。]
   concurrency_checks:
-  - 修改时校验版本号或等价乐观锁，冲突时拒绝覆盖并返回当前版本。
+  - 使用row_version乐观锁，冲突时拒绝覆盖。
   required_locks:
-  - 对象更新使用版本号或等价乐观锁。
-  required_leases:
-  - Runner资源租约。
+  - 聚合根行锁与row_version校验。
+  required_leases: []
   actions:
-  - 原子更新生命周期阶段为AUTHENTICATED
+  - 原子更新lifecycle_status为DISABLED
   - 记录操作者、时间、原因和版本号
   side_effects:
-  - 按对象联动规则更新或阻止下游新操作
-  - 保留历史快照和引用
-  failure_behavior: 保持REGISTERED或进入明确异常阶段，不得部分提交；返回可定位失败原因。
-  idempotency_rule: 以object_id+LCT-00461+request_id作为幂等键，重复请求返回同一转换结果。
+  - 不修改connection_status、health_status或机器凭证状态
+  failure_behavior: 保持ACTIVE且不得部分提交；返回可定位失败原因。
+  idempotency_rule: 以runner_id+LCT-00461+Idempotency-Key作为幂等键，重复请求返回同一转换结果。
   audit_requirements:
-  - 记录转换前后阶段、主体、作用范围、原因、结果和关联请求。
+  - 记录转换前后阶段、人工主体、project_id、原因、结果和关联请求。
   emitted_events:
-  - runner.authenticated
-  completion_status: VALID_LIFECYCLE_COMPLETION
+  - runner.disabled
+  completion_status: USER_APPROVED_RUNNER_FOUNDATION
 - transition_id: LCT-00462
   lifecycle_id: LC-052
   object_id: OBJ-052
-  from_stage: AUTHENTICATED
-  to_stage: BOUND
-  trigger: 已认证转为已绑定
-  actor: Runner中心及平台管理员
+  from_stage: DISABLED
+  to_stage: ACTIVE
+  trigger: 恢复启用
+  actor: 具备RUNNER_REGISTER及目标Project数据范围的人工用户
   preconditions:
   - 源阶段匹配
-  - 对象未被并发更新
-  - 关联对象和作用范围有效
+  - expected_version与当前row_version匹配
   permission_requirements:
-  - 由项目成员关系、角色权限点和数据范围交集派生。
+  - RUNNER_REGISTER
   state_requirements:
-  - current_stage=AUTHENTICATED
+  - lifecycle_status=DISABLED
   reference_checks: []
   concurrency_checks:
-  - 修改时校验版本号或等价乐观锁，冲突时拒绝覆盖并返回当前版本。
+  - 使用row_version乐观锁，冲突时拒绝覆盖。
   required_locks:
-  - 对象更新使用版本号或等价乐观锁。
-  required_leases:
-  - Runner资源租约。
+  - 聚合根行锁与row_version校验。
+  required_leases: []
   actions:
-  - 原子更新生命周期阶段为BOUND
+  - 原子更新lifecycle_status为ACTIVE
   - 记录操作者、时间、原因和版本号
   side_effects:
-  - 按对象联动规则更新或阻止下游新操作
-  - 保留历史快照和引用
-  failure_behavior: 保持AUTHENTICATED或进入明确异常阶段，不得部分提交；返回可定位失败原因。
-  idempotency_rule: 以object_id+LCT-00462+request_id作为幂等键，重复请求返回同一转换结果。
+  - 不修改connection_status、health_status或机器凭证状态
+  failure_behavior: 保持DISABLED且不得部分提交；返回可定位失败原因。
+  idempotency_rule: 以runner_id+LCT-00462+Idempotency-Key作为幂等键，重复请求返回同一转换结果。
   audit_requirements:
-  - 记录转换前后阶段、主体、作用范围、原因、结果和关联请求。
+  - 记录转换前后阶段、人工主体、project_id、原因、结果和关联请求。
   emitted_events:
-  - runner.bound
-  completion_status: VALID_LIFECYCLE_COMPLETION
+  - runner.enabled
+  completion_status: USER_APPROVED_RUNNER_FOUNDATION
 - transition_id: LCT-00463
   lifecycle_id: LC-052
   object_id: OBJ-052
-  from_stage: BOUND
-  to_stage: ENABLED
-  trigger: 已绑定转为已启用
-  actor: Runner中心及平台管理员
+  from_stage: REGISTERED
+  to_stage: DISABLED
+  trigger: 注册后停用
+  actor: 具备RUNNER_REGISTER及目标Project数据范围的人工用户
   preconditions:
   - 源阶段匹配
-  - 对象未被并发更新
-  - 关联对象和作用范围有效
+  - expected_version与当前row_version匹配
   permission_requirements:
-  - 由项目成员关系、角色权限点和数据范围交集派生。
+  - RUNNER_REGISTER
   state_requirements:
-  - current_stage=BOUND
+  - lifecycle_status=REGISTERED
   reference_checks: []
   concurrency_checks:
-  - 修改时校验版本号或等价乐观锁，冲突时拒绝覆盖并返回当前版本。
+  - 使用row_version乐观锁，冲突时拒绝覆盖。
   required_locks:
-  - 对象更新使用版本号或等价乐观锁。
-  required_leases:
-  - Runner资源租约。
+  - 聚合根行锁与row_version校验。
+  required_leases: []
   actions:
-  - 原子更新生命周期阶段为ENABLED
+  - 原子更新lifecycle_status为DISABLED
   - 记录操作者、时间、原因和版本号
   side_effects:
-  - 按对象联动规则更新或阻止下游新操作
-  - 保留历史快照和引用
-  failure_behavior: 保持BOUND或进入明确异常阶段，不得部分提交；返回可定位失败原因。
-  idempotency_rule: 以object_id+LCT-00463+request_id作为幂等键，重复请求返回同一转换结果。
+  - 不修改connection_status、health_status或机器凭证状态
+  failure_behavior: 保持REGISTERED且不得部分提交；返回可定位失败原因。
+  idempotency_rule: 以runner_id+LCT-00463+Idempotency-Key作为幂等键，重复请求返回同一转换结果。
   audit_requirements:
-  - 记录转换前后阶段、主体、作用范围、原因、结果和关联请求。
+  - 记录转换前后阶段、人工主体、project_id、原因、结果和关联请求。
   emitted_events:
-  - runner.enabled
-  completion_status: VALID_LIFECYCLE_COMPLETION
+  - runner.disabled
+  completion_status: USER_APPROVED_RUNNER_FOUNDATION
 - transition_id: LCT-00464
   lifecycle_id: LC-052
   object_id: OBJ-052
-  from_stage: ENABLED
-  to_stage: ONLINE
-  trigger: 已启用转为在线
-  actor: Runner中心及平台管理员
-  preconditions:
-  - 源阶段匹配
-  - 对象未被并发更新
-  - 关联对象和作用范围有效
-  permission_requirements:
-  - 由项目成员关系、角色权限点和数据范围交集派生。
-  state_requirements:
-  - current_stage=ENABLED
-  reference_checks: []
-  concurrency_checks:
-  - 修改时校验版本号或等价乐观锁，冲突时拒绝覆盖并返回当前版本。
-  required_locks:
-  - 对象更新使用版本号或等价乐观锁。
-  required_leases:
-  - Runner资源租约。
-  actions:
-  - 原子更新生命周期阶段为ONLINE
-  - 记录操作者、时间、原因和版本号
-  side_effects:
-  - 按对象联动规则更新或阻止下游新操作
-  - 保留历史快照和引用
-  failure_behavior: 保持ENABLED或进入明确异常阶段，不得部分提交；返回可定位失败原因。
-  idempotency_rule: 以object_id+LCT-00464+request_id作为幂等键，重复请求返回同一转换结果。
-  audit_requirements:
-  - 记录转换前后阶段、主体、作用范围、原因、结果和关联请求。
-  emitted_events:
-  - runner.online
-  completion_status: VALID_LIFECYCLE_COMPLETION
-- transition_id: LCT-00465
-  lifecycle_id: LC-052
-  object_id: OBJ-052
-  from_stage: ONLINE
-  to_stage: DEGRADED
-  trigger: 在线转为降级
-  actor: Runner中心及平台管理员
-  preconditions:
-  - 源阶段匹配
-  - 对象未被并发更新
-  - 关联对象和作用范围有效
-  permission_requirements:
-  - 由项目成员关系、角色权限点和数据范围交集派生。
-  state_requirements:
-  - current_stage=ONLINE
-  reference_checks: []
-  concurrency_checks:
-  - 修改时校验版本号或等价乐观锁，冲突时拒绝覆盖并返回当前版本。
-  required_locks:
-  - 对象更新使用版本号或等价乐观锁。
-  required_leases:
-  - Runner资源租约。
-  actions:
-  - 原子更新生命周期阶段为DEGRADED
-  - 记录操作者、时间、原因和版本号
-  side_effects:
-  - 按对象联动规则更新或阻止下游新操作
-  - 保留历史快照和引用
-  failure_behavior: 保持ONLINE或进入明确异常阶段，不得部分提交；返回可定位失败原因。
-  idempotency_rule: 以object_id+LCT-00465+request_id作为幂等键，重复请求返回同一转换结果。
-  audit_requirements:
-  - 记录转换前后阶段、主体、作用范围、原因、结果和关联请求。
-  emitted_events:
-  - runner.degraded
-  completion_status: VALID_LIFECYCLE_COMPLETION
-- transition_id: LCT-00466
-  lifecycle_id: LC-052
-  object_id: OBJ-052
-  from_stage: DEGRADED
-  to_stage: ONLINE
-  trigger: 降级转为在线
-  actor: Runner中心及平台管理员
-  preconditions:
-  - 源阶段匹配
-  - 对象未被并发更新
-  - 关联对象和作用范围有效
-  permission_requirements:
-  - 由项目成员关系、角色权限点和数据范围交集派生。
-  state_requirements:
-  - current_stage=DEGRADED
-  reference_checks: []
-  concurrency_checks:
-  - 修改时校验版本号或等价乐观锁，冲突时拒绝覆盖并返回当前版本。
-  required_locks:
-  - 对象更新使用版本号或等价乐观锁。
-  required_leases:
-  - Runner资源租约。
-  actions:
-  - 原子更新生命周期阶段为ONLINE
-  - 记录操作者、时间、原因和版本号
-  side_effects:
-  - 按对象联动规则更新或阻止下游新操作
-  - 保留历史快照和引用
-  failure_behavior: 保持DEGRADED或进入明确异常阶段，不得部分提交；返回可定位失败原因。
-  idempotency_rule: 以object_id+LCT-00466+request_id作为幂等键，重复请求返回同一转换结果。
-  audit_requirements:
-  - 记录转换前后阶段、主体、作用范围、原因、结果和关联请求。
-  emitted_events:
-  - runner.online
-  completion_status: VALID_LIFECYCLE_COMPLETION
-- transition_id: LCT-00467
-  lifecycle_id: LC-052
-  object_id: OBJ-052
-  from_stage: DEGRADED
-  to_stage: UNHEALTHY
-  trigger: 降级转为不健康
-  actor: Runner中心及平台管理员
-  preconditions:
-  - 源阶段匹配
-  - 对象未被并发更新
-  - 关联对象和作用范围有效
-  permission_requirements:
-  - 由项目成员关系、角色权限点和数据范围交集派生。
-  state_requirements:
-  - current_stage=DEGRADED
-  reference_checks: []
-  concurrency_checks:
-  - 修改时校验版本号或等价乐观锁，冲突时拒绝覆盖并返回当前版本。
-  required_locks:
-  - 对象更新使用版本号或等价乐观锁。
-  required_leases:
-  - Runner资源租约。
-  actions:
-  - 原子更新生命周期阶段为UNHEALTHY
-  - 记录操作者、时间、原因和版本号
-  side_effects:
-  - 按对象联动规则更新或阻止下游新操作
-  - 保留历史快照和引用
-  failure_behavior: 保持DEGRADED或进入明确异常阶段，不得部分提交；返回可定位失败原因。
-  idempotency_rule: 以object_id+LCT-00467+request_id作为幂等键，重复请求返回同一转换结果。
-  audit_requirements:
-  - 记录转换前后阶段、主体、作用范围、原因、结果和关联请求。
-  emitted_events:
-  - runner.unhealthy
-  completion_status: VALID_LIFECYCLE_COMPLETION
-- transition_id: LCT-00468
-  lifecycle_id: LC-052
-  object_id: OBJ-052
-  from_stage: ONLINE
-  to_stage: OFFLINE
-  trigger: 在线转为离线
-  actor: Runner中心及平台管理员
-  preconditions:
-  - 源阶段匹配
-  - 对象未被并发更新
-  - 关联对象和作用范围有效
-  permission_requirements:
-  - 由项目成员关系、角色权限点和数据范围交集派生。
-  state_requirements:
-  - current_stage=ONLINE
-  reference_checks: []
-  concurrency_checks:
-  - 修改时校验版本号或等价乐观锁，冲突时拒绝覆盖并返回当前版本。
-  required_locks:
-  - 对象更新使用版本号或等价乐观锁。
-  required_leases:
-  - Runner资源租约。
-  actions:
-  - 原子更新生命周期阶段为OFFLINE
-  - 记录操作者、时间、原因和版本号
-  side_effects:
-  - 按对象联动规则更新或阻止下游新操作
-  - 保留历史快照和引用
-  failure_behavior: 保持ONLINE或进入明确异常阶段，不得部分提交；返回可定位失败原因。
-  idempotency_rule: 以object_id+LCT-00468+request_id作为幂等键，重复请求返回同一转换结果。
-  audit_requirements:
-  - 记录转换前后阶段、主体、作用范围、原因、结果和关联请求。
-  emitted_events:
-  - runner.offline
-  completion_status: VALID_LIFECYCLE_COMPLETION
-- transition_id: LCT-00469
-  lifecycle_id: LC-052
-  object_id: OBJ-052
-  from_stage: UNHEALTHY
-  to_stage: RECOVERING
-  trigger: 不健康转为恢复中
-  actor: Runner中心及平台管理员
-  preconditions:
-  - 源阶段匹配
-  - 对象未被并发更新
-  - 关联对象和作用范围有效
-  permission_requirements:
-  - 由项目成员关系、角色权限点和数据范围交集派生。
-  state_requirements:
-  - current_stage=UNHEALTHY
-  reference_checks: []
-  concurrency_checks:
-  - 修改时校验版本号或等价乐观锁，冲突时拒绝覆盖并返回当前版本。
-  required_locks:
-  - 对象更新使用版本号或等价乐观锁。
-  required_leases:
-  - Runner资源租约。
-  actions:
-  - 原子更新生命周期阶段为RECOVERING
-  - 记录操作者、时间、原因和版本号
-  side_effects:
-  - 按对象联动规则更新或阻止下游新操作
-  - 保留历史快照和引用
-  failure_behavior: 保持UNHEALTHY或进入明确异常阶段，不得部分提交；返回可定位失败原因。
-  idempotency_rule: 以object_id+LCT-00469+request_id作为幂等键，重复请求返回同一转换结果。
-  audit_requirements:
-  - 记录转换前后阶段、主体、作用范围、原因、结果和关联请求。
-  emitted_events:
-  - runner.recovering
-  completion_status: VALID_LIFECYCLE_COMPLETION
-- transition_id: LCT-00470
-  lifecycle_id: LC-052
-  object_id: OBJ-052
-  from_stage: OFFLINE
-  to_stage: RECOVERING
-  trigger: 离线转为恢复中
-  actor: Runner中心及平台管理员
-  preconditions:
-  - 源阶段匹配
-  - 对象未被并发更新
-  - 关联对象和作用范围有效
-  permission_requirements:
-  - 由项目成员关系、角色权限点和数据范围交集派生。
-  state_requirements:
-  - current_stage=OFFLINE
-  reference_checks: []
-  concurrency_checks:
-  - 修改时校验版本号或等价乐观锁，冲突时拒绝覆盖并返回当前版本。
-  required_locks:
-  - 对象更新使用版本号或等价乐观锁。
-  required_leases:
-  - Runner资源租约。
-  actions:
-  - 原子更新生命周期阶段为RECOVERING
-  - 记录操作者、时间、原因和版本号
-  side_effects:
-  - 按对象联动规则更新或阻止下游新操作
-  - 保留历史快照和引用
-  failure_behavior: 保持OFFLINE或进入明确异常阶段，不得部分提交；返回可定位失败原因。
-  idempotency_rule: 以object_id+LCT-00470+request_id作为幂等键，重复请求返回同一转换结果。
-  audit_requirements:
-  - 记录转换前后阶段、主体、作用范围、原因、结果和关联请求。
-  emitted_events:
-  - runner.recovering
-  completion_status: VALID_LIFECYCLE_COMPLETION
-- transition_id: LCT-00471
-  lifecycle_id: LC-052
-  object_id: OBJ-052
-  from_stage: RECOVERING
-  to_stage: ONLINE
-  trigger: 恢复中转为在线
-  actor: Runner中心及平台管理员
-  preconditions:
-  - 源阶段匹配
-  - 对象未被并发更新
-  - 关联对象和作用范围有效
-  permission_requirements:
-  - 由项目成员关系、角色权限点和数据范围交集派生。
-  state_requirements:
-  - current_stage=RECOVERING
-  reference_checks: []
-  concurrency_checks:
-  - 修改时校验版本号或等价乐观锁，冲突时拒绝覆盖并返回当前版本。
-  required_locks:
-  - 对象更新使用版本号或等价乐观锁。
-  required_leases:
-  - Runner资源租约。
-  actions:
-  - 原子更新生命周期阶段为ONLINE
-  - 记录操作者、时间、原因和版本号
-  side_effects:
-  - 按对象联动规则更新或阻止下游新操作
-  - 保留历史快照和引用
-  failure_behavior: 保持RECOVERING或进入明确异常阶段，不得部分提交；返回可定位失败原因。
-  idempotency_rule: 以object_id+LCT-00471+request_id作为幂等键，重复请求返回同一转换结果。
-  audit_requirements:
-  - 记录转换前后阶段、主体、作用范围、原因、结果和关联请求。
-  emitted_events:
-  - runner.online
-  completion_status: VALID_LIFECYCLE_COMPLETION
-- transition_id: LCT-00472
-  lifecycle_id: LC-052
-  object_id: OBJ-052
-  from_stage: ONLINE
-  to_stage: DRAINING
-  trigger: 在线转为排空中
-  actor: Runner中心及平台管理员
-  preconditions:
-  - 源阶段匹配
-  - 对象未被并发更新
-  - 关联对象和作用范围有效
-  permission_requirements:
-  - 由项目成员关系、角色权限点和数据范围交集派生。
-  state_requirements:
-  - current_stage=ONLINE
-  reference_checks: []
-  concurrency_checks:
-  - 修改时校验版本号或等价乐观锁，冲突时拒绝覆盖并返回当前版本。
-  required_locks:
-  - 对象更新使用版本号或等价乐观锁。
-  required_leases:
-  - Runner资源租约。
-  actions:
-  - 原子更新生命周期阶段为DRAINING
-  - 记录操作者、时间、原因和版本号
-  side_effects:
-  - 按对象联动规则更新或阻止下游新操作
-  - 保留历史快照和引用
-  failure_behavior: 保持ONLINE或进入明确异常阶段，不得部分提交；返回可定位失败原因。
-  idempotency_rule: 以object_id+LCT-00472+request_id作为幂等键，重复请求返回同一转换结果。
-  audit_requirements:
-  - 记录转换前后阶段、主体、作用范围、原因、结果和关联请求。
-  emitted_events:
-  - runner.draining
-  completion_status: VALID_LIFECYCLE_COMPLETION
-- transition_id: LCT-00473
-  lifecycle_id: LC-052
-  object_id: OBJ-052
-  from_stage: DRAINING
-  to_stage: DISABLED
-  trigger: 排空中转为停用
-  actor: Runner中心及平台管理员
-  preconditions:
-  - 源阶段匹配
-  - 对象未被并发更新
-  - 关联对象和作用范围有效
-  permission_requirements:
-  - 由项目成员关系、角色权限点和数据范围交集派生。
-  state_requirements:
-  - current_stage=DRAINING
-  reference_checks:
-  - 归档、删除、解绑、退役或停用前检查活动引用和运行中任务。
-  concurrency_checks:
-  - 修改时校验版本号或等价乐观锁，冲突时拒绝覆盖并返回当前版本。
-  required_locks:
-  - 对象更新使用版本号或等价乐观锁。
-  required_leases:
-  - Runner资源租约。
-  actions:
-  - 原子更新生命周期阶段为DISABLED
-  - 记录操作者、时间、原因和版本号
-  side_effects:
-  - 按对象联动规则更新或阻止下游新操作
-  - 保留历史快照和引用
-  failure_behavior: 保持DRAINING或进入明确异常阶段，不得部分提交；返回可定位失败原因。
-  idempotency_rule: 以object_id+LCT-00473+request_id作为幂等键，重复请求返回同一转换结果。
-  audit_requirements:
-  - 记录转换前后阶段、主体、作用范围、原因、结果和关联请求。
-  emitted_events:
-  - runner.disabled
-  completion_status: VALID_LIFECYCLE_COMPLETION
-- transition_id: LCT-00474
-  lifecycle_id: LC-052
-  object_id: OBJ-052
   from_stage: DISABLED
-  to_stage: UNBOUND
-  trigger: 停用转为已解绑
-  actor: Runner中心及平台管理员
-  preconditions:
-  - 源阶段匹配
-  - 对象未被并发更新
-  - 关联对象和作用范围有效
-  permission_requirements:
-  - 由项目成员关系、角色权限点和数据范围交集派生。
-  state_requirements:
-  - current_stage=DISABLED
-  reference_checks:
-  - 归档、删除、解绑、退役或停用前检查活动引用和运行中任务。
-  concurrency_checks:
-  - 修改时校验版本号或等价乐观锁，冲突时拒绝覆盖并返回当前版本。
-  required_locks:
-  - 对象更新使用版本号或等价乐观锁。
-  required_leases:
-  - Runner资源租约。
-  actions:
-  - 原子更新生命周期阶段为UNBOUND
-  - 记录操作者、时间、原因和版本号
-  side_effects:
-  - 按对象联动规则更新或阻止下游新操作
-  - 保留历史快照和引用
-  failure_behavior: 保持DISABLED或进入明确异常阶段，不得部分提交；返回可定位失败原因。
-  idempotency_rule: 以object_id+LCT-00474+request_id作为幂等键，重复请求返回同一转换结果。
-  audit_requirements:
-  - 记录转换前后阶段、主体、作用范围、原因、结果和关联请求。
-  emitted_events:
-  - runner.unbound
-  completion_status: VALID_LIFECYCLE_COMPLETION
-- transition_id: LCT-00475
-  lifecycle_id: LC-052
-  object_id: OBJ-052
-  from_stage: UNBOUND
-  to_stage: DEREGISTERED
-  trigger: 已解绑转为已撤销注册
-  actor: Runner中心及平台管理员
-  preconditions:
-  - 源阶段匹配
-  - 对象未被并发更新
-  - 关联对象和作用范围有效
-  permission_requirements:
-  - 由项目成员关系、角色权限点和数据范围交集派生。
-  state_requirements:
-  - current_stage=UNBOUND
-  reference_checks:
-  - 归档、删除、解绑、退役或停用前检查活动引用和运行中任务。
-  concurrency_checks:
-  - 修改时校验版本号或等价乐观锁，冲突时拒绝覆盖并返回当前版本。
-  required_locks:
-  - 对象更新使用版本号或等价乐观锁。
-  required_leases:
-  - Runner资源租约。
-  actions:
-  - 原子更新生命周期阶段为DEREGISTERED
-  - 记录操作者、时间、原因和版本号
-  side_effects:
-  - 按对象联动规则更新或阻止下游新操作
-  - 保留历史快照和引用
-  failure_behavior: 保持UNBOUND或进入明确异常阶段，不得部分提交；返回可定位失败原因。
-  idempotency_rule: 以object_id+LCT-00475+request_id作为幂等键，重复请求返回同一转换结果。
-  audit_requirements:
-  - 记录转换前后阶段、主体、作用范围、原因、结果和关联请求。
-  emitted_events:
-  - runner.deregistered
-  completion_status: VALID_LIFECYCLE_COMPLETION
-- transition_id: LCT-00476
-  lifecycle_id: LC-052
-  object_id: OBJ-052
-  from_stage: DEREGISTERED
   to_stage: ARCHIVED
-  trigger: 已撤销注册转为归档
-  actor: Runner中心及平台管理员
+  trigger: 归档
+  actor: 具备RUNNER_REGISTER及目标Project数据范围的人工用户
   preconditions:
   - 源阶段匹配
-  - 对象未被并发更新
-  - 关联对象和作用范围有效
+  - expected_version与当前row_version匹配
   permission_requirements:
-  - 由项目成员关系、角色权限点和数据范围交集派生。
+  - RUNNER_REGISTER
   state_requirements:
-  - current_stage=DEREGISTERED
-  reference_checks:
-  - 归档、删除、解绑、退役或停用前检查活动引用和运行中任务。
+  - lifecycle_status=DISABLED
+  reference_checks: [归档前检查活动执行引用。]
   concurrency_checks:
-  - 修改时校验版本号或等价乐观锁，冲突时拒绝覆盖并返回当前版本。
+  - 使用row_version乐观锁，冲突时拒绝覆盖。
   required_locks:
-  - 对象更新使用版本号或等价乐观锁。
-  required_leases:
-  - Runner资源租约。
+  - 聚合根行锁与row_version校验。
+  required_leases: []
   actions:
-  - 原子更新生命周期阶段为ARCHIVED
+  - 原子更新lifecycle_status为ARCHIVED
   - 记录操作者、时间、原因和版本号
   side_effects:
-  - 按对象联动规则更新或阻止下游新操作
-  - 保留历史快照和引用
-  failure_behavior: 保持DEREGISTERED或进入明确异常阶段，不得部分提交；返回可定位失败原因。
-  idempotency_rule: 以object_id+LCT-00476+request_id作为幂等键，重复请求返回同一转换结果。
+  - 不修改connection_status、health_status或机器凭证状态
+  failure_behavior: 保持DISABLED且不得部分提交；返回可定位失败原因。
+  idempotency_rule: 以runner_id+LCT-00464+Idempotency-Key作为幂等键，重复请求返回同一转换结果。
   audit_requirements:
-  - 记录转换前后阶段、主体、作用范围、原因、结果和关联请求。
+  - 记录转换前后阶段、人工主体、project_id、原因、结果和关联请求。
   emitted_events:
   - runner.archived
-  completion_status: VALID_LIFECYCLE_COMPLETION
+  completion_status: USER_APPROVED_RUNNER_FOUNDATION
 - transition_id: LCT-00477
   lifecycle_id: LC-053
   object_id: OBJ-053
@@ -161308,115 +160708,114 @@ state_dimensions:
   release_id: PDBR-2026.08.06-R4.1
 - state_dimension_id: SD-EX-001
   object_id: OBJ-052
-  dimension_name: registration_state
+  dimension_name: registration_status
   values:
-  - UNREGISTERED
   - REGISTERED
-  - DEREGISTERED
-  initial_value: UNREGISTERED
+  initial_value: REGISTERED
   terminal_values: []
   dimension_kind: ORTHOGONAL_STATE_DIMENSION
-  completion_status: CURRENT_STATE_DIMENSION
-  persistence_field: registration_state
+  completion_status: USER_APPROVED_RUNNER_FOUNDATION
+  persistence_field: registration_status
   owner: DOMAIN_AGGREGATE
   release_id: PDBR-2026.08.06-R4.1
 - state_dimension_id: SD-EX-002
-  object_id: OBJ-052
-  dimension_name: authentication_state
+  object_id: OBJ-089
+  dimension_name: token_status
   values:
-  - UNAUTHENTICATED
-  - AUTHENTICATED
+  - ACTIVE
   - REVOKED
-  initial_value: UNAUTHENTICATED
-  terminal_values: []
+  initial_value: ACTIVE
+  terminal_values:
+  - REVOKED
   dimension_kind: ORTHOGONAL_STATE_DIMENSION
-  completion_status: CURRENT_STATE_DIMENSION
-  persistence_field: authentication_state
+  completion_status: USER_APPROVED_RUNNER_FOUNDATION
+  persistence_field: token_status
   owner: DOMAIN_AGGREGATE
   release_id: PDBR-2026.08.06-R4.1
 - state_dimension_id: SD-EX-003
   object_id: OBJ-052
-  dimension_name: connection_state
+  dimension_name: connection_status
   values:
-  - ONLINE
   - OFFLINE
-  - DISCONNECTED
-  initial_value: ONLINE
+  - CONNECTING
+  - ONLINE
+  - LOST
+  initial_value: OFFLINE
   terminal_values: []
   dimension_kind: ORTHOGONAL_STATE_DIMENSION
-  completion_status: CURRENT_STATE_DIMENSION
-  persistence_field: connection_state
+  completion_status: USER_APPROVED_RUNNER_FOUNDATION
+  persistence_field: connection_status
   owner: DOMAIN_AGGREGATE
   release_id: PDBR-2026.08.06-R4.1
 - state_dimension_id: SD-EX-004
   object_id: OBJ-052
-  dimension_name: health_state
+  dimension_name: health_status
   values:
+  - UNKNOWN
   - HEALTHY
   - DEGRADED
   - UNHEALTHY
-  initial_value: HEALTHY
+  initial_value: UNKNOWN
   terminal_values: []
   dimension_kind: ORTHOGONAL_STATE_DIMENSION
-  completion_status: CURRENT_STATE_DIMENSION
-  persistence_field: health_state
+  completion_status: USER_APPROVED_RUNNER_FOUNDATION
+  persistence_field: health_status
   owner: DOMAIN_AGGREGATE
   release_id: PDBR-2026.08.06-R4.1
 - state_dimension_id: SD-EX-005
   object_id: OBJ-052
-  dimension_name: enablement_state
+  dimension_name: enable_status
   values:
   - ENABLED
   - DISABLED
-  - DRAINING
-  initial_value: ENABLED
+  initial_value: DISABLED
   terminal_values: []
   dimension_kind: ORTHOGONAL_STATE_DIMENSION
-  completion_status: CURRENT_STATE_DIMENSION
-  persistence_field: enablement_state
+  completion_status: USER_APPROVED_RUNNER_FOUNDATION
+  persistence_field: enable_status
   owner: DOMAIN_AGGREGATE
   release_id: PDBR-2026.08.06-R4.1
 - state_dimension_id: SD-EX-006
   object_id: OBJ-052
-  dimension_name: binding_state
+  dimension_name: project_binding_status
   values:
-  - UNBOUND
   - BOUND
-  initial_value: UNBOUND
+  initial_value: BOUND
   terminal_values: []
   dimension_kind: ORTHOGONAL_STATE_DIMENSION
-  completion_status: CURRENT_STATE_DIMENSION
-  persistence_field: binding_state
+  completion_status: USER_APPROVED_RUNNER_FOUNDATION
+  persistence_field: project_binding_status
   owner: DOMAIN_AGGREGATE
   release_id: PDBR-2026.08.06-R4.1
 - state_dimension_id: SD-EX-007
   object_id: OBJ-052
-  dimension_name: scheduling_state
+  dimension_name: scheduling_status
   values:
+  - UNSCHEDULABLE
   - IDLE
-  - RESERVED
-  - RUNNING
+  - PARTIALLY_OCCUPIED
+  - BUSY
   - DRAINING
-  initial_value: IDLE
+  initial_value: UNSCHEDULABLE
   terminal_values: []
   dimension_kind: ORTHOGONAL_STATE_DIMENSION
-  completion_status: CURRENT_STATE_DIMENSION
-  persistence_field: scheduling_state
+  completion_status: USER_APPROVED_RUNNER_FOUNDATION
+  persistence_field: scheduling_status
   owner: DOMAIN_AGGREGATE
   release_id: PDBR-2026.08.06-R4.1
 - state_dimension_id: SD-EX-008
   object_id: OBJ-052
-  dimension_name: resource_state
+  dimension_name: resource_status
   values:
   - AVAILABLE
-  - PARTIALLY_ALLOCATED
-  - FULLY_ALLOCATED
+  - PARTIALLY_OCCUPIED
   - EXHAUSTED
+  - RECLAIMING
   initial_value: AVAILABLE
   terminal_values: []
   dimension_kind: ORTHOGONAL_STATE_DIMENSION
-  completion_status: CURRENT_STATE_DIMENSION
-  persistence_field: resource_state
+  completion_status: USER_APPROVED_RUNNER_FOUNDATION
+  persistence_field: resource_status
   owner: DOMAIN_AGGREGATE
   release_id: PDBR-2026.08.06-R4.1
 - state_dimension_id: SD-EX-009
@@ -161691,29 +161090,17 @@ state_dimensions:
   object_id: OBJ-052
   dimension_name: lifecycle_stage
   values:
-  - REGISTERING
   - REGISTERED
-  - AUTHENTICATED
-  - BOUND
-  - ENABLED
-  - ONLINE
-  - DEGRADED
-  - UNHEALTHY
-  - OFFLINE
-  - RECOVERING
-  - DRAINING
+  - ACTIVE
   - DISABLED
-  - UNBOUND
-  - DEREGISTERED
   - ARCHIVED
-  initial_value: REGISTERING
+  initial_value: REGISTERED
   terminal_values:
   - ARCHIVED
   dimension_kind: LIFECYCLE_STATE
   persistence_field: lifecycle_status
   owner: DOMAIN_AGGREGATE
-  completion_status: CURRENT_STATE_DIMENSION
-  release_id: PDBR-2026.08.06-R4.1
+  completion_status: USER_APPROVED_RUNNER_FOUNDATION
 - state_dimension_id: R3-LS-007
   object_id: OBJ-061
   dimension_name: lifecycle_stage
@@ -195257,21 +194644,16 @@ object_lifecycle_matrix:
 - object_id: OBJ-052
   object_name: Runner
   lifecycle_id: LC-052
-  initial_stage: REGISTERING
+  initial_stage: REGISTERED
   active_stages:
-  - ONLINE
-  - DEGRADED
+  - ACTIVE
   suspended_stages:
-  - DRAINING
   - DISABLED
-  exception_stages:
-  - UNHEALTHY
-  - OFFLINE
-  - RECOVERING
+  exception_stages: []
   archive_stage: ARCHIVED
   terminal_stages:
   - ARCHIVED
-  recoverable: true
+  recoverable: false
 - object_id: OBJ-053
   object_name: Runner能力
   lifecycle_id: LC-053
@@ -196139,7 +195521,7 @@ object_scenario_mappings:
   validation_status: MAPPED
 - mapping_id: SCN-MAP-011
   scenario_id: USR-SCN-021
-  scenario_name: Runner绑定项目
+  scenario_name: 创建Runner project-scoped enrollment
   actor: ROLE-RUNNER-ADMIN
   created_objects: []
   read_objects:
@@ -197070,7 +196452,7 @@ lifecycle_dependencies:
   completion_status: VALID_LIFECYCLE_COMPLETION
 - dependency_id: LCD-011
   source_object_id: OBJ-052
-  source_change: OFFLINE_UNHEALTHY_DISABLED_OR_UNBOUND
+  source_change: OFFLINE_UNHEALTHY_OR_DISABLED
   target_object_ids:
   - OBJ-027
   - OBJ-030
@@ -197418,7 +196800,7 @@ decisions:
 - decision_id: ADR-007
   title: Runner、Runner Agent和执行机分层且项目独占绑定
   status: ACCEPTED
-  final_decision: 执行机是物理/虚拟节点，Runner Agent是驻留代理，Runner是平台登记与调度对象；一个Runner绑定项目后不得同时绑定其他项目。
+  final_decision: 执行机是物理/虚拟节点，Runner Agent是驻留代理，Runner是平台登记与调度对象；一个创建Runner project-scoped enrollment后不得同时绑定其他项目。
   authority_basis:
   - AI自动化测试执行平台综合说明文档
   - 文档治理规则

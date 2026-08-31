@@ -606,48 +606,39 @@ export type AssertionAssetResource = {
   lifecycle_status: "CREATED" | "DRAFT" | "ACTIVE" | "DISABLED" | "RECOVERED" | "ARCHIVED" | "LOGICALLY_DELETED";
 };
 
-export type RunnerResource = {
-  runner_id: string;
-  display_name?: string | null;
-  row_version: number;
-  created_at: string;
-  updated_at: string;
-  runner_code?: string | null;
-  runner_project_binding_id?: string | null;
-  project_id?: string | null;
-  health_status: "DEGRADED" | "HEALTHY" | "OFFLINE" | "UNHEALTHY" | "UNKNOWN";
-  scheduling_status: "DISABLED" | "DRAINING" | "ENABLED";
-  registration_state: "UNREGISTERED" | "REGISTERED" | "DEREGISTERED";
-  authentication_state: "UNAUTHENTICATED" | "AUTHENTICATED" | "REVOKED";
-  connection_state: "ONLINE" | "OFFLINE" | "DISCONNECTED";
-  health_state: "HEALTHY" | "DEGRADED" | "UNHEALTHY";
-  enablement_state: "ENABLED" | "DISABLED" | "DRAINING";
-  binding_state: "UNBOUND" | "BOUND";
-  scheduling_state: "IDLE" | "RESERVED" | "RUNNING" | "DRAINING";
-  resource_state: "AVAILABLE" | "PARTIALLY_ALLOCATED" | "FULLY_ALLOCATED" | "EXHAUSTED";
-  lifecycle_status: "REGISTERING" | "REGISTERED" | "AUTHENTICATED" | "BOUND" | "ENABLED" | "ONLINE" | "DEGRADED" | "UNHEALTHY" | "OFFLINE" | "RECOVERING" | "DRAINING" | "DISABLED" | "UNBOUND" | "DEREGISTERED" | "ARCHIVED";
-};
-
 export type RunnerCapabilityResource = {
   runner_capability_id: string;
-  display_name?: string | null;
-  row_version: number;
-  created_at: string;
-  updated_at: string;
-  runner_id?: string | null;
-  capability_code?: string | null;
-  lifecycle_status: "CREATED" | "DRAFT" | "ACTIVE" | "DISABLED" | "RECOVERED" | "ARCHIVED" | "LOGICALLY_DELETED";
+  capability_code: "BROWSER_CHROMIUM" | "BROWSER_CHROME" | "BROWSER_EDGE" | "MODE_HEADED" | "MODE_HEADLESS" | "TERMINAL_ADMIN_WEB" | "TERMINAL_CLIENT_WEB" | "TERMINAL_PDA_WEB" | "SINGLE_TERMINAL" | "CROSS_TERMINAL" | "CAPTURE_SCREENSHOT" | "CAPTURE_VIDEO" | "CAPTURE_TRACE" | "NETWORK_RESPONSE_LISTEN" | "INTRANET_ACCESS" | "PROXY_ACCESS" | "FILE_TRANSFER" | "MANUAL_RECORDING" | "AI_EXPLORATION" | "FORMAL_EXECUTION" | "LOCAL_ARTIFACT_CACHE" | "PLAYWRIGHT_VERSION" | "AGENT_VERSION" | "CONTEXT_ISOLATION";
+  capability_type: "BROWSER" | "SESSION" | "TERMINAL" | "FLOW" | "ARTIFACT" | "NETWORK" | "IO" | "STORAGE" | "VERSION" | "SECURITY";
+  availability_status: "CONFIGURED" | "NOT_CONFIGURED";
+  validation_status: "PENDING" | "VALID" | "INVALID";
+  observed_version?: string | null;
+  observed_metadata?: Record<string, unknown> | null;
+  lifecycle_status: "ACTIVE" | "DISABLED";
+  reported_at: string;
 };
 
-export type RunnerProjectBindingResource = {
-  runner_project_binding_id: string;
+export type RunnerResource = {
+  runner_id: string;
+  project_id: string;
+  runner_code: string;
   display_name?: string | null;
+  lifecycle_status: "REGISTERED" | "ACTIVE" | "DISABLED" | "ARCHIVED";
+  registration_status: "REGISTERED";
+  connection_status: "OFFLINE" | "CONNECTING" | "ONLINE" | "LOST";
+  health_status: "UNKNOWN" | "HEALTHY" | "DEGRADED" | "UNHEALTHY";
+  enable_status: "ENABLED" | "DISABLED";
+  project_binding_status: "BOUND";
+  scheduling_status: "UNSCHEDULABLE" | "IDLE" | "PARTIALLY_OCCUPIED" | "BUSY" | "DRAINING";
+  resource_status: "AVAILABLE" | "PARTIALLY_OCCUPIED" | "EXHAUSTED" | "RECLAIMING";
+  version_compatibility: "UNKNOWN" | "COMPATIBLE" | "INCOMPATIBLE" | "UPGRADE_REQUIRED";
+  last_heartbeat_at?: string | null;
+  registered_at: string;
+  runtime_metadata?: Record<string, unknown> | null;
+  capabilities: Array<RunnerCapabilityResource>;
   row_version: number;
   created_at: string;
   updated_at: string;
-  runner_id?: string | null;
-  effective_at?: string | null;
-  lifecycle_status: "CREATED" | "DRAFT" | "ACTIVE" | "DISABLED" | "RECOVERED" | "ARCHIVED" | "LOGICALLY_DELETED";
 };
 
 export type ExecutionSlotResource = {
@@ -2336,26 +2327,26 @@ export type ListRunnerResponse = {
   page: PageMeta;
 };
 
-export type CreateRunnerRequest = {
-  expected_version?: number;
-  reason?: string | null;
-  runner_id?: string;
+export type CreateRunnerEnrollmentRequest = {
+  project_id: string;
+  runner_code: string;
   display_name?: string | null;
-  runner_code?: string | null;
-  runner_project_binding_id?: string | null;
-  project_id?: string | null;
-  registration_state?: "UNREGISTERED" | "REGISTERED" | "DEREGISTERED";
-  authentication_state?: "UNAUTHENTICATED" | "AUTHENTICATED" | "REVOKED";
-  connection_state?: "ONLINE" | "OFFLINE" | "DISCONNECTED";
-  health_state?: "HEALTHY" | "DEGRADED" | "UNHEALTHY";
-  enablement_state?: "ENABLED" | "DISABLED" | "DRAINING";
-  binding_state?: "UNBOUND" | "BOUND";
-  scheduling_state?: "IDLE" | "RESERVED" | "RUNNING" | "DRAINING";
-  resource_state?: "AVAILABLE" | "PARTIALLY_ALLOCATED" | "FULLY_ALLOCATED" | "EXHAUSTED";
+  reason: string;
 };
 
-export type CreateRunnerResponse = {
-  data: RunnerResource;
+export type RunnerEnrollmentIssuedResource = {
+  enrollment_id: string;
+  project_id: string;
+  runner_code: string;
+  display_name?: string | null;
+  enrollment_status: "PENDING";
+  enrollment_credential: string;
+  row_version: number;
+  created_at: string;
+};
+
+export type CreateRunnerEnrollmentResponse = {
+  data: RunnerEnrollmentIssuedResource;
   correlation_id: string;
 };
 
@@ -2366,60 +2357,23 @@ export type GetRunnerResponse = {
 
 export type UpdateRunnerRequest = {
   expected_version: number;
-  reason?: string | null;
   display_name?: string | null;
-  runner_code?: string | null;
-  runner_project_binding_id?: string | null;
-  project_id?: string | null;
-  registration_state?: "UNREGISTERED" | "REGISTERED" | "DEREGISTERED";
-  authentication_state?: "UNAUTHENTICATED" | "AUTHENTICATED" | "REVOKED";
-  connection_state?: "ONLINE" | "OFFLINE" | "DISCONNECTED";
-  health_state?: "HEALTHY" | "DEGRADED" | "UNHEALTHY";
-  enablement_state?: "ENABLED" | "DISABLED" | "DRAINING";
-  binding_state?: "UNBOUND" | "BOUND";
-  scheduling_state?: "IDLE" | "RESERVED" | "RUNNING" | "DRAINING";
-  resource_state?: "AVAILABLE" | "PARTIALLY_ALLOCATED" | "FULLY_ALLOCATED" | "EXHAUSTED";
+  reason: string;
 };
 
-export type UpdateRunnerResponse = {
-  data: RunnerResource;
-  correlation_id: string;
-};
-
-export type ListRunnerCapabilityResponse = {
-  items: Array<RunnerCapabilityResource>;
-  page: PageMeta;
-};
-
-export type CreateRunnerCapabilityRequest = {
-  expected_version?: number;
-  reason?: string | null;
-  runner_capability_id?: string;
-  display_name?: string | null;
-  runner_id?: string | null;
-  capability_code?: string | null;
-};
-
-export type CreateRunnerCapabilityResponse = {
-  data: RunnerCapabilityResource;
-  correlation_id: string;
-};
-
-export type GetRunnerCapabilityResponse = {
-  data: RunnerCapabilityResource;
-  correlation_id: string;
-};
-
-export type UpdateRunnerCapabilityRequest = {
+export type RunnerLifecycleRequest = {
   expected_version: number;
-  reason?: string | null;
-  display_name?: string | null;
-  runner_id?: string | null;
-  capability_code?: string | null;
+  reason: string;
 };
 
-export type UpdateRunnerCapabilityResponse = {
-  data: RunnerCapabilityResource;
+export type RotateRunnerAgentTokenData = {
+  runner: RunnerResource;
+  agent_token: string;
+  token_version: number;
+};
+
+export type RotateRunnerAgentTokenResponse = {
+  data: RotateRunnerAgentTokenData;
   correlation_id: string;
 };
 
@@ -3263,24 +3217,45 @@ export type TerminateExecutionResponse = {
   correlation_id: string;
 };
 
+export type RunnerCapabilityReportItem = {
+  capability_code: "BROWSER_CHROMIUM" | "BROWSER_CHROME" | "BROWSER_EDGE" | "MODE_HEADED" | "MODE_HEADLESS" | "TERMINAL_ADMIN_WEB" | "TERMINAL_CLIENT_WEB" | "TERMINAL_PDA_WEB" | "SINGLE_TERMINAL" | "CROSS_TERMINAL" | "CAPTURE_SCREENSHOT" | "CAPTURE_VIDEO" | "CAPTURE_TRACE" | "NETWORK_RESPONSE_LISTEN" | "INTRANET_ACCESS" | "PROXY_ACCESS" | "FILE_TRANSFER" | "MANUAL_RECORDING" | "AI_EXPLORATION" | "FORMAL_EXECUTION" | "LOCAL_ARTIFACT_CACHE" | "PLAYWRIGHT_VERSION" | "AGENT_VERSION" | "CONTEXT_ISOLATION";
+  availability_status: "CONFIGURED" | "NOT_CONFIGURED";
+  observed_version?: string | null;
+  observed_metadata?: Record<string, unknown> | null;
+};
+
 export type RegisterRunnerRequest = {
-  expected_version?: number;
-  reason?: string | null;
-  operation_id?: string;
+  enrollment_credential: string;
+  machine_fingerprint: string;
+  agent_version: string;
+  runtime_metadata?: Record<string, unknown> | null;
+  capabilities: Array<RunnerCapabilityReportItem>;
+};
+
+export type RegisterRunnerData = {
+  runner: RunnerResource;
+  agent_token: string;
+  token_version: number;
 };
 
 export type RegisterRunnerResponse = {
-  data: GenericOperationResource;
+  data: RegisterRunnerData;
   correlation_id: string;
 };
 
 export type HeartbeatRunnerRequest = {
-  expected_version: number;
-  reason?: string | null;
+  health_status: "HEALTHY" | "DEGRADED" | "UNHEALTHY";
+  agent_version: string;
+  runtime_metadata?: Record<string, unknown> | null;
+  capabilities?: Array<RunnerCapabilityReportItem>;
+};
+
+export type ReportRunnerCapabilitiesRequest = {
+  capabilities: Array<RunnerCapabilityReportItem>;
 };
 
 export type HeartbeatRunnerResponse = {
-  data: GenericOperationResource;
+  data: RunnerResource;
   correlation_id: string;
 };
 

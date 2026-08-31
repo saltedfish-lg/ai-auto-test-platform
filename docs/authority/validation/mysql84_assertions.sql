@@ -1,4 +1,4 @@
--- Current Living Authority MySQL 8.4 V3 → V4 → V5 → V6 → V7 → V8 → V9 → V10 → V11 → V12 → V13 → V14 runtime assertions
+-- Current Living Authority MySQL 8.4 V3 → V4 → V5 → V6 → V7 → V8 → V9 → V10 → V11 → V12 → V13 → V14 → V15 runtime assertions
 DELIMITER //
 CREATE PROCEDURE assert_current_contract()
 BEGIN
@@ -8,8 +8,8 @@ BEGIN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Retired atp_platform_design_baseline_release must not exist at the current migration head';
   END IF;
 
-  IF (SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type='BASE TABLE') <> 96 THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Expected exactly 96 base tables after V3 → V4 → V5 → V6 → V7 → V8 → V9 → V10 → V11 → V12 → V13 → V14';
+  IF (SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type='BASE TABLE') <> 98 THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Expected exactly 98 base tables after V3 → V4 → V5 → V6 → V7 → V8 → V9 → V10 → V11 → V12 → V13 → V14 → V15';
   END IF;
   IF EXISTS (
     SELECT 1 FROM information_schema.columns
@@ -244,5 +244,80 @@ END$$
 DELIMITER ;
 CALL assert_auth_audit_triggers();
 DROP PROCEDURE assert_auth_audit_triggers;
+
+DROP PROCEDURE IF EXISTS assert_runner_foundation_contract;
+DELIMITER $$
+CREATE PROCEDURE assert_runner_foundation_contract()
+BEGIN
+  DECLARE got_error BOOLEAN DEFAULT FALSE;
+  DECLARE legacy_runner_count INT DEFAULT 0;
+
+  IF (SELECT COUNT(*) FROM information_schema.table_constraints
+      WHERE constraint_schema=DATABASE() AND table_name='atp_runner'
+        AND constraint_name='uq_atp_runner_business' AND constraint_type='UNIQUE') <> 1 THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Runner project-scoped business uniqueness missing';
+  END IF;
+  IF (SELECT COUNT(*) FROM information_schema.check_constraints
+      WHERE constraint_schema=DATABASE() AND constraint_name='ck_atp_runner_project_binding_status'
+        AND check_clause LIKE '%BOUND%') <> 1 THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Runner BOUND-only CHECK missing';
+  END IF;
+  IF (SELECT COUNT(*) FROM information_schema.columns
+      WHERE table_schema=DATABASE()
+        AND table_name IN ('atp_runner_enrollment','atp_runner_agent')
+        AND column_name IN ('enrollment_credential','agent_token','token','credential')) <> 0 THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Runner plaintext credential column detected';
+  END IF;
+  IF (SELECT COUNT(*) FROM information_schema.columns
+      WHERE table_schema=DATABASE() AND table_name='atp_runner_agent'
+        AND column_name IN ('token_hash','machine_fingerprint_hash')
+        AND data_type='binary' AND character_maximum_length=32) <> 2 THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Runner Agent hash verification columns invalid';
+  END IF;
+
+  SELECT COUNT(*) INTO legacy_runner_count
+  FROM atp_runner WHERE runner_code='LEGACY-RUNNER-01';
+  IF legacy_runner_count = 1 THEN
+    IF (SELECT COUNT(*) FROM atp_runner
+        WHERE runner_code='LEGACY-RUNNER-01' AND project_id=CONCAT('P',REPEAT('0',25))
+          AND project_binding_status='BOUND' AND registration_status='REGISTERED'
+          AND lifecycle_status='REGISTERED') <> 1 THEN
+      SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Legacy Runner ownership/state backfill failed';
+    END IF;
+    IF (SELECT COUNT(*) FROM atp_runner_agent
+        WHERE runner_id=CONCAT('R',REPEAT('0',25)) AND project_id=CONCAT('P',REPEAT('0',25))
+          AND token_status='REVOKED' AND lifecycle_status='REVOKED'
+          AND OCTET_LENGTH(token_hash)=32 AND OCTET_LENGTH(machine_fingerprint_hash)=32) <> 1 THEN
+      SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Legacy Runner Agent safe revocation failed';
+    END IF;
+    IF (SELECT COUNT(*) FROM atp_runner_capability
+        WHERE runner_id=CONCAT('R',REPEAT('0',25)) AND project_id=CONCAT('P',REPEAT('0',25))
+          AND capability_code='AGENT_VERSION' AND lifecycle_status='ACTIVE'
+          AND capability_type='VERSION') <> 1 THEN
+      SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Legacy Runner capability backfill failed';
+    END IF;
+  END IF;
+
+  INSERT INTO atp_project(project_id,project_code,lifecycle_status,display_name,row_version)
+  VALUES
+    (CONCAT('Q',REPEAT('1',25)),'RUNNER-SCOPE-ASSERT-1','ACTIVE','Runner Scope Assert 1',1),
+    (CONCAT('Q',REPEAT('2',25)),'RUNNER-SCOPE-ASSERT-2','ACTIVE','Runner Scope Assert 2',1);
+  INSERT INTO atp_runner(runner_id,project_id,runner_code,scheduling_status)
+  VALUES
+    (CONCAT('S',REPEAT('1',25)),CONCAT('Q',REPEAT('1',25)),'SAME-RUNNER-CODE','UNSCHEDULABLE'),
+    (CONCAT('S',REPEAT('2',25)),CONCAT('Q',REPEAT('2',25)),'SAME-RUNNER-CODE','UNSCHEDULABLE');
+  SET got_error = FALSE;
+  BEGIN
+    DECLARE CONTINUE HANDLER FOR SQLEXCEPTION SET got_error = TRUE;
+    INSERT INTO atp_runner(runner_id,project_id,runner_code,scheduling_status)
+    VALUES (CONCAT('S',REPEAT('3',25)),CONCAT('Q',REPEAT('1',25)),'SAME-RUNNER-CODE','UNSCHEDULABLE');
+  END;
+  IF got_error = FALSE THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Runner same-Project code uniqueness rejection failed';
+  END IF;
+END$$
+DELIMITER ;
+CALL assert_runner_foundation_contract();
+DROP PROCEDURE assert_runner_foundation_contract;
 
 SELECT 'CURRENT_AUTHORITY_MYSQL84_GATE_PASS' AS result;

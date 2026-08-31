@@ -34,6 +34,11 @@ async function renderShell(permissions = ["PROJECT_VIEW", "PROJECT_CREATE"]): Pr
             component: { template: "<div>projects</div>" },
           },
           {
+            path: "runners",
+            name: "runners.manage",
+            component: { template: "<div>runners</div>" },
+          },
+          {
             path: "ai-settings/model-configurations",
             name: "models.configurations",
             component: { template: "<div>models</div>" },
@@ -92,6 +97,12 @@ describe("身份工作台（组件测试，API 为 mock）", () => {
   it("shows AI exploration only to identities with AI_TASK_CREATE", async () => {
     await renderShell(["AI_TASK_CREATE"]);
     expect(screen.getByRole("link", { name: "AI 探索" })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "项目管理" })).toBeNull();
+  });
+
+  it("gives Runner administrators a discoverable management entry", async () => {
+    await renderShell(["RUNNER_REGISTER"]);
+    expect(screen.getByRole("link", { name: "Runner 管理" })).toBeTruthy();
     expect(screen.queryByRole("link", { name: "项目管理" })).toBeNull();
   });
 

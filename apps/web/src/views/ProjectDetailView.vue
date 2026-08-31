@@ -118,6 +118,9 @@ async function submitTransition(): Promise<void> {
           >
             测试账号
           </el-button>
+          <el-button @click="router.push({ name: 'projects.runners', params: { projectId } })">
+            Runner 管理
+          </el-button>
         </PermissionGate>
         <PermissionGate permission="PROJECT_EDIT">
           <el-button

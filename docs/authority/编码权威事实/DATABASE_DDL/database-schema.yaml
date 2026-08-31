@@ -6892,16 +6892,11 @@ tables:
     default: null
   - name: project_id
     type: VARCHAR(26)
-    nullable: true
+    nullable: false
     primary_key: false
     default: null
   - name: runner_code
     type: VARCHAR(191)
-    nullable: true
-    primary_key: false
-    default: null
-  - name: runner_project_binding_id
-    type: VARCHAR(26)
     nullable: false
     primary_key: false
     default: null
@@ -6909,57 +6904,62 @@ tables:
     type: VARCHAR(9)
     nullable: false
     primary_key: false
-    default: DEGRADED
+    default: UNKNOWN
   - name: scheduling_status
+    type: VARCHAR(20)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: resource_status
+    type: VARCHAR(20)
+    nullable: false
+    primary_key: false
+    default: AVAILABLE
+  - name: version_compatibility
+    type: VARCHAR(20)
+    nullable: false
+    primary_key: false
+    default: UNKNOWN
+  - name: last_heartbeat_at
+    type: DATETIME(6)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: registered_at
+    type: DATETIME(6)
+    nullable: false
+    primary_key: false
+    default: CURRENT_TIMESTAMP(6)
+  - name: runtime_metadata_json
+    type: JSON
+    nullable: true
+    primary_key: false
+    default: null
+  - name: registration_status
+    type: VARCHAR(12)
+    nullable: false
+    primary_key: false
+    default: REGISTERED
+  - name: connection_status
+    type: VARCHAR(12)
+    nullable: false
+    primary_key: false
+    default: OFFLINE
+  - name: enable_status
     type: VARCHAR(8)
     nullable: false
     primary_key: false
     default: DISABLED
-  - name: registration_state
-    type: VARCHAR(12)
-    nullable: false
-    primary_key: false
-    default: UNREGISTERED
-  - name: authentication_state
-    type: VARCHAR(15)
-    nullable: false
-    primary_key: false
-    default: UNAUTHENTICATED
-  - name: connection_state
-    type: VARCHAR(12)
-    nullable: false
-    primary_key: false
-    default: ONLINE
-  - name: health_state
-    type: VARCHAR(9)
-    nullable: false
-    primary_key: false
-    default: HEALTHY
-  - name: enablement_state
-    type: VARCHAR(8)
-    nullable: false
-    primary_key: false
-    default: ENABLED
-  - name: binding_state
+  - name: project_binding_status
     type: VARCHAR(7)
     nullable: false
     primary_key: false
-    default: UNBOUND
-  - name: scheduling_state
-    type: VARCHAR(8)
-    nullable: false
-    primary_key: false
-    default: IDLE
-  - name: resource_state
-    type: VARCHAR(19)
-    nullable: false
-    primary_key: false
-    default: AVAILABLE
+    default: BOUND
   - name: lifecycle_status
-    type: VARCHAR(13)
+    type: VARCHAR(10)
     nullable: false
     primary_key: false
-    default: REGISTERING
+    default: REGISTERED
   - name: display_name
     type: VARCHAR(255)
     nullable: true
@@ -7000,64 +7000,67 @@ tables:
   unique_keys:
   - name: uq_atp_runner_business
     columns:
+    - project_id
     - runner_code
+  - name: uq_atp_runner_project_scope
+    columns:
+    - runner_id
+    - project_id
   check_constraints:
+  - name: ck_atp_runner_registration_status
+    expression: (registration_status = 'REGISTERED')
+  - name: ck_atp_runner_connection_status
+    expression: (connection_status IN ('OFFLINE', 'CONNECTING', 'ONLINE', 'LOST'))
   - name: ck_atp_runner_health_status
-    expression: (health_status IN ('DEGRADED', 'HEALTHY', 'OFFLINE', 'UNHEALTHY', 'UNKNOWN'))
+    expression: (health_status IN ('UNKNOWN', 'HEALTHY', 'DEGRADED', 'UNHEALTHY'))
+  - name: ck_atp_runner_enable_status
+    expression: (enable_status IN ('ENABLED', 'DISABLED'))
+  - name: ck_atp_runner_project_binding_status
+    expression: (project_binding_status = 'BOUND')
   - name: ck_atp_runner_scheduling_status
-    expression: (scheduling_status IN ('DISABLED', 'DRAINING', 'ENABLED'))
-  - name: ck_atp_runner_registration_state
-    expression: (registration_state IN ('UNREGISTERED', 'REGISTERED', 'DEREGISTERED'))
-  - name: ck_atp_runner_authentication_state
-    expression: (authentication_state IN ('UNAUTHENTICATED', 'AUTHENTICATED', 'REVOKED'))
-  - name: ck_atp_runner_connection_state
-    expression: (connection_state IN ('ONLINE', 'OFFLINE', 'DISCONNECTED'))
-  - name: ck_atp_runner_health_state
-    expression: (health_state IN ('HEALTHY', 'DEGRADED', 'UNHEALTHY'))
-  - name: ck_atp_runner_enablement_state
-    expression: (enablement_state IN ('ENABLED', 'DISABLED', 'DRAINING'))
-  - name: ck_atp_runner_binding_state
-    expression: (binding_state IN ('UNBOUND', 'BOUND'))
-  - name: ck_atp_runner_scheduling_state
-    expression: (scheduling_state IN ('IDLE', 'RESERVED', 'RUNNING', 'DRAINING'))
-  - name: ck_atp_runner_resource_state
-    expression: (resource_state IN ('AVAILABLE', 'PARTIALLY_ALLOCATED', 'FULLY_ALLOCATED', 'EXHAUSTED'))
+    expression: (scheduling_status IN ('UNSCHEDULABLE', 'IDLE', 'PARTIALLY_OCCUPIED', 'BUSY', 'DRAINING'))
+  - name: ck_atp_runner_resource_status
+    expression: (resource_status IN ('AVAILABLE', 'PARTIALLY_OCCUPIED', 'EXHAUSTED', 'RECLAIMING'))
+  - name: ck_atp_runner_version_compatibility
+    expression: (version_compatibility IN ('UNKNOWN', 'COMPATIBLE', 'INCOMPATIBLE', 'UPGRADE_REQUIRED'))
   - name: ck_atp_runner_lifecycle_status
-    expression: (lifecycle_status IN ('REGISTERING', 'REGISTERED', 'AUTHENTICATED', 'BOUND', 'ENABLED', 'ONLINE', 'DEGRADED',
-      'UNHEALTHY', 'OFFLINE', 'RECOVERING', 'DRAINING', 'DISABLED', 'UNBOUND', 'DEREGISTERED', 'ARCHIVED'))
+    expression: (lifecycle_status IN ('REGISTERED', 'ACTIVE', 'DISABLED', 'ARCHIVED'))
   foreign_keys:
-  - name: fk_atp_runner_runner_project_binding_id
-    column: runner_project_binding_id
-    referenced_table: atp_runner_project_binding
-    referenced_column: runner_project_binding_id
-    on_delete: RESTRICT
-    on_update: RESTRICT
   - name: fk_atp_runner_project_id
     column: project_id
     referenced_table: atp_project
     referenced_column: project_id
     on_delete: RESTRICT
     on_update: RESTRICT
-  indexes: []
+  indexes:
+  - name: ix_atp_runner_project_lifecycle
+    columns:
+    - project_id
+    - lifecycle_status
+  - name: ix_atp_runner_project_health
+    columns:
+    - project_id
+    - health_status
+    - connection_status
+  - name: ix_atp_runner_last_heartbeat
+    columns:
+    - last_heartbeat_at
   delete_behavior: DECLARED_PER_FOREIGN_KEY
-  data_owner: DOMAIN_OR_TECHNICAL_OWNER
-  idempotency_and_audit: ROW_VERSION_OR_TECHNICAL_TABLE_RULE
+  data_owner: RUNNER_AGGREGATE
+  idempotency_and_audit: ROW_VERSION_PLUS_APPEND_ONLY_AUDIT_AND_OUTBOX
   object_id: OBJ-052
-  business_unique_key: runner_code
+  business_unique_key: project_id+runner_code
   state_fields:
-  - health_status
-  - scheduling_status
-  - registration_state
-  - authentication_state
-  - connection_state
-  - health_state
-  - enablement_state
-  - binding_state
-  - scheduling_state
-  - resource_state
   - lifecycle_status
+  - registration_status
+  - connection_status
+  - health_status
+  - enable_status
+  - project_binding_status
+  - scheduling_status
+  - resource_status
+  - version_compatibility
   relationship_fields:
-  - runner_project_binding_id
   - project_id
   extension_json_rule: NON_CONTRACT_EXTENSIONS_ONLY
 - table_name: atp_runner_agent
@@ -7069,7 +7072,7 @@ tables:
     default: null
   - name: project_id
     type: VARCHAR(26)
-    nullable: true
+    nullable: false
     primary_key: false
     default: null
   - name: runner_id
@@ -7077,11 +7080,51 @@ tables:
     nullable: false
     primary_key: false
     default: null
-  - name: lifecycle_status
-    type: VARCHAR(17)
+  - name: token_hash
+    type: BINARY(32)
     nullable: false
     primary_key: false
-    default: CREATED
+    default: null
+  - name: token_status
+    type: VARCHAR(7)
+    nullable: false
+    primary_key: false
+    default: ACTIVE
+  - name: token_version
+    type: BIGINT
+    nullable: false
+    primary_key: false
+    default: '1'
+  - name: machine_fingerprint_hash
+    type: BINARY(32)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: agent_version
+    type: VARCHAR(64)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: last_authenticated_at
+    type: DATETIME(6)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: credential_rotated_at
+    type: DATETIME(6)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: revoked_at
+    type: DATETIME(6)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: lifecycle_status
+    type: VARCHAR(8)
+    nullable: false
+    primary_key: false
+    default: ACTIVE
   - name: display_name
     type: VARCHAR(255)
     nullable: true
@@ -7119,15 +7162,27 @@ tables:
     default: null
   primary_key:
   - runner_agent_id
-  unique_keys: []
+  unique_keys:
+  - name: uq_atp_runner_agent_runner
+    columns:
+    - runner_id
+  - name: uq_atp_runner_agent_token_hash
+    columns:
+    - token_hash
   check_constraints:
   - name: ck_atp_runner_agent_lifecycle_status
-    expression: (lifecycle_status IN ('CREATED', 'DRAFT', 'ACTIVE', 'DISABLED', 'RECOVERED', 'ARCHIVED', 'LOGICALLY_DELETED'))
+    expression: (lifecycle_status IN ('ACTIVE', 'REVOKED'))
+  - name: ck_atp_runner_agent_token_status
+    expression: (token_status IN ('ACTIVE', 'REVOKED'))
   foreign_keys:
-  - name: fk_atp_runner_agent_runner_id
-    column: runner_id
+  - name: fk_atp_runner_agent_runner_scope
+    columns:
+    - runner_id
+    - project_id
     referenced_table: atp_runner
-    referenced_column: runner_id
+    referenced_columns:
+    - runner_id
+    - project_id
     on_delete: RESTRICT
     on_update: RESTRICT
   - name: fk_atp_runner_agent_project_id
@@ -7136,14 +7191,19 @@ tables:
     referenced_column: project_id
     on_delete: RESTRICT
     on_update: RESTRICT
-  indexes: []
+  indexes:
+  - name: ix_atp_runner_agent_status
+    columns:
+    - runner_id
+    - token_status
   delete_behavior: DECLARED_PER_FOREIGN_KEY
-  data_owner: DOMAIN_OR_TECHNICAL_OWNER
-  idempotency_and_audit: ROW_VERSION_OR_TECHNICAL_TABLE_RULE
+  data_owner: RUNNER_AGGREGATE
+  idempotency_and_audit: OPAQUE_TOKEN_HASH_ONLY_EXPLICIT_ROTATE_REVOKE
   object_id: OBJ-089
-  business_unique_key: runner_agent_id
+  business_unique_key: runner_id
   state_fields:
   - lifecycle_status
+  - token_status
   relationship_fields:
   - runner_id
   - project_id
@@ -7157,24 +7217,54 @@ tables:
     default: null
   - name: project_id
     type: VARCHAR(26)
-    nullable: true
+    nullable: false
     primary_key: false
     default: null
   - name: runner_id
     type: VARCHAR(26)
-    nullable: true
+    nullable: false
     primary_key: false
     default: null
   - name: capability_code
-    type: VARCHAR(191)
+    type: VARCHAR(64)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: capability_type
+    type: VARCHAR(16)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: availability_status
+    type: VARCHAR(14)
+    nullable: false
+    primary_key: false
+    default: CONFIGURED
+  - name: validation_status
+    type: VARCHAR(16)
+    nullable: false
+    primary_key: false
+    default: PENDING
+  - name: observed_version
+    type: VARCHAR(64)
     nullable: true
     primary_key: false
     default: null
-  - name: lifecycle_status
-    type: VARCHAR(17)
+  - name: observed_metadata_json
+    type: JSON
+    nullable: true
+    primary_key: false
+    default: null
+  - name: reported_at
+    type: DATETIME(6)
     nullable: false
     primary_key: false
-    default: CREATED
+    default: CURRENT_TIMESTAMP(6)
+  - name: lifecycle_status
+    type: VARCHAR(8)
+    nullable: false
+    primary_key: false
+    default: ACTIVE
   - name: display_name
     type: VARCHAR(255)
     nullable: true
@@ -7218,13 +7308,28 @@ tables:
     - runner_id
     - capability_code
   check_constraints:
+  - name: ck_atp_runner_capability_code
+    expression: (capability_code IN ('BROWSER_CHROMIUM', 'BROWSER_CHROME', 'BROWSER_EDGE', 'MODE_HEADED', 'MODE_HEADLESS',
+      'TERMINAL_ADMIN_WEB', 'TERMINAL_CLIENT_WEB', 'TERMINAL_PDA_WEB', 'SINGLE_TERMINAL', 'CROSS_TERMINAL', 'CAPTURE_SCREENSHOT',
+      'CAPTURE_VIDEO', 'CAPTURE_TRACE', 'NETWORK_RESPONSE_LISTEN', 'INTRANET_ACCESS', 'PROXY_ACCESS', 'FILE_TRANSFER', 'MANUAL_RECORDING',
+      'AI_EXPLORATION', 'FORMAL_EXECUTION', 'LOCAL_ARTIFACT_CACHE', 'PLAYWRIGHT_VERSION', 'AGENT_VERSION', 'CONTEXT_ISOLATION'))
+  - name: ck_atp_runner_capability_type
+    expression: (capability_type IN ('BROWSER', 'SESSION', 'TERMINAL', 'FLOW', 'ARTIFACT', 'NETWORK', 'IO', 'STORAGE', 'VERSION', 'SECURITY'))
+  - name: ck_atp_runner_capability_availability
+    expression: (availability_status IN ('CONFIGURED', 'NOT_CONFIGURED'))
+  - name: ck_atp_runner_capability_validation
+    expression: (validation_status IN ('PENDING', 'VALID', 'INVALID'))
   - name: ck_atp_runner_capability_lifecycle_status
-    expression: (lifecycle_status IN ('CREATED', 'DRAFT', 'ACTIVE', 'DISABLED', 'RECOVERED', 'ARCHIVED', 'LOGICALLY_DELETED'))
+    expression: (lifecycle_status IN ('ACTIVE', 'DISABLED'))
   foreign_keys:
-  - name: fk_atp_runner_capability_runner_id
-    column: runner_id
+  - name: fk_atp_runner_capability_runner_scope
+    columns:
+    - runner_id
+    - project_id
     referenced_table: atp_runner
-    referenced_column: runner_id
+    referenced_columns:
+    - runner_id
+    - project_id
     on_delete: RESTRICT
     on_update: RESTRICT
   - name: fk_atp_runner_capability_project_id
@@ -7233,18 +7338,300 @@ tables:
     referenced_column: project_id
     on_delete: RESTRICT
     on_update: RESTRICT
-  indexes: []
+  indexes:
+  - name: ix_atp_runner_capability_project_code
+    columns:
+    - project_id
+    - capability_code
+    - availability_status
+  - name: ix_atp_runner_capability_runner_reported
+    columns:
+    - runner_id
+    - reported_at
   delete_behavior: DECLARED_PER_FOREIGN_KEY
-  data_owner: DOMAIN_OR_TECHNICAL_OWNER
-  idempotency_and_audit: ROW_VERSION_OR_TECHNICAL_TABLE_RULE
+  data_owner: RUNNER_AGGREGATE
+  idempotency_and_audit: MACHINE_REPORT_WITH_APPEND_ONLY_CHANGE_AUDIT
   object_id: OBJ-053
   business_unique_key: runner_id+capability_code
   state_fields:
+  - availability_status
+  - validation_status
   - lifecycle_status
   relationship_fields:
   - runner_id
   - project_id
-  extension_json_rule: NON_CONTRACT_EXTENSIONS_ONLY
+  extension_json_rule: OBSERVED_NON_SECRET_METADATA_ONLY
+- table_name: atp_runner_audit
+  columns:
+  - name: audit_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: true
+    default: null
+  - name: runner_id
+    type: VARCHAR(26)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: enrollment_id
+    type: VARCHAR(26)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: project_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: action
+    type: VARCHAR(64)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: operation_id
+    type: VARCHAR(128)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: actor_type
+    type: VARCHAR(8)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: actor_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: required_permission
+    type: VARCHAR(128)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: previous_status
+    type: VARCHAR(16)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: new_status
+    type: VARCHAR(16)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: result_code
+    type: VARCHAR(64)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: reason
+    type: VARCHAR(1000)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: before_json
+    type: JSON
+    nullable: true
+    primary_key: false
+    default: null
+  - name: after_json
+    type: JSON
+    nullable: true
+    primary_key: false
+    default: null
+  - name: credential_changed
+    type: BOOLEAN
+    nullable: false
+    primary_key: false
+    default: 'FALSE'
+  - name: correlation_id
+    type: VARCHAR(128)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: occurred_at
+    type: DATETIME(6)
+    nullable: false
+    primary_key: false
+    default: CURRENT_TIMESTAMP(6)
+  - name: source_context_hash
+    type: BINARY(32)
+    nullable: false
+    primary_key: false
+    default: null
+  primary_key:
+  - audit_id
+  unique_keys: []
+  check_constraints:
+  - name: ck_atp_runner_audit_actor_type
+    expression: (actor_type IN ('HUMAN', 'AGENT'))
+  foreign_keys:
+  - name: fk_atp_runner_audit_runner
+    column: runner_id
+    referenced_table: atp_runner
+    referenced_column: runner_id
+    on_delete: RESTRICT
+    on_update: RESTRICT
+  - name: fk_atp_runner_audit_enrollment
+    column: enrollment_id
+    referenced_table: atp_runner_enrollment
+    referenced_column: enrollment_id
+    on_delete: RESTRICT
+    on_update: RESTRICT
+  - name: fk_atp_runner_audit_project
+    column: project_id
+    referenced_table: atp_project
+    referenced_column: project_id
+    on_delete: RESTRICT
+    on_update: RESTRICT
+  indexes:
+  - name: ix_atp_runner_audit_runner_time
+    columns:
+    - runner_id
+    - occurred_at
+  - name: ix_atp_runner_audit_enrollment_time
+    columns:
+    - enrollment_id
+    - occurred_at
+  delete_behavior: APPEND_ONLY_TRIGGER_PROTECTED
+  data_owner: RUNNER_AGGREGATE
+  idempotency_and_audit: APPEND_ONLY_AUDIT
+  business_unique_key: audit_id
+  state_fields: []
+  relationship_fields:
+  - runner_id
+  - enrollment_id
+  - project_id
+  extension_json_rule: FORBIDDEN
+- table_name: atp_runner_enrollment
+  columns:
+  - name: enrollment_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: true
+    default: null
+  - name: project_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: runner_code
+    type: VARCHAR(191)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: display_name
+    type: VARCHAR(255)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: credential_hash
+    type: BINARY(32)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: enrollment_status
+    type: VARCHAR(8)
+    nullable: false
+    primary_key: false
+    default: PENDING
+  - name: consumed_runner_id
+    type: VARCHAR(26)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: consumed_at
+    type: DATETIME(6)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: revoked_at
+    type: DATETIME(6)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: row_version
+    type: BIGINT
+    nullable: false
+    primary_key: false
+    default: '1'
+  - name: created_at
+    type: DATETIME(6)
+    nullable: false
+    primary_key: false
+    default: CURRENT_TIMESTAMP(6)
+  - name: updated_at
+    type: DATETIME(6)
+    nullable: false
+    primary_key: false
+    default: CURRENT_TIMESTAMP(6)
+  - name: created_by
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: updated_by
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: reason
+    type: VARCHAR(1000)
+    nullable: false
+    primary_key: false
+    default: null
+  primary_key:
+  - enrollment_id
+  unique_keys:
+  - name: uq_atp_runner_enrollment_credential
+    columns:
+    - credential_hash
+  check_constraints:
+  - name: ck_atp_runner_enrollment_status
+    expression: (enrollment_status IN ('PENDING', 'CONSUMED', 'REVOKED'))
+  foreign_keys:
+  - name: fk_atp_runner_enrollment_project
+    column: project_id
+    referenced_table: atp_project
+    referenced_column: project_id
+    on_delete: RESTRICT
+    on_update: RESTRICT
+  - name: fk_atp_runner_enrollment_runner
+    column: consumed_runner_id
+    referenced_table: atp_runner
+    referenced_column: runner_id
+    on_delete: RESTRICT
+    on_update: RESTRICT
+  - name: fk_atp_runner_enrollment_created_by
+    column: created_by
+    referenced_table: atp_user
+    referenced_column: user_id
+    on_delete: RESTRICT
+    on_update: RESTRICT
+  - name: fk_atp_runner_enrollment_updated_by
+    column: updated_by
+    referenced_table: atp_user
+    referenced_column: user_id
+    on_delete: RESTRICT
+    on_update: RESTRICT
+  indexes:
+  - name: ix_atp_runner_enrollment_project_status
+    columns:
+    - project_id
+    - enrollment_status
+  - name: ix_atp_runner_enrollment_project_code
+    columns:
+    - project_id
+    - runner_code
+  delete_behavior: DECLARED_PER_FOREIGN_KEY
+  data_owner: RUNNER_AGGREGATE
+  idempotency_and_audit: ONE_TIME_CREDENTIAL_HASH_ONLY
+  business_unique_key: enrollment_id
+  state_fields:
+  - enrollment_status
+  relationship_fields:
+  - project_id
+  - consumed_runner_id
+  extension_json_rule: FORBIDDEN
 - table_name: atp_runner_project_binding
   columns:
   - name: runner_project_binding_id

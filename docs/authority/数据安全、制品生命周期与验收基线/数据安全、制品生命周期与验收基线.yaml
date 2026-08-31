@@ -91032,7 +91032,7 @@ acceptance_expected_results:
 - expected_result_id: ACC-00097-EXP-01
   acceptance_id: ACC-00097
   sequence: 1
-  expected_result: Runner获得唯一服务身份、认证和能力快照且保持UNBOUND；USR-SCN-021是唯一项目绑定入口。
+  expected_result: Runner获得唯一服务身份、认证和能力快照，并在注册事务中立即绑定enrollment预定Project；不支持UNBOUND或普通rebind。
 - expected_result_id: ACC-00098-EXP-01
   acceptance_id: ACC-00098
   sequence: 1
@@ -95724,7 +95724,7 @@ acceptance_expected_results:
 - expected_result_id: ACC-00722-EXP-01
   acceptance_id: ACC-00722
   sequence: 1
-  expected_result: 注册仅作用于Runner自身平台技术范围；注册结果必须为UNBOUND，不产生任何项目成员关系或项目绑定。
+  expected_result: 注册仅使用管理员预创建的project-scoped enrollment；注册结果立即绑定enrollment预定Project，不产生项目成员关系且不支持UNBOUND。
 - expected_result_id: ACC-00723-EXP-01
   acceptance_id: ACC-00723
   sequence: 1
@@ -96024,7 +96024,7 @@ acceptance_expected_results:
 - expected_result_id: ACC-00761-EXP-01
   acceptance_id: ACC-00761
   sequence: 1
-  expected_result: 'Runner绑定状态: UNBOUND→BOUND；解绑反向但需门禁'
+  expected_result: 'Runner归属状态: project-scoped enrollment注册时建立BOUND；本阶段无普通解绑或rebind'
 - expected_result_id: ACC-00762-EXP-01
   acceptance_id: ACC-00762
   sequence: 1
@@ -96108,7 +96108,7 @@ acceptance_expected_results:
 - expected_result_id: ACC-00769-EXP-03
   acceptance_id: ACC-00769
   sequence: 3
-  expected_result: Runner获得唯一服务身份、认证和能力快照且保持UNBOUND；USR-SCN-021是唯一项目绑定入口。
+  expected_result: Runner获得唯一服务身份、认证和能力快照，并在注册事务中立即绑定enrollment预定Project；不支持UNBOUND或普通rebind。
 - expected_result_id: ACC-00770-EXP-01
   acceptance_id: ACC-00770
   sequence: 1

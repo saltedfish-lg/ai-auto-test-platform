@@ -266,9 +266,7 @@ class BusinessTerminal(Base):
 class AutomationAsset(Base):
     __tablename__ = "atp_automation_asset"
     __table_args__ = (
-        UniqueConstraint(
-            "automation_asset_id", "project_id", name="uq_atp_automation_asset_scope"
-        ),
+        UniqueConstraint("automation_asset_id", "project_id", name="uq_atp_automation_asset_scope"),
     )
     automation_asset_id: Mapped[str] = mapped_column(String(26), primary_key=True)
     project_id: Mapped[str] = mapped_column(String(26), ForeignKey("atp_project.project_id"))
@@ -285,9 +283,7 @@ class AutomationAsset(Base):
 class LoginStrategy(Base):
     __tablename__ = "atp_login_strategy"
     __table_args__ = (
-        UniqueConstraint(
-            "login_strategy_id", "project_id", name="uq_atp_login_strategy_scope"
-        ),
+        UniqueConstraint("login_strategy_id", "project_id", name="uq_atp_login_strategy_scope"),
         ForeignKeyConstraint(
             ["automation_asset_id", "project_id"],
             ["atp_automation_asset.automation_asset_id", "atp_automation_asset.project_id"],
@@ -489,6 +485,142 @@ class TestAccountAudit(Base):
     required_permission: Mapped[str] = mapped_column(String(128))
     previous_status: Mapped[str | None] = mapped_column(String(18))
     new_status: Mapped[str | None] = mapped_column(String(18))
+    result_code: Mapped[str] = mapped_column(String(64))
+    reason: Mapped[str | None] = mapped_column(String(1000))
+    before_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    after_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    credential_changed: Mapped[bool] = mapped_column(Boolean)
+    correlation_id: Mapped[str] = mapped_column(String(128))
+    occurred_at: Mapped[datetime] = mapped_column(DateTime)
+    source_context_hash: Mapped[bytes] = mapped_column(MySQLBinary(32))
+
+
+class Runner(Base):
+    __tablename__ = "atp_runner"
+    __table_args__ = (
+        UniqueConstraint("project_id", "runner_code", name="uq_atp_runner_business"),
+        UniqueConstraint("runner_id", "project_id", name="uq_atp_runner_project_scope"),
+    )
+    runner_id: Mapped[str] = mapped_column(String(26), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(26), ForeignKey("atp_project.project_id"))
+    runner_code: Mapped[str] = mapped_column(String(191))
+    health_status: Mapped[str] = mapped_column(String(9))
+    scheduling_status: Mapped[str] = mapped_column(String(20))
+    resource_status: Mapped[str] = mapped_column(String(20))
+    version_compatibility: Mapped[str] = mapped_column(String(20))
+    last_heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime)
+    registered_at: Mapped[datetime] = mapped_column(DateTime)
+    runtime_metadata_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    registration_status: Mapped[str] = mapped_column(String(12))
+    connection_status: Mapped[str] = mapped_column(String(12))
+    enable_status: Mapped[str] = mapped_column(String(8))
+    project_binding_status: Mapped[str] = mapped_column(String(7))
+    lifecycle_status: Mapped[str] = mapped_column(String(10))
+    display_name: Mapped[str | None] = mapped_column(String(255))
+    row_version: Mapped[int] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime] = mapped_column(DateTime)
+    created_by: Mapped[str | None] = mapped_column(String(26))
+    updated_by: Mapped[str | None] = mapped_column(String(26))
+    extension_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+
+
+class RunnerEnrollment(Base):
+    __tablename__ = "atp_runner_enrollment"
+    enrollment_id: Mapped[str] = mapped_column(String(26), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(26), ForeignKey("atp_project.project_id"))
+    runner_code: Mapped[str] = mapped_column(String(191))
+    display_name: Mapped[str | None] = mapped_column(String(255))
+    credential_hash: Mapped[bytes] = mapped_column(MySQLBinary(32), unique=True)
+    enrollment_status: Mapped[str] = mapped_column(String(8))
+    consumed_runner_id: Mapped[str | None] = mapped_column(
+        String(26), ForeignKey("atp_runner.runner_id")
+    )
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime)
+    row_version: Mapped[int] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime] = mapped_column(DateTime)
+    created_by: Mapped[str] = mapped_column(String(26), ForeignKey("atp_user.user_id"))
+    updated_by: Mapped[str] = mapped_column(String(26), ForeignKey("atp_user.user_id"))
+    reason: Mapped[str] = mapped_column(String(1000))
+
+
+class RunnerAgent(Base):
+    __tablename__ = "atp_runner_agent"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["runner_id", "project_id"],
+            ["atp_runner.runner_id", "atp_runner.project_id"],
+            name="fk_atp_runner_agent_runner_scope",
+        ),
+    )
+    runner_agent_id: Mapped[str] = mapped_column(String(26), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(26), ForeignKey("atp_project.project_id"))
+    runner_id: Mapped[str] = mapped_column(String(26), unique=True)
+    token_hash: Mapped[bytes] = mapped_column(MySQLBinary(32), unique=True)
+    token_status: Mapped[str] = mapped_column(String(7))
+    token_version: Mapped[int] = mapped_column(BigInteger)
+    machine_fingerprint_hash: Mapped[bytes] = mapped_column(MySQLBinary(32))
+    agent_version: Mapped[str] = mapped_column(String(64))
+    last_authenticated_at: Mapped[datetime | None] = mapped_column(DateTime)
+    credential_rotated_at: Mapped[datetime | None] = mapped_column(DateTime)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime)
+    lifecycle_status: Mapped[str] = mapped_column(String(8))
+    display_name: Mapped[str | None] = mapped_column(String(255))
+    row_version: Mapped[int] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime] = mapped_column(DateTime)
+    created_by: Mapped[str | None] = mapped_column(String(26))
+    updated_by: Mapped[str | None] = mapped_column(String(26))
+    extension_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+
+
+class RunnerCapability(Base):
+    __tablename__ = "atp_runner_capability"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["runner_id", "project_id"],
+            ["atp_runner.runner_id", "atp_runner.project_id"],
+            name="fk_atp_runner_capability_runner_scope",
+        ),
+        UniqueConstraint("runner_id", "capability_code", name="uq_atp_runner_capability_business"),
+    )
+    runner_capability_id: Mapped[str] = mapped_column(String(26), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(26), ForeignKey("atp_project.project_id"))
+    runner_id: Mapped[str] = mapped_column(String(26))
+    capability_code: Mapped[str] = mapped_column(String(64))
+    capability_type: Mapped[str] = mapped_column(String(16))
+    availability_status: Mapped[str] = mapped_column(String(14))
+    validation_status: Mapped[str] = mapped_column(String(16))
+    observed_version: Mapped[str | None] = mapped_column(String(64))
+    observed_metadata_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    reported_at: Mapped[datetime] = mapped_column(DateTime)
+    lifecycle_status: Mapped[str] = mapped_column(String(8))
+    display_name: Mapped[str | None] = mapped_column(String(255))
+    row_version: Mapped[int] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime] = mapped_column(DateTime)
+    created_by: Mapped[str | None] = mapped_column(String(26))
+    updated_by: Mapped[str | None] = mapped_column(String(26))
+    extension_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+
+
+class RunnerAudit(Base):
+    __tablename__ = "atp_runner_audit"
+    audit_id: Mapped[str] = mapped_column(String(26), primary_key=True)
+    runner_id: Mapped[str | None] = mapped_column(String(26), ForeignKey("atp_runner.runner_id"))
+    enrollment_id: Mapped[str | None] = mapped_column(
+        String(26), ForeignKey("atp_runner_enrollment.enrollment_id")
+    )
+    project_id: Mapped[str] = mapped_column(String(26), ForeignKey("atp_project.project_id"))
+    action: Mapped[str] = mapped_column(String(64))
+    operation_id: Mapped[str] = mapped_column(String(128))
+    actor_type: Mapped[str] = mapped_column(String(8))
+    actor_id: Mapped[str] = mapped_column(String(26))
+    required_permission: Mapped[str | None] = mapped_column(String(128))
+    previous_status: Mapped[str | None] = mapped_column(String(16))
+    new_status: Mapped[str | None] = mapped_column(String(16))
     result_code: Mapped[str] = mapped_column(String(64))
     reason: Mapped[str | None] = mapped_column(String(1000))
     before_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)

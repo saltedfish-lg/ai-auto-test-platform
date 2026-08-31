@@ -1,8 +1,15 @@
 import asyncio
 from pathlib import Path
+from typing import Any
 
 from platform_runner import RunnerApplication, RunnerSettings
 from platform_runner.adapters import ArtifactCollector, BrowserAdapter, PlatformTransport
+from platform_runner.credentials import AgentCredentialStore, StoredAgentIdentity
+from platform_runner.transport import (
+    HttpPlatformTransport,
+    PlatformTransportError,
+    RegistrationResult,
+)
 
 
 class FakeBrowserAdapter:
@@ -48,3 +55,254 @@ def test_runner_adapter_protocols_are_replaceable() -> None:
     assert isinstance(FakeBrowserAdapter(), BrowserAdapter)
     assert isinstance(FakePlatformTransport(), PlatformTransport)
     assert isinstance(FakeArtifactCollector(), ArtifactCollector)
+
+
+class MemoryCredentialStore:
+    def __init__(self, identity: StoredAgentIdentity | None = None) -> None:
+        self.identity = identity
+        self.saved: list[StoredAgentIdentity] = []
+
+    def load(self) -> StoredAgentIdentity | None:
+        return self.identity
+
+    def save(self, identity: StoredAgentIdentity) -> None:
+        self.identity = identity
+        self.saved.append(identity)
+
+
+class RecordingRunnerTransport:
+    def __init__(self) -> None:
+        self.register_calls: list[dict[str, object]] = []
+        self.capability_calls: list[tuple[str, str, list[dict[str, object]]]] = []
+        self.heartbeat_calls: list[tuple[str, str, list[dict[str, object]]]] = []
+
+    async def register(
+        self,
+        enrollment_credential: str,
+        machine_fingerprint: str,
+        agent_version: str,
+        runtime_metadata: dict[str, object],
+        capabilities: list[dict[str, object]],
+    ) -> RegistrationResult:
+        self.register_calls.append(
+            {
+                "enrollment_credential": enrollment_credential,
+                "machine_fingerprint": machine_fingerprint,
+                "agent_version": agent_version,
+                "runtime_metadata": runtime_metadata,
+                "capabilities": capabilities,
+            }
+        )
+        return RegistrationResult("R" * 26, "rat_" + "t" * 48, 1)
+
+    async def report_capabilities(
+        self,
+        runner_id: str,
+        agent_token: str,
+        capabilities: list[dict[str, object]],
+    ) -> dict[str, object]:
+        self.capability_calls.append((runner_id, agent_token, capabilities))
+        return {}
+
+    async def heartbeat(
+        self,
+        runner_id: str,
+        agent_token: str,
+        agent_version: str,
+        runtime_metadata: dict[str, object],
+        capabilities: list[dict[str, object]],
+        health_status: str = "HEALTHY",
+    ) -> dict[str, object]:
+        del agent_version, runtime_metadata, health_status
+        self.heartbeat_calls.append((runner_id, agent_token, capabilities))
+        return {}
+
+
+def _runtime_settings(tmp_path: Path, *, enrollment: str | None = None) -> RunnerSettings:
+    return RunnerSettings(
+        _env_file=None,
+        environment="test",
+        platform_url="http://127.0.0.1:8000",
+        work_dir=tmp_path,
+        enrollment_credential=enrollment,
+        heartbeat_interval_seconds=300,
+        declared_capabilities=["BROWSER_CHROMIUM"],
+    )
+
+
+def test_runtime_registers_once_then_uses_agent_identity_for_machine_calls(
+    tmp_path: Path,
+) -> None:
+    async def scenario() -> None:
+        transport = RecordingRunnerTransport()
+        store = MemoryCredentialStore()
+        app = RunnerApplication(
+            _runtime_settings(tmp_path, enrollment="enr_" + "e" * 48),
+            transport=transport,  # type: ignore[arg-type]
+            credential_store=store,  # type: ignore[arg-type]
+        )
+
+        await app.start(runtime_enabled=True)
+        try:
+            assert len(transport.register_calls) == 1
+            assert transport.register_calls[0]["enrollment_credential"] == "enr_" + "e" * 48
+            assert store.saved == [StoredAgentIdentity("R" * 26, "rat_" + "t" * 48, 1)]
+            assert transport.capability_calls[0][0:2] == ("R" * 26, "rat_" + "t" * 48)
+            assert transport.heartbeat_calls[0][0:2] == ("R" * 26, "rat_" + "t" * 48)
+            codes = {item["capability_code"] for item in transport.capability_calls[0][2]}
+            assert {"AGENT_VERSION", "PLAYWRIGHT_VERSION", "BROWSER_CHROMIUM"} <= codes
+        finally:
+            await app.stop()
+
+    asyncio.run(scenario())
+
+
+def test_runtime_reuses_stored_agent_token_without_enrollment(tmp_path: Path) -> None:
+    async def scenario() -> None:
+        transport = RecordingRunnerTransport()
+        identity = StoredAgentIdentity("R" * 26, "rat_" + "s" * 48, 3)
+        store = MemoryCredentialStore(identity)
+        app = RunnerApplication(
+            _runtime_settings(tmp_path),
+            transport=transport,  # type: ignore[arg-type]
+            credential_store=store,  # type: ignore[arg-type]
+        )
+
+        await app.start(runtime_enabled=True)
+        try:
+            assert transport.register_calls == []
+            assert transport.capability_calls[0][0:2] == (identity.runner_id, identity.agent_token)
+            assert transport.heartbeat_calls[0][0:2] == (identity.runner_id, identity.agent_token)
+        finally:
+            await app.stop()
+
+    asyncio.run(scenario())
+
+
+class HeaderCaptureTransport(HttpPlatformTransport):
+    def __init__(self) -> None:
+        super().__init__("http://127.0.0.1:8000")
+        self.requests: list[tuple[str, str, dict[str, object], dict[str, str]]] = []
+
+    async def _request(
+        self,
+        method: str,
+        path: str,
+        body: dict[str, object],
+        headers: dict[str, str],
+    ) -> dict[str, Any]:
+        self.requests.append((method, path, body, headers))
+        if path.endswith("/register"):
+            return {
+                "data": {
+                    "runner": {"runner_id": "R" * 26},
+                    "agent_token": "rat_" + "a" * 48,
+                    "token_version": 1,
+                }
+            }
+        return {}
+
+
+def test_transport_never_uses_human_bearer_for_machine_interfaces() -> None:
+    async def scenario() -> None:
+        transport = HeaderCaptureTransport()
+        registration = await transport.register("enr_" + "e" * 48, "machine", "1.0.0", {}, [])
+        await transport.report_capabilities(registration.runner_id, registration.agent_token, [])
+        await transport.heartbeat(registration.runner_id, registration.agent_token, "1.0.0", {}, [])
+
+        assert "Authorization" not in transport.requests[0][3]
+        assert set(transport.requests[0][3]) == {"Idempotency-Key"}
+        first_key = transport.requests[0][3]["Idempotency-Key"]
+        await transport.register("enr_" + "e" * 48, "machine", "1.0.0", {}, [])
+        assert transport.requests[-1][3]["Idempotency-Key"] == first_key
+        for _, _, _, headers in transport.requests[1:]:
+            if "X-Runner-Agent-Token" in headers:
+                assert headers == {"X-Runner-Agent-Token": registration.agent_token}
+
+    asyncio.run(scenario())
+
+
+def test_agent_token_is_protected_at_rest(tmp_path: Path) -> None:
+    token = "rat_" + "z" * 48
+    store = AgentCredentialStore(tmp_path / "agent-identity.json")
+    identity = StoredAgentIdentity("R" * 26, token, 2)
+
+    store.save(identity)
+
+    assert token not in (tmp_path / "agent-identity.json").read_text(encoding="utf-8")
+    assert store.load() == identity
+
+
+def test_registration_retries_transient_delivery_failure_with_same_request(tmp_path: Path) -> None:
+    class FlakyRegistrationTransport(RecordingRunnerTransport):
+        def __init__(self) -> None:
+            super().__init__()
+            self.attempts = 0
+
+        async def register(self, *args: object, **kwargs: object) -> RegistrationResult:
+            self.attempts += 1
+            if self.attempts == 1:
+                raise PlatformTransportError(None, "PLATFORM_UNREACHABLE")
+            return await super().register(*args, **kwargs)  # type: ignore[arg-type]
+
+    async def scenario() -> None:
+        transport = FlakyRegistrationTransport()
+        sleeps: list[float] = []
+
+        async def no_wait(delay: float) -> None:
+            sleeps.append(delay)
+
+        app = RunnerApplication(
+            _runtime_settings(tmp_path, enrollment="enr_" + "e" * 48),
+            transport=transport,  # type: ignore[arg-type]
+            credential_store=MemoryCredentialStore(),  # type: ignore[arg-type]
+            sleep=no_wait,
+        )
+        await app.start(runtime_enabled=True)
+        try:
+            assert transport.attempts == 2
+            assert sleeps[0] == 1.0
+        finally:
+            await app.stop()
+
+    asyncio.run(scenario())
+
+
+def test_heartbeat_authentication_failure_reaches_cli_supervisor(tmp_path: Path) -> None:
+    class RevokedTransport(RecordingRunnerTransport):
+        def __init__(self) -> None:
+            super().__init__()
+            self.attempts = 0
+
+        async def heartbeat(self, *args: object, **kwargs: object) -> dict[str, object]:
+            self.attempts += 1
+            if self.attempts > 1:
+                raise PlatformTransportError(401, "RUNNER_AGENT_UNAUTHENTICATED")
+            return await super().heartbeat(*args, **kwargs)  # type: ignore[arg-type]
+
+    async def scenario() -> None:
+        transport = RevokedTransport()
+
+        async def no_wait(_: float) -> None:
+            return None
+
+        app = RunnerApplication(
+            _runtime_settings(tmp_path),
+            transport=transport,  # type: ignore[arg-type]
+            credential_store=MemoryCredentialStore(
+                StoredAgentIdentity("R" * 26, "rat_" + "s" * 48, 3)
+            ),  # type: ignore[arg-type]
+            sleep=no_wait,
+        )
+        await app.start(runtime_enabled=True)
+        try:
+            try:
+                await app.wait_for_runtime_failure()
+            except RuntimeError as error:
+                assert "authentication was rejected" in str(error)
+            else:
+                raise AssertionError("heartbeat authentication failure was swallowed")
+        finally:
+            await app.stop()
+
+    asyncio.run(scenario())

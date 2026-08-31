@@ -1,4 +1,4 @@
-"""Independent P0 Runner Agent without platform business communication."""
+"""Independent Runner Agent Foundation runtime."""
 
 from platform_runner.application import RunnerApplication
 from platform_runner.config import RunnerSettings

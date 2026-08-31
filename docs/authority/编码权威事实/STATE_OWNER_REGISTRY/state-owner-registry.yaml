@@ -8044,115 +8044,106 @@ state_owners:
 - state_dimension_id: SD-EX-001
   object_id: OBJ-052
   object_name: Runner
-  dimension_name: registration_state
-  persistence_field: registration_state
-  owner: DOMAIN_AGGREGATE
+  dimension_name: registration_status
   values:
-  - UNREGISTERED
   - REGISTERED
-  - DEREGISTERED
-  initial_value: UNREGISTERED
+  initial_value: REGISTERED
   terminal_values: []
-  transitions: []
+  persistence_field: registration_status
+  owner: DOMAIN_AGGREGATE
   release_id: PDBR-2026.08.07-R4.2
 - state_dimension_id: SD-EX-002
-  object_id: OBJ-052
-  object_name: Runner
-  dimension_name: authentication_state
-  persistence_field: authentication_state
-  owner: DOMAIN_AGGREGATE
+  object_id: OBJ-089
+  object_name: Runner Agent
+  dimension_name: token_status
   values:
-  - UNAUTHENTICATED
-  - AUTHENTICATED
+  - ACTIVE
   - REVOKED
-  initial_value: UNAUTHENTICATED
-  terminal_values: []
-  transitions: []
+  initial_value: ACTIVE
+  terminal_values:
+  - REVOKED
+  persistence_field: token_status
+  owner: DOMAIN_AGGREGATE
   release_id: PDBR-2026.08.07-R4.2
 - state_dimension_id: SD-EX-003
   object_id: OBJ-052
   object_name: Runner
-  dimension_name: connection_state
-  persistence_field: connection_state
-  owner: DOMAIN_AGGREGATE
+  dimension_name: connection_status
   values:
-  - ONLINE
   - OFFLINE
-  - DISCONNECTED
-  initial_value: ONLINE
+  - CONNECTING
+  - ONLINE
+  - LOST
+  initial_value: OFFLINE
   terminal_values: []
-  transitions: []
+  persistence_field: connection_status
+  owner: DOMAIN_AGGREGATE
   release_id: PDBR-2026.08.07-R4.2
 - state_dimension_id: SD-EX-004
   object_id: OBJ-052
   object_name: Runner
-  dimension_name: health_state
-  persistence_field: health_state
-  owner: DOMAIN_AGGREGATE
+  dimension_name: health_status
   values:
+  - UNKNOWN
   - HEALTHY
   - DEGRADED
   - UNHEALTHY
-  initial_value: HEALTHY
+  initial_value: UNKNOWN
   terminal_values: []
-  transitions: []
+  persistence_field: health_status
+  owner: DOMAIN_AGGREGATE
   release_id: PDBR-2026.08.07-R4.2
 - state_dimension_id: SD-EX-005
   object_id: OBJ-052
   object_name: Runner
-  dimension_name: enablement_state
-  persistence_field: enablement_state
-  owner: DOMAIN_AGGREGATE
+  dimension_name: enable_status
   values:
   - ENABLED
   - DISABLED
-  - DRAINING
-  initial_value: ENABLED
+  initial_value: DISABLED
   terminal_values: []
-  transitions: []
+  persistence_field: enable_status
+  owner: DOMAIN_AGGREGATE
   release_id: PDBR-2026.08.07-R4.2
 - state_dimension_id: SD-EX-006
   object_id: OBJ-052
   object_name: Runner
-  dimension_name: binding_state
-  persistence_field: binding_state
-  owner: DOMAIN_AGGREGATE
+  dimension_name: project_binding_status
   values:
-  - UNBOUND
   - BOUND
-  initial_value: UNBOUND
+  initial_value: BOUND
   terminal_values: []
-  transitions: []
+  persistence_field: project_binding_status
+  owner: DOMAIN_AGGREGATE
   release_id: PDBR-2026.08.07-R4.2
 - state_dimension_id: SD-EX-007
   object_id: OBJ-052
   object_name: Runner
-  dimension_name: scheduling_state
-  persistence_field: scheduling_state
-  owner: DOMAIN_AGGREGATE
+  dimension_name: scheduling_status
   values:
+  - UNSCHEDULABLE
   - IDLE
-  - RESERVED
-  - RUNNING
+  - PARTIALLY_OCCUPIED
+  - BUSY
   - DRAINING
-  initial_value: IDLE
+  initial_value: UNSCHEDULABLE
   terminal_values: []
-  transitions: []
+  persistence_field: scheduling_status
+  owner: DOMAIN_AGGREGATE
   release_id: PDBR-2026.08.07-R4.2
 - state_dimension_id: SD-EX-008
   object_id: OBJ-052
   object_name: Runner
-  dimension_name: resource_state
-  persistence_field: resource_state
-  owner: DOMAIN_AGGREGATE
+  dimension_name: resource_status
   values:
   - AVAILABLE
-  - PARTIALLY_ALLOCATED
-  - FULLY_ALLOCATED
+  - PARTIALLY_OCCUPIED
   - EXHAUSTED
+  - RECLAIMING
   initial_value: AVAILABLE
   terminal_values: []
-  transitions: []
+  persistence_field: resource_status
+  owner: DOMAIN_AGGREGATE
   release_id: PDBR-2026.08.07-R4.2
 - state_dimension_id: SD-EX-009
   object_id: OBJ-035
@@ -9239,178 +9230,14 @@ state_owners:
   persistence_field: lifecycle_status
   owner: DOMAIN_AGGREGATE
   values:
-  - REGISTERING
   - REGISTERED
-  - AUTHENTICATED
-  - BOUND
-  - ENABLED
-  - ONLINE
-  - DEGRADED
-  - UNHEALTHY
-  - OFFLINE
-  - RECOVERING
-  - DRAINING
+  - ACTIVE
   - DISABLED
-  - UNBOUND
-  - DEREGISTERED
   - ARCHIVED
-  initial_value: REGISTERING
+  initial_value: REGISTERED
   terminal_values:
   - ARCHIVED
-  transitions:
-  - transition_id: LCT-00460
-    from: REGISTERING
-    to: REGISTERED
-    permission_requirements:
-    - 由项目成员关系、角色权限点和数据范围交集派生。
-    concurrency_checks:
-    - 修改时校验版本号或等价乐观锁，冲突时拒绝覆盖并返回当前版本。
-    events:
-    - runner.registered
-  - transition_id: LCT-00461
-    from: REGISTERED
-    to: AUTHENTICATED
-    permission_requirements:
-    - 由项目成员关系、角色权限点和数据范围交集派生。
-    concurrency_checks:
-    - 修改时校验版本号或等价乐观锁，冲突时拒绝覆盖并返回当前版本。
-    events:
-    - runner.authenticated
-  - transition_id: LCT-00462
-    from: AUTHENTICATED
-    to: BOUND
-    permission_requirements:
-    - 由项目成员关系、角色权限点和数据范围交集派生。
-    concurrency_checks:
-    - 修改时校验版本号或等价乐观锁，冲突时拒绝覆盖并返回当前版本。
-    events:
-    - runner.bound
-  - transition_id: LCT-00463
-    from: BOUND
-    to: ENABLED
-    permission_requirements:
-    - 由项目成员关系、角色权限点和数据范围交集派生。
-    concurrency_checks:
-    - 修改时校验版本号或等价乐观锁，冲突时拒绝覆盖并返回当前版本。
-    events:
-    - runner.enabled
-  - transition_id: LCT-00464
-    from: ENABLED
-    to: ONLINE
-    permission_requirements:
-    - 由项目成员关系、角色权限点和数据范围交集派生。
-    concurrency_checks:
-    - 修改时校验版本号或等价乐观锁，冲突时拒绝覆盖并返回当前版本。
-    events:
-    - runner.online
-  - transition_id: LCT-00465
-    from: ONLINE
-    to: DEGRADED
-    permission_requirements:
-    - 由项目成员关系、角色权限点和数据范围交集派生。
-    concurrency_checks:
-    - 修改时校验版本号或等价乐观锁，冲突时拒绝覆盖并返回当前版本。
-    events:
-    - runner.degraded
-  - transition_id: LCT-00466
-    from: DEGRADED
-    to: ONLINE
-    permission_requirements:
-    - 由项目成员关系、角色权限点和数据范围交集派生。
-    concurrency_checks:
-    - 修改时校验版本号或等价乐观锁，冲突时拒绝覆盖并返回当前版本。
-    events:
-    - runner.online
-  - transition_id: LCT-00467
-    from: DEGRADED
-    to: UNHEALTHY
-    permission_requirements:
-    - 由项目成员关系、角色权限点和数据范围交集派生。
-    concurrency_checks:
-    - 修改时校验版本号或等价乐观锁，冲突时拒绝覆盖并返回当前版本。
-    events:
-    - runner.unhealthy
-  - transition_id: LCT-00468
-    from: ONLINE
-    to: OFFLINE
-    permission_requirements:
-    - 由项目成员关系、角色权限点和数据范围交集派生。
-    concurrency_checks:
-    - 修改时校验版本号或等价乐观锁，冲突时拒绝覆盖并返回当前版本。
-    events:
-    - runner.offline
-  - transition_id: LCT-00469
-    from: UNHEALTHY
-    to: RECOVERING
-    permission_requirements:
-    - 由项目成员关系、角色权限点和数据范围交集派生。
-    concurrency_checks:
-    - 修改时校验版本号或等价乐观锁，冲突时拒绝覆盖并返回当前版本。
-    events:
-    - runner.recovering
-  - transition_id: LCT-00470
-    from: OFFLINE
-    to: RECOVERING
-    permission_requirements:
-    - 由项目成员关系、角色权限点和数据范围交集派生。
-    concurrency_checks:
-    - 修改时校验版本号或等价乐观锁，冲突时拒绝覆盖并返回当前版本。
-    events:
-    - runner.recovering
-  - transition_id: LCT-00471
-    from: RECOVERING
-    to: ONLINE
-    permission_requirements:
-    - 由项目成员关系、角色权限点和数据范围交集派生。
-    concurrency_checks:
-    - 修改时校验版本号或等价乐观锁，冲突时拒绝覆盖并返回当前版本。
-    events:
-    - runner.online
-  - transition_id: LCT-00472
-    from: ONLINE
-    to: DRAINING
-    permission_requirements:
-    - 由项目成员关系、角色权限点和数据范围交集派生。
-    concurrency_checks:
-    - 修改时校验版本号或等价乐观锁，冲突时拒绝覆盖并返回当前版本。
-    events:
-    - runner.draining
-  - transition_id: LCT-00473
-    from: DRAINING
-    to: DISABLED
-    permission_requirements:
-    - 由项目成员关系、角色权限点和数据范围交集派生。
-    concurrency_checks:
-    - 修改时校验版本号或等价乐观锁，冲突时拒绝覆盖并返回当前版本。
-    events:
-    - runner.disabled
-  - transition_id: LCT-00474
-    from: DISABLED
-    to: UNBOUND
-    permission_requirements:
-    - 由项目成员关系、角色权限点和数据范围交集派生。
-    concurrency_checks:
-    - 修改时校验版本号或等价乐观锁，冲突时拒绝覆盖并返回当前版本。
-    events:
-    - runner.unbound
-  - transition_id: LCT-00475
-    from: UNBOUND
-    to: DEREGISTERED
-    permission_requirements:
-    - 由项目成员关系、角色权限点和数据范围交集派生。
-    concurrency_checks:
-    - 修改时校验版本号或等价乐观锁，冲突时拒绝覆盖并返回当前版本。
-    events:
-    - runner.deregistered
-  - transition_id: LCT-00476
-    from: DEREGISTERED
-    to: ARCHIVED
-    permission_requirements:
-    - 由项目成员关系、角色权限点和数据范围交集派生。
-    concurrency_checks:
-    - 修改时校验版本号或等价乐观锁，冲突时拒绝覆盖并返回当前版本。
-    events:
-    - runner.archived
+  transitions: []
   release_id: PDBR-2026.08.07-R4.2
 - state_dimension_id: R3-LS-007
   object_id: OBJ-061

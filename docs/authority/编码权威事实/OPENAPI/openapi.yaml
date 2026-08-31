@@ -13184,697 +13184,171 @@ paths:
   /api/v1/runner:
     get:
       operationId: list_runner
-      summary: 查询Runner
-      tags:
-      - Runner
+      summary: 查询Project范围内Runner
+      tags: [Runner]
       parameters:
-      - name: X-Correlation-Id
-        in: header
-        required: false
-        schema:
-          type: string
-      - name: page
-        in: query
-        required: false
-        schema:
-          type: integer
-          minimum: 1
-          default: 1
-      - name: page_size
-        in: query
-        required: false
-        schema:
-          type: integer
-          minimum: 1
-          maximum: 200
-          default: 50
-      - name: sort
-        in: query
-        required: false
-        schema:
-          type: string
-          maxLength: 128
-      - name: filter
-        in: query
-        required: false
-        schema:
-          type: string
-          maxLength: 1000
+      - {name: project_id, in: query, required: true, schema: {type: string, minLength: 26, maxLength: 26}}
+      - {name: lifecycle_status, in: query, required: false, schema: {type: string, enum: [REGISTERED, ACTIVE, DISABLED, ARCHIVED]}}
+      - {name: health_status, in: query, required: false, schema: {type: string, enum: [UNKNOWN, HEALTHY, DEGRADED, UNHEALTHY]}}
+      - {name: capability_code, in: query, required: false, schema: {type: string, maxLength: 64}}
+      - {name: page, in: query, required: false, schema: {type: integer, minimum: 1, default: 1}}
+      - {name: page_size, in: query, required: false, schema: {type: integer, minimum: 1, maximum: 200, default: 50}}
+      - {name: X-Correlation-Id, in: header, required: false, schema: {type: string}}
       responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ListRunnerResponse'
-        '400':
-          description: Bad request
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
-          description: Unauthenticated
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '404':
-          description: Not found
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '409':
-          description: Conflict
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '422':
-          $ref: '#/components/responses/RequestValidationFailed'
-        '429':
-          description: Rate limited
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '500':
-          description: Internal error
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '503':
-          description: Service unavailable
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-      x-permission-code: PROJECT_VIEW
-      security:
-      - BearerAuth: []
+        '200': {description: Success, content: {application/json: {schema: {$ref: '#/components/schemas/ListRunnerResponse'}}}}
+        '401': {description: Unauthenticated, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '403': {description: Forbidden, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '422': {$ref: '#/components/responses/RequestValidationFailed'}
+      x-permission-code: RUNNER_REGISTER
+      security: [{BearerAuth: []}]
+  /api/v1/runner-enrollments:
     post:
-      operationId: create_runner
-      summary: 创建Runner
-      tags:
-      - Runner
+      operationId: create_runner_enrollment
+      summary: 为指定Project创建一次性Runner enrollment
+      tags: [Runner]
       parameters:
-      - name: X-Correlation-Id
-        in: header
-        required: false
-        schema:
-          type: string
-      - name: Idempotency-Key
-        in: header
-        required: true
-        schema:
-          type: string
-      responses:
-        '202':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CreateRunnerResponse'
-        '400':
-          description: Bad request
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
-          description: Unauthenticated
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '404':
-          description: Not found
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '409':
-          description: Conflict
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '422':
-          $ref: '#/components/responses/RequestValidationFailed'
-        '429':
-          description: Rate limited
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '500':
-          description: Internal error
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '503':
-          description: Service unavailable
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+      - {name: X-Correlation-Id, in: header, required: false, schema: {type: string}}
+      - {name: Idempotency-Key, in: header, required: true, schema: {type: string, minLength: 1, maxLength: 191}}
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              $ref: '#/components/schemas/CreateRunnerRequest'
-      x-permission-code: PROJECT_EDIT
-      security:
-      - BearerAuth: []
+            schema: {$ref: '#/components/schemas/CreateRunnerEnrollmentRequest'}
+      responses:
+        '201': {description: Enrollment credential is returned once, content: {application/json: {schema: {$ref: '#/components/schemas/CreateRunnerEnrollmentResponse'}}}}
+        '401': {description: Unauthenticated, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '403': {description: Forbidden, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '404': {description: Project not found in authorized scope, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '409': {description: Enrollment or runner_code conflict, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '422': {$ref: '#/components/responses/RequestValidationFailed'}
+      x-permission-code: RUNNER_BIND
+      security: [{BearerAuth: []}]
   /api/v1/runner/{id}:
     get:
       operationId: get_runner
       summary: 查看Runner
-      tags:
-      - Runner
+      tags: [Runner]
       parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          minLength: 1
-      - name: X-Correlation-Id
-        in: header
-        required: false
-        schema:
-          type: string
+      - {name: id, in: path, required: true, schema: {type: string, minLength: 26, maxLength: 26}}
+      - {name: X-Correlation-Id, in: header, required: false, schema: {type: string}}
       responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GetRunnerResponse'
-        '400':
-          description: Bad request
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
-          description: Unauthenticated
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '404':
-          description: Not found
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '409':
-          description: Conflict
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '422':
-          $ref: '#/components/responses/RequestValidationFailed'
-        '429':
-          description: Rate limited
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '500':
-          description: Internal error
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '503':
-          description: Service unavailable
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-      x-permission-code: PROJECT_VIEW
-      security:
-      - BearerAuth: []
+        '200': {description: Success, content: {application/json: {schema: {$ref: '#/components/schemas/GetRunnerResponse'}}}}
+        '401': {description: Unauthenticated, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '403': {description: Forbidden, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '404': {description: Not found in authorized Project scope, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '422': {$ref: '#/components/responses/RequestValidationFailed'}
+      x-permission-code: RUNNER_REGISTER
+      security: [{BearerAuth: []}]
     patch:
       operationId: update_runner
-      summary: 更新Runner
-      tags:
-      - Runner
+      summary: 更新Runner可编辑显示元数据
+      tags: [Runner]
       parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          minLength: 1
-      - name: X-Correlation-Id
-        in: header
-        required: false
-        schema:
-          type: string
-      - name: Idempotency-Key
-        in: header
-        required: true
-        schema:
-          type: string
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/UpdateRunnerResponse'
-        '400':
-          description: Bad request
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
-          description: Unauthenticated
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '404':
-          description: Not found
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '409':
-          description: Conflict
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '422':
-          $ref: '#/components/responses/RequestValidationFailed'
-        '429':
-          description: Rate limited
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '500':
-          description: Internal error
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '503':
-          description: Service unavailable
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+      - {name: id, in: path, required: true, schema: {type: string, minLength: 26, maxLength: 26}}
+      - {name: X-Correlation-Id, in: header, required: false, schema: {type: string}}
+      - {name: Idempotency-Key, in: header, required: true, schema: {type: string, minLength: 1, maxLength: 191}}
       requestBody:
         required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UpdateRunnerRequest'
-      x-permission-code: PROJECT_EDIT
-      security:
-      - BearerAuth: []
-  /api/v1/runner-capability:
-    get:
-      operationId: list_runner_capability
-      summary: 查询Runner能力
-      tags:
-      - Runner能力
-      parameters:
-      - name: X-Correlation-Id
-        in: header
-        required: false
-        schema:
-          type: string
-      - name: page
-        in: query
-        required: false
-        schema:
-          type: integer
-          minimum: 1
-          default: 1
-      - name: page_size
-        in: query
-        required: false
-        schema:
-          type: integer
-          minimum: 1
-          maximum: 200
-          default: 50
-      - name: sort
-        in: query
-        required: false
-        schema:
-          type: string
-          maxLength: 128
-      - name: filter
-        in: query
-        required: false
-        schema:
-          type: string
-          maxLength: 1000
+        content: {application/json: {schema: {$ref: '#/components/schemas/UpdateRunnerRequest'}}}
       responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ListRunnerCapabilityResponse'
-        '400':
-          description: Bad request
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
-          description: Unauthenticated
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '404':
-          description: Not found
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '409':
-          description: Conflict
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '422':
-          $ref: '#/components/responses/RequestValidationFailed'
-        '429':
-          description: Rate limited
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '500':
-          description: Internal error
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '503':
-          description: Service unavailable
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-      x-permission-code: PROJECT_VIEW
-      security:
-      - BearerAuth: []
+        '200': {description: Success, content: {application/json: {schema: {$ref: '#/components/schemas/GetRunnerResponse'}}}}
+        '401': {description: Unauthenticated, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '403': {description: Forbidden, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '404': {description: Not found in authorized Project scope, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '409': {description: Concurrency or lifecycle conflict, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '422': {$ref: '#/components/responses/RequestValidationFailed'}
+      x-permission-code: RUNNER_REGISTER
+      security: [{BearerAuth: []}]
+  /api/v1/runner/{id}/enable:
     post:
-      operationId: create_runner_capability
-      summary: 创建Runner能力
-      tags:
-      - Runner能力
+      operationId: enable_runner
+      summary: 启用Runner
+      tags: [Runner]
       parameters:
-      - name: X-Correlation-Id
-        in: header
-        required: false
-        schema:
-          type: string
-      - name: Idempotency-Key
-        in: header
-        required: true
-        schema:
-          type: string
+      - {name: id, in: path, required: true, schema: {type: string, minLength: 26, maxLength: 26}}
+      - {name: Idempotency-Key, in: header, required: true, schema: {type: string, minLength: 1, maxLength: 191}}
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/RunnerLifecycleRequest'}}}}
       responses:
-        '202':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CreateRunnerCapabilityResponse'
-        '400':
-          description: Bad request
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
-          description: Unauthenticated
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '404':
-          description: Not found
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '409':
-          description: Conflict
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '422':
-          $ref: '#/components/responses/RequestValidationFailed'
-        '429':
-          description: Rate limited
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '500':
-          description: Internal error
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '503':
-          description: Service unavailable
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateRunnerCapabilityRequest'
-      x-permission-code: PROJECT_EDIT
-      security:
-      - BearerAuth: []
-  /api/v1/runner-capability/{id}:
-    get:
-      operationId: get_runner_capability
-      summary: 查看Runner能力
-      tags:
-      - Runner能力
+        '200': {description: Success, content: {application/json: {schema: {$ref: '#/components/schemas/GetRunnerResponse'}}}}
+        '401': {description: Unauthenticated, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '403': {description: Forbidden, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '404': {description: Not found, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '409': {description: State conflict, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '422': {$ref: '#/components/responses/RequestValidationFailed'}
+      x-permission-code: RUNNER_REGISTER
+      security: [{BearerAuth: []}]
+  /api/v1/runner/{id}/disable:
+    post:
+      operationId: disable_runner
+      summary: 停用Runner
+      tags: [Runner]
       parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          minLength: 1
-      - name: X-Correlation-Id
-        in: header
-        required: false
-        schema:
-          type: string
+      - {name: id, in: path, required: true, schema: {type: string, minLength: 26, maxLength: 26}}
+      - {name: Idempotency-Key, in: header, required: true, schema: {type: string, minLength: 1, maxLength: 191}}
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/RunnerLifecycleRequest'}}}}
       responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GetRunnerCapabilityResponse'
-        '400':
-          description: Bad request
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
-          description: Unauthenticated
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '404':
-          description: Not found
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '409':
-          description: Conflict
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '422':
-          $ref: '#/components/responses/RequestValidationFailed'
-        '429':
-          description: Rate limited
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '500':
-          description: Internal error
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '503':
-          description: Service unavailable
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-      x-permission-code: PROJECT_VIEW
-      security:
-      - BearerAuth: []
-    patch:
-      operationId: update_runner_capability
-      summary: 更新Runner能力
-      tags:
-      - Runner能力
+        '200': {description: Success, content: {application/json: {schema: {$ref: '#/components/schemas/GetRunnerResponse'}}}}
+        '401': {description: Unauthenticated, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '403': {description: Forbidden, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '404': {description: Not found, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '409': {description: State conflict, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '422': {$ref: '#/components/responses/RequestValidationFailed'}
+      x-permission-code: RUNNER_REGISTER
+      security: [{BearerAuth: []}]
+  /api/v1/runner/{id}/archive:
+    post:
+      operationId: archive_runner
+      summary: 归档Runner
+      tags: [Runner]
       parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          minLength: 1
-      - name: X-Correlation-Id
-        in: header
-        required: false
-        schema:
-          type: string
-      - name: Idempotency-Key
-        in: header
-        required: true
-        schema:
-          type: string
+      - {name: id, in: path, required: true, schema: {type: string, minLength: 26, maxLength: 26}}
+      - {name: Idempotency-Key, in: header, required: true, schema: {type: string, minLength: 1, maxLength: 191}}
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/RunnerLifecycleRequest'}}}}
       responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/UpdateRunnerCapabilityResponse'
-        '400':
-          description: Bad request
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
-          description: Unauthenticated
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '404':
-          description: Not found
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '409':
-          description: Conflict
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '422':
-          $ref: '#/components/responses/RequestValidationFailed'
-        '429':
-          description: Rate limited
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '500':
-          description: Internal error
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '503':
-          description: Service unavailable
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UpdateRunnerCapabilityRequest'
-      x-permission-code: PROJECT_EDIT
-      security:
-      - BearerAuth: []
+        '200': {description: Success, content: {application/json: {schema: {$ref: '#/components/schemas/GetRunnerResponse'}}}}
+        '401': {description: Unauthenticated, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '403': {description: Forbidden, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '404': {description: Not found, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '409': {description: State conflict, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '422': {$ref: '#/components/responses/RequestValidationFailed'}
+      x-permission-code: RUNNER_REGISTER
+      security: [{BearerAuth: []}]
+  /api/v1/runner/{id}/agent-token/rotate:
+    post:
+      operationId: rotate_runner_agent_token
+      summary: 轮换Runner Agent token
+      tags: [Runner]
+      parameters:
+      - {name: id, in: path, required: true, schema: {type: string, minLength: 26, maxLength: 26}}
+      - {name: Idempotency-Key, in: header, required: true, schema: {type: string, minLength: 1, maxLength: 191}}
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/RunnerLifecycleRequest'}}}}
+      responses:
+        '200': {description: New token is returned once, content: {application/json: {schema: {$ref: '#/components/schemas/RotateRunnerAgentTokenResponse'}}}}
+        '401': {description: Unauthenticated, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '403': {description: Forbidden, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '404': {description: Not found, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '409': {description: State conflict, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '422': {$ref: '#/components/responses/RequestValidationFailed'}
+      x-permission-code: RUNNER_REGISTER
+      security: [{BearerAuth: []}]
+  /api/v1/runner/{id}/agent-token/revoke:
+    post:
+      operationId: revoke_runner_agent_token
+      summary: 撤销Runner Agent token
+      tags: [Runner]
+      parameters:
+      - {name: id, in: path, required: true, schema: {type: string, minLength: 26, maxLength: 26}}
+      - {name: Idempotency-Key, in: header, required: true, schema: {type: string, minLength: 1, maxLength: 191}}
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/RunnerLifecycleRequest'}}}}
+      responses:
+        '200': {description: Success, content: {application/json: {schema: {$ref: '#/components/schemas/GetRunnerResponse'}}}}
+        '401': {description: Unauthenticated, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '403': {description: Forbidden, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '404': {description: Not found, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '409': {description: State conflict, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '422': {$ref: '#/components/responses/RequestValidationFailed'}
+      x-permission-code: RUNNER_REGISTER
+      security: [{BearerAuth: []}]
   /api/v1/execution-slot:
     get:
       operationId: list_execution_slot
@@ -21663,175 +21137,55 @@ paths:
   /api/v1/runners/register:
     post:
       operationId: register_runner
-      summary: Runner注册
-      tags:
-      - Critical
+      summary: 使用一次性enrollment credential注册Runner Agent
+      tags: [Runner Agent]
       parameters:
-      - name: X-Correlation-Id
-        in: header
-        required: false
-        schema:
-          type: string
-      - name: Idempotency-Key
-        in: header
-        required: true
-        schema:
-          type: string
+      - {name: X-Correlation-Id, in: header, required: false, schema: {type: string}}
+      - {name: Idempotency-Key, in: header, required: true, schema: {type: string, minLength: 1, maxLength: 191}}
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/RegisterRunnerRequest'}}}}
       responses:
-        '201':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RegisterRunnerResponse'
-        '400':
-          description: Bad request
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
-          description: Unauthenticated
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '404':
-          description: Not found
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '409':
-          description: Conflict
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '422':
-          $ref: '#/components/responses/RequestValidationFailed'
-        '429':
-          description: Rate limited
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '500':
-          description: Internal error
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '503':
-          description: Service unavailable
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/RegisterRunnerRequest'
-      x-permission-code: PROJECT_EDIT
-      security:
-      - BearerAuth: []
+        '201': {description: Agent token is returned once, content: {application/json: {schema: {$ref: '#/components/schemas/RegisterRunnerResponse'}}}}
+        '401': {description: Invalid or consumed enrollment credential, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '409': {description: Duplicate identity or runner_code conflict, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '422': {$ref: '#/components/responses/RequestValidationFailed'}
+      x-machine-auth: EnrollmentCredential
+      security: []
   /api/v1/runners/{id}/heartbeat:
     post:
       operationId: heartbeat_runner
-      summary: Runner心跳
-      tags:
-      - Critical
+      summary: Runner Agent心跳
+      tags: [Runner Agent]
       parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          minLength: 1
-      - name: X-Correlation-Id
-        in: header
-        required: false
-        schema:
-          type: string
-      - name: Idempotency-Key
-        in: header
-        required: true
-        schema:
-          type: string
+      - {name: id, in: path, required: true, schema: {type: string, minLength: 26, maxLength: 26}}
+      - {name: X-Correlation-Id, in: header, required: false, schema: {type: string}}
+      - {name: X-Runner-Agent-Token, in: header, required: true, schema: {type: string, minLength: 32, maxLength: 512}}
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/HeartbeatRunnerRequest'}}}}
       responses:
-        '201':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HeartbeatRunnerResponse'
-        '400':
-          description: Bad request
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
-          description: Unauthenticated
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '404':
-          description: Not found
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '409':
-          description: Conflict
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '422':
-          $ref: '#/components/responses/RequestValidationFailed'
-        '429':
-          description: Rate limited
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '500':
-          description: Internal error
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '503':
-          description: Service unavailable
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/HeartbeatRunnerRequest'
-      x-permission-code: PROJECT_EDIT
-      security:
-      - BearerAuth: []
+        '200': {description: Success, content: {application/json: {schema: {$ref: '#/components/schemas/HeartbeatRunnerResponse'}}}}
+        '401': {description: Invalid or revoked Agent token, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '404': {description: Runner not found, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '409': {description: Archived Runner or machine identity conflict, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '422': {$ref: '#/components/responses/RequestValidationFailed'}
+      x-machine-auth: RunnerAgentToken
+      security: [{AgentTokenAuth: []}]
+  /api/v1/runners/{id}/capabilities:
+    post:
+      operationId: report_runner_capabilities
+      summary: Runner Agent能力上报
+      tags: [Runner Agent]
+      parameters:
+      - {name: id, in: path, required: true, schema: {type: string, minLength: 26, maxLength: 26}}
+      - {name: X-Correlation-Id, in: header, required: false, schema: {type: string}}
+      - {name: X-Runner-Agent-Token, in: header, required: true, schema: {type: string, minLength: 32, maxLength: 512}}
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ReportRunnerCapabilitiesRequest'}}}}
+      responses:
+        '200': {description: Success, content: {application/json: {schema: {$ref: '#/components/schemas/HeartbeatRunnerResponse'}}}}
+        '401': {description: Invalid or revoked Agent token, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '404': {description: Runner not found, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '409': {description: Archived Runner or machine identity conflict, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '422': {$ref: '#/components/responses/RequestValidationFailed'}
+      x-machine-auth: RunnerAgentToken
+      security: [{AgentTokenAuth: []}]
   /api/v1/runners/{id}/claim:
     post:
       operationId: claim_runner_task
@@ -26457,268 +25811,47 @@ components:
         created_at: '2026-08-06T06:46:00Z'
         updated_at: '2026-08-06T06:46:00Z'
         lifecycle_status: CREATED
-    RunnerResource:
-      type: object
-      additionalProperties: false
-      properties:
-        runner_id:
-          type: string
-          minLength: 26
-          maxLength: 26
-        display_name:
-          type:
-          - string
-          - 'null'
-          maxLength: 255
-        row_version:
-          type: integer
-          minimum: 0
-        created_at:
-          type: string
-          format: date-time
-        updated_at:
-          type: string
-          format: date-time
-        runner_code:
-          type:
-          - string
-          - 'null'
-          maxLength: 191
-        runner_project_binding_id:
-          type:
-          - string
-          - 'null'
-          minLength: 26
-          maxLength: 26
-        project_id:
-          type:
-          - string
-          - 'null'
-          minLength: 26
-          maxLength: 26
-        health_status:
-          type: string
-          enum:
-          - DEGRADED
-          - HEALTHY
-          - OFFLINE
-          - UNHEALTHY
-          - UNKNOWN
-        scheduling_status:
-          type: string
-          enum:
-          - DISABLED
-          - DRAINING
-          - ENABLED
-        registration_state:
-          type: string
-          enum:
-          - UNREGISTERED
-          - REGISTERED
-          - DEREGISTERED
-        authentication_state:
-          type: string
-          enum:
-          - UNAUTHENTICATED
-          - AUTHENTICATED
-          - REVOKED
-        connection_state:
-          type: string
-          enum:
-          - ONLINE
-          - OFFLINE
-          - DISCONNECTED
-        health_state:
-          type: string
-          enum:
-          - HEALTHY
-          - DEGRADED
-          - UNHEALTHY
-        enablement_state:
-          type: string
-          enum:
-          - ENABLED
-          - DISABLED
-          - DRAINING
-        binding_state:
-          type: string
-          enum:
-          - UNBOUND
-          - BOUND
-        scheduling_state:
-          type: string
-          enum:
-          - IDLE
-          - RESERVED
-          - RUNNING
-          - DRAINING
-        resource_state:
-          type: string
-          enum:
-          - AVAILABLE
-          - PARTIALLY_ALLOCATED
-          - FULLY_ALLOCATED
-          - EXHAUSTED
-        lifecycle_status:
-          type: string
-          enum:
-          - REGISTERING
-          - REGISTERED
-          - AUTHENTICATED
-          - BOUND
-          - ENABLED
-          - ONLINE
-          - DEGRADED
-          - UNHEALTHY
-          - OFFLINE
-          - RECOVERING
-          - DRAINING
-          - DISABLED
-          - UNBOUND
-          - DEREGISTERED
-          - ARCHIVED
-      required:
-      - runner_id
-      - row_version
-      - created_at
-      - updated_at
-      - health_status
-      - scheduling_status
-      - registration_state
-      - authentication_state
-      - connection_state
-      - health_state
-      - enablement_state
-      - binding_state
-      - scheduling_state
-      - resource_state
-      - lifecycle_status
-      example:
-        runner_id: 01J00000000000000000000000
-        row_version: 0
-        created_at: '2026-08-06T06:46:00Z'
-        updated_at: '2026-08-06T06:46:00Z'
-        health_status: DEGRADED
-        scheduling_status: DISABLED
-        registration_state: UNREGISTERED
-        authentication_state: UNAUTHENTICATED
-        connection_state: ONLINE
-        health_state: HEALTHY
-        enablement_state: ENABLED
-        binding_state: UNBOUND
-        scheduling_state: IDLE
-        resource_state: AVAILABLE
-        lifecycle_status: REGISTERING
     RunnerCapabilityResource:
       type: object
       additionalProperties: false
+      required: [runner_capability_id, capability_code, capability_type, availability_status, validation_status, lifecycle_status, reported_at]
       properties:
-        runner_capability_id:
-          type: string
-          minLength: 26
-          maxLength: 26
-        display_name:
-          type:
-          - string
-          - 'null'
-          maxLength: 255
-        row_version:
-          type: integer
-          minimum: 0
-        created_at:
-          type: string
-          format: date-time
-        updated_at:
-          type: string
-          format: date-time
-        runner_id:
-          type:
-          - string
-          - 'null'
-          minLength: 26
-          maxLength: 26
+        runner_capability_id: {type: string, minLength: 26, maxLength: 26}
         capability_code:
-          type:
-          - string
-          - 'null'
-          maxLength: 191
-        lifecycle_status:
           type: string
-          enum:
-          - CREATED
-          - DRAFT
-          - ACTIVE
-          - DISABLED
-          - RECOVERED
-          - ARCHIVED
-          - LOGICALLY_DELETED
-      required:
-      - runner_capability_id
-      - row_version
-      - created_at
-      - updated_at
-      - lifecycle_status
-      example:
-        runner_capability_id: 01J00000000000000000000000
-        row_version: 0
-        created_at: '2026-08-06T06:46:00Z'
-        updated_at: '2026-08-06T06:46:00Z'
-        lifecycle_status: CREATED
-    RunnerProjectBindingResource:
+          enum: [BROWSER_CHROMIUM, BROWSER_CHROME, BROWSER_EDGE, MODE_HEADED, MODE_HEADLESS, TERMINAL_ADMIN_WEB, TERMINAL_CLIENT_WEB, TERMINAL_PDA_WEB, SINGLE_TERMINAL, CROSS_TERMINAL, CAPTURE_SCREENSHOT, CAPTURE_VIDEO, CAPTURE_TRACE, NETWORK_RESPONSE_LISTEN, INTRANET_ACCESS, PROXY_ACCESS, FILE_TRANSFER, MANUAL_RECORDING, AI_EXPLORATION, FORMAL_EXECUTION, LOCAL_ARTIFACT_CACHE, PLAYWRIGHT_VERSION, AGENT_VERSION, CONTEXT_ISOLATION]
+        capability_type: {type: string, enum: [BROWSER, SESSION, TERMINAL, FLOW, ARTIFACT, NETWORK, IO, STORAGE, VERSION, SECURITY]}
+        availability_status: {type: string, enum: [CONFIGURED, NOT_CONFIGURED]}
+        validation_status: {type: string, enum: [PENDING, VALID, INVALID]}
+        observed_version: {type: [string, 'null'], maxLength: 64}
+        observed_metadata: {type: [object, 'null'], additionalProperties: true}
+        lifecycle_status: {type: string, enum: [ACTIVE, DISABLED]}
+        reported_at: {type: string, format: date-time}
+    RunnerResource:
       type: object
       additionalProperties: false
+      required: [runner_id, project_id, runner_code, lifecycle_status, registration_status, connection_status, health_status, enable_status, project_binding_status, scheduling_status, resource_status, version_compatibility, capabilities, registered_at, row_version, created_at, updated_at]
       properties:
-        runner_project_binding_id:
-          type: string
-          minLength: 26
-          maxLength: 26
-        display_name:
-          type:
-          - string
-          - 'null'
-          maxLength: 255
-        row_version:
-          type: integer
-          minimum: 0
-        created_at:
-          type: string
-          format: date-time
-        updated_at:
-          type: string
-          format: date-time
-        runner_id:
-          type:
-          - string
-          - 'null'
-          minLength: 26
-          maxLength: 26
-        effective_at:
-          type:
-          - string
-          - 'null'
-          maxLength: 191
-        lifecycle_status:
-          type: string
-          enum:
-          - CREATED
-          - DRAFT
-          - ACTIVE
-          - DISABLED
-          - RECOVERED
-          - ARCHIVED
-          - LOGICALLY_DELETED
-      required:
-      - runner_project_binding_id
-      - row_version
-      - created_at
-      - updated_at
-      - lifecycle_status
-      example:
-        runner_project_binding_id: 01J00000000000000000000000
-        row_version: 0
-        created_at: '2026-08-06T06:46:00Z'
-        updated_at: '2026-08-06T06:46:00Z'
-        lifecycle_status: CREATED
+        runner_id: {type: string, minLength: 26, maxLength: 26}
+        project_id: {type: string, minLength: 26, maxLength: 26}
+        runner_code: {type: string, minLength: 1, maxLength: 191, readOnly: true}
+        display_name: {type: [string, 'null'], maxLength: 255}
+        lifecycle_status: {type: string, enum: [REGISTERED, ACTIVE, DISABLED, ARCHIVED]}
+        registration_status: {type: string, enum: [REGISTERED]}
+        connection_status: {type: string, enum: [OFFLINE, CONNECTING, ONLINE, LOST]}
+        health_status: {type: string, enum: [UNKNOWN, HEALTHY, DEGRADED, UNHEALTHY]}
+        enable_status: {type: string, enum: [ENABLED, DISABLED]}
+        project_binding_status: {type: string, enum: [BOUND]}
+        scheduling_status: {type: string, enum: [UNSCHEDULABLE, IDLE, PARTIALLY_OCCUPIED, BUSY, DRAINING]}
+        resource_status: {type: string, enum: [AVAILABLE, PARTIALLY_OCCUPIED, EXHAUSTED, RECLAIMING]}
+        version_compatibility: {type: string, enum: [UNKNOWN, COMPATIBLE, INCOMPATIBLE, UPGRADE_REQUIRED]}
+        last_heartbeat_at: {type: [string, 'null'], format: date-time}
+        registered_at: {type: string, format: date-time}
+        runtime_metadata: {type: [object, 'null'], additionalProperties: true}
+        capabilities: {type: array, items: {$ref: '#/components/schemas/RunnerCapabilityResource'}}
+        row_version: {type: integer, minimum: 0}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
     ExecutionSlotResource:
       type: object
       additionalProperties: false
@@ -33873,427 +33006,76 @@ components:
     ListRunnerResponse:
       type: object
       additionalProperties: false
-      required:
-      - items
-      - page
+      required: [items, page]
       properties:
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/RunnerResource'
-        page:
-          $ref: '#/components/schemas/PageMeta'
-      example:
-        items: []
-        page:
-          page: 1
-          page_size: 1
-          total: 0
-    CreateRunnerRequest:
+        items: {type: array, items: {$ref: '#/components/schemas/RunnerResource'}}
+        page: {$ref: '#/components/schemas/PageMeta'}
+    CreateRunnerEnrollmentRequest:
       type: object
       additionalProperties: false
+      required: [project_id, runner_code, reason]
       properties:
-        expected_version:
-          type: integer
-          minimum: 0
-        reason:
-          type:
-          - string
-          - 'null'
-          maxLength: 1000
-        runner_id:
-          type: string
-          minLength: 26
-          maxLength: 26
-        display_name:
-          type:
-          - string
-          - 'null'
-          maxLength: 255
-        runner_code:
-          type:
-          - string
-          - 'null'
-          maxLength: 191
-        runner_project_binding_id:
-          type:
-          - string
-          - 'null'
-          minLength: 26
-          maxLength: 26
-        project_id:
-          type:
-          - string
-          - 'null'
-          minLength: 26
-          maxLength: 26
-        registration_state:
-          type: string
-          enum:
-          - UNREGISTERED
-          - REGISTERED
-          - DEREGISTERED
-        authentication_state:
-          type: string
-          enum:
-          - UNAUTHENTICATED
-          - AUTHENTICATED
-          - REVOKED
-        connection_state:
-          type: string
-          enum:
-          - ONLINE
-          - OFFLINE
-          - DISCONNECTED
-        health_state:
-          type: string
-          enum:
-          - HEALTHY
-          - DEGRADED
-          - UNHEALTHY
-        enablement_state:
-          type: string
-          enum:
-          - ENABLED
-          - DISABLED
-          - DRAINING
-        binding_state:
-          type: string
-          enum:
-          - UNBOUND
-          - BOUND
-        scheduling_state:
-          type: string
-          enum:
-          - IDLE
-          - RESERVED
-          - RUNNING
-          - DRAINING
-        resource_state:
-          type: string
-          enum:
-          - AVAILABLE
-          - PARTIALLY_ALLOCATED
-          - FULLY_ALLOCATED
-          - EXHAUSTED
-      required: []
-      example: {}
-    CreateRunnerResponse:
+        project_id: {type: string, minLength: 26, maxLength: 26}
+        runner_code: {type: string, minLength: 1, maxLength: 191}
+        display_name: {type: [string, 'null'], maxLength: 255}
+        reason: {type: string, minLength: 1, maxLength: 1000}
+    RunnerEnrollmentIssuedResource:
       type: object
       additionalProperties: false
-      required:
-      - data
-      - correlation_id
+      required: [enrollment_id, project_id, runner_code, enrollment_status, enrollment_credential, row_version, created_at]
       properties:
-        data:
-          $ref: '#/components/schemas/RunnerResource'
-        correlation_id:
-          type: string
-      example:
-        data:
-          runner_id: 01J00000000000000000000000
-          row_version: 0
-          created_at: '2026-08-06T06:46:00Z'
-          updated_at: '2026-08-06T06:46:00Z'
-          health_status: DEGRADED
-          scheduling_status: DISABLED
-          registration_state: UNREGISTERED
-          authentication_state: UNAUTHENTICATED
-          connection_state: ONLINE
-          health_state: HEALTHY
-          enablement_state: ENABLED
-          binding_state: UNBOUND
-          scheduling_state: IDLE
-          resource_state: AVAILABLE
-          lifecycle_status: REGISTERING
-        correlation_id: example
+        enrollment_id: {type: string, minLength: 26, maxLength: 26}
+        project_id: {type: string, minLength: 26, maxLength: 26}
+        runner_code: {type: string, minLength: 1, maxLength: 191}
+        display_name: {type: [string, 'null'], maxLength: 255}
+        enrollment_status: {type: string, enum: [PENDING]}
+        enrollment_credential: {type: string, minLength: 32, maxLength: 512, writeOnly: true}
+        row_version: {type: integer, minimum: 1}
+        created_at: {type: string, format: date-time}
+    CreateRunnerEnrollmentResponse:
+      type: object
+      additionalProperties: false
+      required: [data, correlation_id]
+      properties:
+        data: {$ref: '#/components/schemas/RunnerEnrollmentIssuedResource'}
+        correlation_id: {type: string}
     GetRunnerResponse:
       type: object
       additionalProperties: false
-      required:
-      - data
-      - correlation_id
+      required: [data, correlation_id]
       properties:
-        data:
-          $ref: '#/components/schemas/RunnerResource'
-        correlation_id:
-          type: string
-      example:
-        data:
-          runner_id: 01J00000000000000000000000
-          row_version: 0
-          created_at: '2026-08-06T06:46:00Z'
-          updated_at: '2026-08-06T06:46:00Z'
-          health_status: DEGRADED
-          scheduling_status: DISABLED
-          registration_state: UNREGISTERED
-          authentication_state: UNAUTHENTICATED
-          connection_state: ONLINE
-          health_state: HEALTHY
-          enablement_state: ENABLED
-          binding_state: UNBOUND
-          scheduling_state: IDLE
-          resource_state: AVAILABLE
-          lifecycle_status: REGISTERING
-        correlation_id: example
+        data: {$ref: '#/components/schemas/RunnerResource'}
+        correlation_id: {type: string}
     UpdateRunnerRequest:
       type: object
       additionalProperties: false
+      required: [expected_version, reason]
       properties:
-        expected_version:
-          type: integer
-          minimum: 0
-        reason:
-          type:
-          - string
-          - 'null'
-          maxLength: 1000
-        display_name:
-          type:
-          - string
-          - 'null'
-          maxLength: 255
-        runner_code:
-          type:
-          - string
-          - 'null'
-          maxLength: 191
-        runner_project_binding_id:
-          type:
-          - string
-          - 'null'
-          minLength: 26
-          maxLength: 26
-        project_id:
-          type:
-          - string
-          - 'null'
-          minLength: 26
-          maxLength: 26
-        registration_state:
-          type: string
-          enum:
-          - UNREGISTERED
-          - REGISTERED
-          - DEREGISTERED
-        authentication_state:
-          type: string
-          enum:
-          - UNAUTHENTICATED
-          - AUTHENTICATED
-          - REVOKED
-        connection_state:
-          type: string
-          enum:
-          - ONLINE
-          - OFFLINE
-          - DISCONNECTED
-        health_state:
-          type: string
-          enum:
-          - HEALTHY
-          - DEGRADED
-          - UNHEALTHY
-        enablement_state:
-          type: string
-          enum:
-          - ENABLED
-          - DISABLED
-          - DRAINING
-        binding_state:
-          type: string
-          enum:
-          - UNBOUND
-          - BOUND
-        scheduling_state:
-          type: string
-          enum:
-          - IDLE
-          - RESERVED
-          - RUNNING
-          - DRAINING
-        resource_state:
-          type: string
-          enum:
-          - AVAILABLE
-          - PARTIALLY_ALLOCATED
-          - FULLY_ALLOCATED
-          - EXHAUSTED
-      required:
-      - expected_version
-      example:
-        expected_version: 0
-    UpdateRunnerResponse:
+        expected_version: {type: integer, minimum: 0}
+        display_name: {type: [string, 'null'], maxLength: 255}
+        reason: {type: string, minLength: 1, maxLength: 1000}
+    RunnerLifecycleRequest:
       type: object
       additionalProperties: false
-      required:
-      - data
-      - correlation_id
+      required: [expected_version, reason]
       properties:
-        data:
-          $ref: '#/components/schemas/RunnerResource'
-        correlation_id:
-          type: string
-      example:
-        data:
-          runner_id: 01J00000000000000000000000
-          row_version: 0
-          created_at: '2026-08-06T06:46:00Z'
-          updated_at: '2026-08-06T06:46:00Z'
-          health_status: DEGRADED
-          scheduling_status: DISABLED
-          registration_state: UNREGISTERED
-          authentication_state: UNAUTHENTICATED
-          connection_state: ONLINE
-          health_state: HEALTHY
-          enablement_state: ENABLED
-          binding_state: UNBOUND
-          scheduling_state: IDLE
-          resource_state: AVAILABLE
-          lifecycle_status: REGISTERING
-        correlation_id: example
-    ListRunnerCapabilityResponse:
+        expected_version: {type: integer, minimum: 0}
+        reason: {type: string, minLength: 1, maxLength: 1000}
+    RotateRunnerAgentTokenData:
       type: object
       additionalProperties: false
-      required:
-      - items
-      - page
+      required: [runner, agent_token, token_version]
       properties:
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/RunnerCapabilityResource'
-        page:
-          $ref: '#/components/schemas/PageMeta'
-      example:
-        items: []
-        page:
-          page: 1
-          page_size: 1
-          total: 0
-    CreateRunnerCapabilityRequest:
+        runner: {$ref: '#/components/schemas/RunnerResource'}
+        agent_token: {type: string, minLength: 32, maxLength: 512, writeOnly: true}
+        token_version: {type: integer, minimum: 2}
+    RotateRunnerAgentTokenResponse:
       type: object
       additionalProperties: false
+      required: [data, correlation_id]
       properties:
-        expected_version:
-          type: integer
-          minimum: 0
-        reason:
-          type:
-          - string
-          - 'null'
-          maxLength: 1000
-        runner_capability_id:
-          type: string
-          minLength: 26
-          maxLength: 26
-        display_name:
-          type:
-          - string
-          - 'null'
-          maxLength: 255
-        runner_id:
-          type:
-          - string
-          - 'null'
-          minLength: 26
-          maxLength: 26
-        capability_code:
-          type:
-          - string
-          - 'null'
-          maxLength: 191
-      required: []
-      example: {}
-    CreateRunnerCapabilityResponse:
-      type: object
-      additionalProperties: false
-      required:
-      - data
-      - correlation_id
-      properties:
-        data:
-          $ref: '#/components/schemas/RunnerCapabilityResource'
-        correlation_id:
-          type: string
-      example:
-        data:
-          runner_capability_id: 01J00000000000000000000000
-          row_version: 0
-          created_at: '2026-08-06T06:46:00Z'
-          updated_at: '2026-08-06T06:46:00Z'
-          lifecycle_status: CREATED
-        correlation_id: example
-    GetRunnerCapabilityResponse:
-      type: object
-      additionalProperties: false
-      required:
-      - data
-      - correlation_id
-      properties:
-        data:
-          $ref: '#/components/schemas/RunnerCapabilityResource'
-        correlation_id:
-          type: string
-      example:
-        data:
-          runner_capability_id: 01J00000000000000000000000
-          row_version: 0
-          created_at: '2026-08-06T06:46:00Z'
-          updated_at: '2026-08-06T06:46:00Z'
-          lifecycle_status: CREATED
-        correlation_id: example
-    UpdateRunnerCapabilityRequest:
-      type: object
-      additionalProperties: false
-      properties:
-        expected_version:
-          type: integer
-          minimum: 0
-        reason:
-          type:
-          - string
-          - 'null'
-          maxLength: 1000
-        display_name:
-          type:
-          - string
-          - 'null'
-          maxLength: 255
-        runner_id:
-          type:
-          - string
-          - 'null'
-          minLength: 26
-          maxLength: 26
-        capability_code:
-          type:
-          - string
-          - 'null'
-          maxLength: 191
-      required:
-      - expected_version
-      example:
-        expected_version: 0
-    UpdateRunnerCapabilityResponse:
-      type: object
-      additionalProperties: false
-      required:
-      - data
-      - correlation_id
-      properties:
-        data:
-          $ref: '#/components/schemas/RunnerCapabilityResource'
-        correlation_id:
-          type: string
-      example:
-        data:
-          runner_capability_id: 01J00000000000000000000000
-          row_version: 0
-          created_at: '2026-08-06T06:46:00Z'
-          updated_at: '2026-08-06T06:46:00Z'
-          lifecycle_status: CREATED
-        correlation_id: example
+        data: {$ref: '#/components/schemas/RotateRunnerAgentTokenData'}
+        correlation_id: {type: string}
     ListExecutionSlotResponse:
       type: object
       additionalProperties: false
@@ -37556,70 +36338,64 @@ components:
           operation_id: example
           status: example
         correlation_id: example
+    RunnerCapabilityReportItem:
+      type: object
+      additionalProperties: false
+      required: [capability_code, availability_status]
+      properties:
+        capability_code:
+          type: string
+          enum: [BROWSER_CHROMIUM, BROWSER_CHROME, BROWSER_EDGE, MODE_HEADED, MODE_HEADLESS, TERMINAL_ADMIN_WEB, TERMINAL_CLIENT_WEB, TERMINAL_PDA_WEB, SINGLE_TERMINAL, CROSS_TERMINAL, CAPTURE_SCREENSHOT, CAPTURE_VIDEO, CAPTURE_TRACE, NETWORK_RESPONSE_LISTEN, INTRANET_ACCESS, PROXY_ACCESS, FILE_TRANSFER, MANUAL_RECORDING, AI_EXPLORATION, FORMAL_EXECUTION, LOCAL_ARTIFACT_CACHE, PLAYWRIGHT_VERSION, AGENT_VERSION, CONTEXT_ISOLATION]
+        availability_status: {type: string, enum: [CONFIGURED, NOT_CONFIGURED]}
+        observed_version: {type: [string, 'null'], maxLength: 64}
+        observed_metadata: {type: [object, 'null'], additionalProperties: true}
     RegisterRunnerRequest:
       type: object
       additionalProperties: false
+      required: [enrollment_credential, machine_fingerprint, agent_version, capabilities]
       properties:
-        expected_version:
-          type: integer
-          minimum: 0
-        reason:
-          type:
-          - string
-          - 'null'
-          maxLength: 1000
-        operation_id:
-          type: string
-      required: []
-      example: {}
+        enrollment_credential: {type: string, minLength: 32, maxLength: 512, writeOnly: true}
+        machine_fingerprint: {type: string, minLength: 1, maxLength: 1024, writeOnly: true}
+        agent_version: {type: string, minLength: 1, maxLength: 64}
+        runtime_metadata: {type: [object, 'null'], additionalProperties: true}
+        capabilities: {type: array, maxItems: 24, items: {$ref: '#/components/schemas/RunnerCapabilityReportItem'}}
+    RegisterRunnerData:
+      type: object
+      additionalProperties: false
+      required: [runner, agent_token, token_version]
+      properties:
+        runner: {$ref: '#/components/schemas/RunnerResource'}
+        agent_token: {type: string, minLength: 32, maxLength: 512, writeOnly: true}
+        token_version: {type: integer, minimum: 1}
     RegisterRunnerResponse:
       type: object
       additionalProperties: false
-      required:
-      - data
-      - correlation_id
+      required: [data, correlation_id]
       properties:
-        data:
-          $ref: '#/components/schemas/GenericOperationResource'
-        correlation_id:
-          type: string
-      example:
-        data:
-          operation_id: example
-          status: example
-        correlation_id: example
+        data: {$ref: '#/components/schemas/RegisterRunnerData'}
+        correlation_id: {type: string}
     HeartbeatRunnerRequest:
       type: object
       additionalProperties: false
+      required: [health_status, agent_version]
       properties:
-        expected_version:
-          type: integer
-          minimum: 0
-        reason:
-          type:
-          - string
-          - 'null'
-          maxLength: 1000
-      required:
-      - expected_version
-      example:
-        expected_version: 0
+        health_status: {type: string, enum: [HEALTHY, DEGRADED, UNHEALTHY]}
+        agent_version: {type: string, minLength: 1, maxLength: 64}
+        runtime_metadata: {type: [object, 'null'], additionalProperties: true}
+        capabilities: {type: array, maxItems: 24, items: {$ref: '#/components/schemas/RunnerCapabilityReportItem'}}
+    ReportRunnerCapabilitiesRequest:
+      type: object
+      additionalProperties: false
+      required: [capabilities]
+      properties:
+        capabilities: {type: array, maxItems: 24, items: {$ref: '#/components/schemas/RunnerCapabilityReportItem'}}
     HeartbeatRunnerResponse:
       type: object
       additionalProperties: false
-      required:
-      - data
-      - correlation_id
+      required: [data, correlation_id]
       properties:
-        data:
-          $ref: '#/components/schemas/GenericOperationResource'
-        correlation_id:
-          type: string
-      example:
-        data:
-          operation_id: example
-          status: example
-        correlation_id: example
+        data: {$ref: '#/components/schemas/RunnerResource'}
+        correlation_id: {type: string}
     ClaimRunnerTaskRequest:
       type: object
       additionalProperties: false
@@ -38352,6 +37128,10 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+    AgentTokenAuth:
+      type: apiKey
+      in: header
+      name: X-Runner-Agent-Token
   responses:
     ModelConfigurationProblem:
       description: Model configuration request failed

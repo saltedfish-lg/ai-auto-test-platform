@@ -442,8 +442,105 @@ def formal_gates_for_conditions(root: Path, conditions: set[str]) -> set[str]:
     return selected
 
 
+def formal_gates_for_task(
+    root: Path,
+    conditions: set[str],
+    domains: set[str],
+    affected_files: list[str],
+) -> set[str]:
+    """Select formal gates after resolving project-owned acceptance capability ownership."""
+    return filter_task_gates_by_acceptance_route(
+        root,
+        formal_gates_for_conditions(root, conditions),
+        conditions,
+        domains,
+        affected_files,
+    )
+
+
+def filter_task_gates_by_acceptance_route(
+    root: Path,
+    selected: set[str],
+    conditions: set[str],
+    domains: set[str],
+    affected_files: list[str],
+) -> set[str]:
+    """Remove route-owned gates whose acceptance capability does not own this Task."""
+    routes = _validated_acceptance_routes(root)
+    route_owned = {
+        gate_id
+        for route in routes
+        for gate_id in _route_string_list(route, 'owned_gate_ids')
+    }
+    if not route_owned:
+        return selected
+    route = _acceptance_route(
+        root,
+        {
+            'formal_gate_conditions': sorted(conditions),
+            'domains': sorted(domains),
+            'affected_files': affected_files,
+        },
+    )
+    if route is None:
+        return selected
+    selected_owned = set(_route_string_list(route, 'owned_gate_ids'))
+    return selected - (route_owned - selected_owned)
+
+
 def runtime_supported_formal_gate_ids(root: Path) -> set[str]:
     return set(load_runtime_gate_catalog(root))
+
+
+def _route_string_list(route: dict[str, Any], field: str) -> list[str]:
+    value = route.get(field)
+    if value is None:
+        return []
+    if not isinstance(value, list) or not all(
+        isinstance(item, str) and item and item == item.strip() for item in value
+    ):
+        raise ValueError(f'task acceptance route {field} must be a list of non-empty strings')
+    if len(value) != len(set(value)):
+        raise ValueError(f'task acceptance route {field} must not contain duplicates')
+    return list(value)
+
+
+def _validated_acceptance_routes(root: Path) -> list[dict[str, Any]]:
+    routes = runtime_config(root).get('task_acceptance_routes') or []
+    if not isinstance(routes, list):
+        raise ValueError('runtime.task_acceptance_routes must be a list')
+    normalized: list[dict[str, Any]] = []
+    route_ids: set[str] = set()
+    for route in routes:
+        if not isinstance(route, dict):
+            raise ValueError('runtime.task_acceptance_routes entries must be mappings')
+        route_id = route.get('route_id')
+        if not isinstance(route_id, str) or not route_id or route_id != route_id.strip():
+            raise ValueError('task acceptance route_id must be a non-empty string')
+        if route_id in route_ids:
+            raise ValueError('task acceptance route_id must be unique')
+        route_ids.add(route_id)
+        for field in (
+            'when_any_formal_gate_conditions',
+            'when_any_domains',
+            'when_any_affected_paths',
+            'canonical_acceptance_paths',
+            'owned_gate_ids',
+        ):
+            _route_string_list(route, field)
+        priority = route.get('selection_priority', 0)
+        if isinstance(priority, bool) or not isinstance(priority, int):
+            raise ValueError('task acceptance route selection_priority must be an integer')
+        normalized.append(route)
+    return normalized
+
+
+def _matching_paths(affected: list[str], patterns: list[str]) -> set[str]:
+    return {
+        path
+        for path in affected
+        if any(fnmatch.fnmatch(path, pattern) for pattern in patterns)
+    }
 
 
 def _acceptance_route(root: Path, ctx: dict[str, Any]) -> dict[str, Any] | None:
@@ -452,33 +549,49 @@ def _acceptance_route(root: Path, ctx: dict[str, Any]) -> dict[str, Any] | None:
     Generic Runtime only understands conditions, domains, and affected paths. Concrete
     capabilities and commands remain in the Project Profile.
     """
-    routes = runtime_config(root).get('task_acceptance_routes') or []
-    if not isinstance(routes, list):
-        raise ValueError('runtime.task_acceptance_routes must be a list')
+    routes = _validated_acceptance_routes(root)
     conditions = {str(value) for value in ctx.get('formal_gate_conditions', [])}
     domains = {str(value) for value in ctx.get('domains', [])}
     affected = [str(value).replace('\\', '/') for value in ctx.get('affected_files', [])]
-    matches: list[dict[str, Any]] = []
+    matches: list[tuple[tuple[int, int, int, int, int, int], str, dict[str, Any]]] = []
     for route in routes:
-        if not isinstance(route, dict):
-            raise ValueError('runtime.task_acceptance_routes entries must be mappings')
-        route_conditions = {
-            str(value) for value in route.get('when_any_formal_gate_conditions') or []
-        }
-        route_domains = {str(value) for value in route.get('when_any_domains') or []}
-        route_paths = [str(value) for value in route.get('when_any_affected_paths') or []]
+        route_conditions = set(_route_string_list(route, 'when_any_formal_gate_conditions'))
+        route_domains = set(_route_string_list(route, 'when_any_domains'))
+        route_paths = _route_string_list(route, 'when_any_affected_paths')
+        path_matches = _matching_paths(affected, route_paths)
         predicates = [
             bool(route_conditions & conditions) if route_conditions else True,
             bool(route_domains & domains) if route_domains else True,
-            any(fnmatch.fnmatch(path, pattern) for path in affected for pattern in route_paths)
-            if route_paths
-            else True,
+            bool(path_matches) if route_paths else True,
         ]
         if all(predicates):
-            matches.append(route)
-    if len(matches) > 1:
-        raise ValueError('runtime.task_acceptance_routes matched more than one route')
-    return matches[0] if matches else None
+            canonical_patterns = _route_string_list(route, 'canonical_acceptance_paths')
+            canonical_matches = _matching_paths(affected, canonical_patterns)
+            canonical_specificity = sum(
+                max(
+                    (len(pattern.replace('*', '').replace('?', '')) for pattern in canonical_patterns if fnmatch.fnmatch(path, pattern)),
+                    default=0,
+                )
+                for path in canonical_matches
+            )
+            rank = (
+                len(canonical_matches),
+                canonical_specificity,
+                len(route_conditions & conditions),
+                len(route_domains & domains),
+                len(path_matches),
+                int(route.get('selection_priority', 0)),
+            )
+            matches.append((rank, str(route['route_id']), route))
+    if not matches:
+        return None
+    # Canonical ownership and concrete Task facts dominate. route_id is the final,
+    # stable tie-breaker so profile order cannot change the selected capability.
+    best_rank = max(rank for rank, _route_id, _route in matches)
+    finalists = sorted(
+        (route_id, route) for rank, route_id, route in matches if rank == best_rank
+    )
+    return finalists[0][1]
 
 
 def _acceptance_command(root: Path, ctx: dict[str, Any]) -> list[str] | None:

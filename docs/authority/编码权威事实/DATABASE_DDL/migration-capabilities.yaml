@@ -20,3 +20,5 @@ capabilities:
     migration_name: V13__business_terminal_foundation.sql
   TEST_ACCOUNT_FOUNDATION_SCHEMA:
     migration_name: V14__test_account_foundation.sql
+  RUNNER_FOUNDATION_SCHEMA:
+    migration_name: V15__runner_foundation.sql

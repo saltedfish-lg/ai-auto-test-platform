@@ -31,7 +31,11 @@ from .project_profile import (
     match_any,
     runtime_config,
 )
-from .required_gate_runner import formal_gate_ids, formal_gates_for_conditions
+from .required_gate_runner import (
+    filter_task_gates_by_acceptance_route,
+    formal_gate_ids,
+    formal_gates_for_conditions,
+)
 from .process_identity import current_process_identity
 from .task_context import context_path, save_context, validate_task_id
 from .workspace_path_policy import consumer_allows_relative, iter_policy_files, load_policy
@@ -720,12 +724,19 @@ def recompute_metadata(root: Path, request: str, affected_files: Iterable[str], 
         engineering_gates.update(GENERIC_AUTO_REQUIRED_GATES)
 
     formal_gates = formal_gates_for_conditions(root, formal_conditions)
+    required_gates = filter_task_gates_by_acceptance_route(
+        root,
+        engineering_gates | formal_gates,
+        formal_conditions,
+        domains,
+        files,
+    )
     language_profiles, framework_profiles = _technology_profiles(root, files)
     owners = _profile_owners(root, domains)
     return {
         'affected_files': files, 'authorities': sorted(authorities), 'dependencies': sorted(dependencies),
         'relevant_tests': sorted(relevant_tests), 'domains': sorted(domains),
-        'required_gates': sorted(engineering_gates | formal_gates), 'formal_gate_conditions': sorted(formal_conditions),
+        'required_gates': sorted(required_gates), 'formal_gate_conditions': sorted(formal_conditions),
         'review_triggers': sorted(review), 'review_profiles': sorted(reviewer_risks), 'risk_flags': sorted(reviewer_risks),
         'sovereignty_categories': sorted(sovereignty),
         'owners': sorted(owners), 'language_profiles': sorted(language_profiles), 'framework_profiles': sorted(framework_profiles),

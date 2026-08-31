@@ -90366,7 +90366,7 @@
       "action": "发起Runner安装、注册和认证",
       "expected_response": {
         "outcome": "SUCCESS_OR_RULE_DEFINED_REJECTION",
-        "description": "注册仅作用于Runner自身平台技术范围；注册结果必须为UNBOUND，不产生任何项目成员关系或项目绑定。",
+        "description": "注册仅使用管理员预创建的project-scoped enrollment；注册结果立即绑定enrollment预定Project，不产生项目成员关系且不支持UNBOUND。",
         "failure_description": "超出数据范围时拒绝操作并记录审计。"
       },
       "expected_state": [
@@ -90383,7 +90383,7 @@
         "重复投递由event_id幂等处理"
       ],
       "permission_assertions": [
-        "注册仅作用于Runner自身平台技术范围；注册结果必须为UNBOUND，不产生任何项目成员关系或项目绑定。"
+        "注册仅使用管理员预创建的project-scoped enrollment；注册结果立即绑定enrollment预定Project，不产生项目成员关系且不支持UNBOUND。"
       ],
       "idempotency_assertions": [
         "同一Idempotency-Key和请求哈希返回同一结果",
@@ -91577,7 +91577,7 @@
       "action": "发起Runner安装、注册和认证",
       "expected_response": {
         "outcome": "SUCCESS_OR_RULE_DEFINED_REJECTION",
-        "description": "Runner获得唯一服务身份、认证和能力快照且保持UNBOUND；USR-SCN-021是唯一项目绑定入口。",
+        "description": "Runner获得唯一服务身份、认证和能力快照，并在注册事务中立即绑定enrollment预定Project；不支持UNBOUND或普通rebind。",
         "failure_description": "返回明确失败原因且不部分提交"
       },
       "expected_state": [
@@ -92786,7 +92786,7 @@
       "action": "发起Runner绑定项目",
       "expected_response": {
         "outcome": "SUCCESS_OR_RULE_DEFINED_REJECTION",
-        "description": "Runner绑定状态: UNBOUND→BOUND；解绑反向但需门禁",
+        "description": "Runner归属状态: project-scoped enrollment注册时建立BOUND；本阶段无普通解绑或rebind",
         "failure_description": "返回明确失败原因且不部分提交"
       },
       "expected_state": [

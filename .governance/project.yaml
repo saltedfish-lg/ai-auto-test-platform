@@ -9,6 +9,12 @@ runtime:
   - playwright_test
   task_acceptance_routes:
   - route_id: authentication_browser_acceptance
+    selection_priority: 300
+    canonical_acceptance_paths:
+    - apps/web/e2e/auth.spec.ts
+    - tools/gates/auth_browser_gate.py
+    owned_gate_ids:
+    - AUTH_BROWSER_RUNTIME_GATE
     when_any_affected_paths:
     - apps/web/e2e/auth.spec.ts
     - apps/web/src/views/LoginView.vue
@@ -20,6 +26,12 @@ runtime:
     execution_identity:
       capability: authentication_browser_acceptance
   - route_id: model_configuration_browser_acceptance
+    selection_priority: 200
+    canonical_acceptance_paths:
+    - apps/web/e2e/model-configuration.spec.ts
+    - tools/gates/model_configuration_browser_gate.py
+    owned_gate_ids:
+    - MODEL_CONFIGURATION_BROWSER_RUNTIME_GATE
     when_any_formal_gate_conditions:
     - MODEL_CONFIGURATION_BROWSER_RUNTIME_CHANGED
     when_any_affected_paths:
@@ -36,6 +48,10 @@ runtime:
     execution_identity:
       capability: model_configuration_browser_acceptance
   - route_id: project_management_browser_acceptance
+    selection_priority: 100
+    canonical_acceptance_paths:
+    - apps/web/e2e/project-management.spec.ts
+    - tools/gates/project_acceptance_runtime.py
     when_any_affected_paths:
     - apps/web/e2e/project-management.spec.ts
     - apps/web/src/views/Project*.vue

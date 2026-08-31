@@ -1595,7 +1595,7 @@ processes:
   - 记录“Runner安装、注册和认证”的发起主体、参与主体、对象ID、权限与数据范围判定、状态前后值、结果/原因码和时间。
   - 本地状态变化、不可变事件和审计在同一原子提交边界内完成；提交前审计失败则不提交或回滚本地变化。
   success_criteria:
-  - Runner获得唯一服务身份、认证和能力快照且保持UNBOUND；USR-SCN-021是唯一项目绑定入口。
+  - Runner通过project-scoped enrollment获得唯一服务身份、Agent token和能力快照，注册成功即绑定enrollment预定Project；不支持UNBOUND。
   failure_criteria:
   - 任一前置、权限、数据范围、并发或明确资源条件不满足，或未进入声明状态、产生越权/重复副作用、证据未密封、审计缺失时失败。
   - 事务/补偿策略：LOCAL_TRANSACTION。
@@ -1659,7 +1659,7 @@ processes:
   - 目标项目有效
   - 发起人具备Runner和项目范围
   permission_requirements:
-  - ROLE-RUNNER-ADMIN发起“Runner绑定项目”前必须具备对应菜单、操作或服务授权；系统主体只按自身服务身份执行；越权时拒绝且不产生业务写入。
+  - ROLE-RUNNER-ADMIN发起“创建Runner project-scoped enrollment”前必须具备对应菜单、操作或服务授权；系统主体只按自身服务身份执行；越权时拒绝且不产生业务写入。
   environment_requirements: NOT_APPLICABLE
   account_requirements: NONE
   runner_requirements: NOT_REQUIRED
@@ -1672,16 +1672,16 @@ processes:
   - 创建绑定并刷新调度索引
   - 记录审计
   alternative_flows:
-  - 先受控解绑旧项目，再绑定新项目
+  - 创建时已确定project_id的project-scoped enrollment；不提供普通解绑或rebind
   exception_flows:
   - 已绑定其他项目、存在活动任务/租约或权限不足时拒绝
   recovery_flows:
   - 修复前置原因后使用幂等命令重试；不得改写已提交历史。
-  - 等待任务终态和租约释放后重新解绑/绑定
+  - 本阶段不支持普通解绑或rebind；如未来需要须走独立正式业务规则
   output_objects:
-  - Runner绑定项目的可追溯结果
+  - 创建Runner project-scoped enrollment的可追溯结果
   state_changes:
-  - 'Runner绑定状态: UNBOUND→BOUND；解绑反向但需门禁'
+  - 'Runner绑定状态: 注册成功即BOUND；本阶段不提供普通解绑或rebind'
   resource_acquisition:
     platform_storage:
       status: REQUIRED
@@ -1707,7 +1707,7 @@ processes:
   artifacts:
   - 业务审计记录
   audit_requirements:
-  - 记录“Runner绑定项目”的发起主体、参与主体、对象ID、权限与数据范围判定、状态前后值、结果/原因码和时间。
+  - 记录“创建Runner project-scoped enrollment”的发起主体、参与主体、对象ID、权限与数据范围判定、状态前后值、结果/原因码和时间。
   - 本地状态变化、不可变事件和审计在同一原子提交边界内完成；提交前审计失败则不提交或回滚本地变化。
   success_criteria:
   - Runner只对绑定项目可调度
@@ -6372,7 +6372,7 @@ process_variants:
   - 建立双向认证
   - 上报版本、浏览器、网络、设备和制品能力
   - 写入注册审计
-  expected_result: Runner获得唯一服务身份、认证和能力快照且保持UNBOUND；USR-SCN-021是唯一项目绑定入口。
+  expected_result: Runner通过project-scoped enrollment获得唯一服务身份、Agent token和能力快照，注册成功即绑定enrollment预定Project；不支持UNBOUND。
 - variant_id: USR-SCN-020-VAR-PERMISSION
   process_id: PROC-002
   scenario_id: USR-SCN-020
@@ -6420,7 +6420,7 @@ process_variants:
   process_id: PROC-003
   scenario_id: USR-SCN-021
   variant_type: NORMAL
-  description: Runner绑定项目—NORMAL分支：全部前置条件成立，所需权限/范围/资源/并发门禁通过。
+  description: 创建Runner project-scoped enrollment—NORMAL分支：全部前置条件成立，所需权限/范围/资源/并发门禁通过。
   trigger_condition: 全部前置条件成立，所需权限/范围/资源/并发门禁通过。
   flow:
   - 选择Runner和目标项目
@@ -6433,20 +6433,20 @@ process_variants:
   process_id: PROC-003
   scenario_id: USR-SCN-021
   variant_type: PERMISSION
-  description: Runner绑定项目—PERMISSION分支：发起主体缺少该场景permission_checks中明确列出的权限或受信系统身份，或目标对象超出active/history数据范围。
+  description: 创建Runner project-scoped enrollment—PERMISSION分支：发起主体缺少该场景permission_checks中明确列出的权限或受信系统身份，或目标对象超出active/history数据范围。
   trigger_condition: 发起主体缺少该场景permission_checks中明确列出的权限或受信系统身份，或目标对象超出active/history数据范围。
   flow:
-  - 在“Runner绑定项目”首个业务副作用前执行权限与数据范围检查
+  - 在“创建Runner project-scoped enrollment”首个业务副作用前执行权限与数据范围检查
   - 拒绝对ENT-RUNNER执行主流程并记录拒绝依据
   expected_result: 返回无权限或超范围结果；ENT-RUNNER状态、绑定、版本、任务和制品均不变化；记录发起主体、该场景permission_checks中明确列出的权限或受信系统身份和目标范围审计。
 - variant_id: USR-SCN-021-VAR-EXCEPTION
   process_id: PROC-003
   scenario_id: USR-SCN-021
   variant_type: EXCEPTION
-  description: Runner绑定项目—EXCEPTION分支：已绑定其他项目、存在活动任务/租约或权限不足时拒绝
+  description: 创建Runner project-scoped enrollment—EXCEPTION分支：已绑定其他项目、存在活动任务/租约或权限不足时拒绝
   trigger_condition: 已绑定其他项目、存在活动任务/租约或权限不足时拒绝
   flow:
-  - 检测“Runner绑定项目”异常：已绑定其他项目、存在活动任务/租约或权限不足时拒绝
+  - 检测“创建Runner project-scoped enrollment”异常：已绑定其他项目、存在活动任务/租约或权限不足时拒绝
   - 停止未提交的后续步骤并按事务策略处理ENT-RUNNER
   - 记录失败结果和可恢复入口
   expected_result: ENT-RUNNER保持异常发生前最后稳定状态或进入场景明确失败状态；不宣称后续步骤成功；按“修复前置原因后使用幂等命令重试；不得改写已提交历史。”提供恢复。
@@ -6454,19 +6454,19 @@ process_variants:
   process_id: PROC-003
   scenario_id: USR-SCN-021
   variant_type: CONCURRENCY
-  description: Runner绑定项目—CONCURRENCY分支：两个或更多命令同时竞争Runner绑定项目中的ENT-RUNNER，并命中“绑定关系唯一；绑定/解绑使用CAS与资源门禁”。
-  trigger_condition: 两个或更多命令同时竞争Runner绑定项目中的ENT-RUNNER，并命中“绑定关系唯一；绑定/解绑使用CAS与资源门禁”。
+  description: 创建Runner project-scoped enrollment—CONCURRENCY分支：两个或更多命令同时竞争创建Runner project-scoped enrollment中的ENT-RUNNER，并命中“project-scoped enrollment绑定关系唯一；本阶段不提供普通解绑或rebind”。
+  trigger_condition: 两个或更多命令同时竞争创建Runner project-scoped enrollment中的ENT-RUNNER，并命中“project-scoped enrollment绑定关系唯一；本阶段不提供普通解绑或rebind”。
   flow:
   - 以ENT-RUNNER及场景声明范围计算竞争键
-  - 按“绑定关系唯一；绑定/解绑使用CAS与资源门禁”取得唯一winner或有效租约持有者
+  - 按“project-scoped enrollment绑定关系唯一；本阶段不提供普通解绑或rebind”取得唯一winner或有效租约持有者
   - loser不执行业务副作用并获得可重试/冲突结果
   expected_result: winner完成当前原子动作并提交版本/租约令牌。 loser不改变ENT-RUNNER，返回冲突、陈旧版本或资源占用结果；不得覆盖winner。
 - variant_id: USR-SCN-021-VAR-RECOVERY
   process_id: PROC-003
   scenario_id: USR-SCN-021
   variant_type: RECOVERY
-  description: Runner绑定项目—RECOVERY分支：“Runner绑定项目”已进入可恢复失败/等待/部分完成状态，且恢复前置已满足。
-  trigger_condition: “Runner绑定项目”已进入可恢复失败/等待/部分完成状态，且恢复前置已满足。
+  description: 创建Runner project-scoped enrollment—RECOVERY分支：“创建Runner project-scoped enrollment”已进入可恢复失败/等待/部分完成状态，且恢复前置已满足。
+  trigger_condition: “创建Runner project-scoped enrollment”已进入可恢复失败/等待/部分完成状态，且恢复前置已满足。
   flow:
   - 修复前置原因后使用幂等命令重试；不得改写已提交历史。
   - 重新校验ENT-RUNNER当前状态、资源和幂等键
@@ -8006,10 +8006,10 @@ process_exceptions:
   process_id: PROC-003
   scenario_id: USR-SCN-021
   variant_type: EXCEPTION
-  description: Runner绑定项目—EXCEPTION分支：已绑定其他项目、存在活动任务/租约或权限不足时拒绝
+  description: 创建Runner project-scoped enrollment—EXCEPTION分支：已绑定其他项目、存在活动任务/租约或权限不足时拒绝
   trigger_condition: 已绑定其他项目、存在活动任务/租约或权限不足时拒绝
   flow:
-  - 检测“Runner绑定项目”异常：已绑定其他项目、存在活动任务/租约或权限不足时拒绝
+  - 检测“创建Runner project-scoped enrollment”异常：已绑定其他项目、存在活动任务/租约或权限不足时拒绝
   - 停止未提交的后续步骤并按事务策略处理ENT-RUNNER
   - 记录失败结果和可恢复入口
   expected_result: ENT-RUNNER保持异常发生前最后稳定状态或进入场景明确失败状态；不宣称后续步骤成功；按“修复前置原因后使用幂等命令重试；不得改写已提交历史。”提供恢复。
@@ -8017,11 +8017,11 @@ process_exceptions:
   process_id: PROC-003
   scenario_id: USR-SCN-021
   variant_type: CONCURRENCY
-  description: Runner绑定项目—CONCURRENCY分支：两个或更多命令同时竞争Runner绑定项目中的ENT-RUNNER，并命中“绑定关系唯一；绑定/解绑使用CAS与资源门禁”。
-  trigger_condition: 两个或更多命令同时竞争Runner绑定项目中的ENT-RUNNER，并命中“绑定关系唯一；绑定/解绑使用CAS与资源门禁”。
+  description: 创建Runner project-scoped enrollment—CONCURRENCY分支：两个或更多命令同时竞争创建Runner project-scoped enrollment中的ENT-RUNNER，并命中“project-scoped enrollment绑定关系唯一；本阶段不提供普通解绑或rebind”。
+  trigger_condition: 两个或更多命令同时竞争创建Runner project-scoped enrollment中的ENT-RUNNER，并命中“project-scoped enrollment绑定关系唯一；本阶段不提供普通解绑或rebind”。
   flow:
   - 以ENT-RUNNER及场景声明范围计算竞争键
-  - 按“绑定关系唯一；绑定/解绑使用CAS与资源门禁”取得唯一winner或有效租约持有者
+  - 按“project-scoped enrollment绑定关系唯一；本阶段不提供普通解绑或rebind”取得唯一winner或有效租约持有者
   - loser不执行业务副作用并获得可重试/冲突结果
   expected_result: winner完成当前原子动作并提交版本/租约令牌。 loser不改变ENT-RUNNER，返回冲突、陈旧版本或资源占用结果；不得覆盖winner。
 - variant_id: USR-SCN-022-VAR-EXCEPTION
@@ -8701,7 +8701,7 @@ process_recovery_flows:
 - recovery_flow_id: PROC-003-REC-02
   process_id: PROC-003
   trigger: 流程失败、中断、超时或资源失效
-  recovery_action: 等待任务终态和租约释放后重新解绑/绑定
+  recovery_action: 本阶段不支持普通解绑或rebind；如未来需要须走独立正式业务规则
   resource_handling: 密封已产生证据；释放或受控保留资源；旧记录不可改写
   result: 恢复、补偿、重新调度或终止，均产生新记录并审计
   completion_status: DIRECTLY_SUPPORTED
@@ -23722,6 +23722,25 @@ runner_definitions:
   authority_boundary: 平台是任务、用例、权限和最终状态的权威；Runner只执行确定任务并上报观察结果
   deployment_boundary: Runner可部署在平台服务器之外、内网物理机或虚拟机；可作为独立代码工程和部署单元实现，但不是独立业务产品项目
   completion_status: SUPPORTED_BY_MULTIPLE_SOURCES
+runner_foundation_product_decision:
+  decision_id: RUNNER-FOUNDATION-PRODUCT-DECISION
+  decision_date: '2026-08-29'
+  approval_status: USER_APPROVED_LIVING_AUTHORITY
+  registration_model: 管理员预创建绑定唯一project_id的一次性enrollment credential；Agent注册成功时立即绑定该Project，不支持UNBOUND注册或由Agent指定Project。
+  machine_identity_model: enrollment credential单次使用后失效并换取opaque Agent token；平台只持久化SHA-256 token哈希和验证状态，不保存可恢复明文token。
+  credential_lifecycle: Agent token支持显式rotate和revoke；rotate只在响应中交付一次新token，旧token立即失效。
+  runner_code_rule: runner_code在project_id范围内唯一，创建后不可修改；hostname、IP和display_name不得替代稳定业务身份。
+  authorization_boundary: 人工管理使用Runner管理权限；heartbeat和capability report使用独立Runner Agent机器身份，不接受人工Bearer Token或PROJECT_EDIT冒充Agent。
+  state_boundary: lifecycle、registration、connection、health、enablement、project binding、scheduling、resource和version compatibility为分离事实，heartbeat不得改变人工生命周期或enablement。
+  excluded_scope:
+  - UNBOUND注册
+  - 跨Project rebind
+  - mTLS
+  - 公钥签名assertion
+  - Scheduler
+  - Resource Lease
+  - Execution Context
+  - AI Exploration
 runner_agent_rules:
 - rule_id: RA-001
   rule: Runner Agent是安装在执行机上的软件实例，负责注册认证、连接心跳、本地执行器、浏览器管理、日志制品采集和结果上报；不得等同Runner业务身份。
@@ -23747,7 +23766,7 @@ runner_deployment_rules:
 runner_registration_rules:
 - rule_id: RREG-001
   sequence: 1
-  rule: 管理员创建一次性或受控注册入口/凭证。
+  rule: 管理员为唯一目标project_id和不可变runner_code创建一次性enrollment credential；Agent不得在注册请求中指定或更换Project。
 - rule_id: RREG-002
   sequence: 2
   rule: Agent提交注册凭证、执行机指纹、Agent版本和基础环境信息。
@@ -23756,7 +23775,7 @@ runner_registration_rules:
   rule: 平台验证注册凭证、去重和安全策略；重复注册不得静默创建多个相同节点。
 - rule_id: RREG-004
   sequence: 4
-  rule: 平台生成不可变runner_id并签发仅供该Agent使用的身份凭证。
+  rule: 平台生成不可变runner_id、立即建立目标Project绑定，并签发仅供该Agent使用的opaque Agent token；平台只持久化token哈希和验证材料。
 - rule_id: RREG-005
   sequence: 5
   rule: Agent上报基础能力，平台保存为待验证能力而非直接可调度能力。
@@ -23769,20 +23788,23 @@ runner_registration_rules:
 - rule_id: RREG-008
   sequence: 8
   rule: 凭证轮换、重装身份恢复、撤销注册和重复注册均必须审计。
+- rule_id: RREG-009
+  sequence: 9
+  rule: enrollment credential成功使用后立即失效；Agent token只允许显式rotate或revoke，rotate后旧token立即失效，任何接口和日志不得再次返回历史token。
 runner_authentication_rules:
 - rule_id: RAUTH-001
-  rule: 每次连接必须使用Agent身份凭证建立受控会话；平台验证runner_id、凭证状态和Agent实例约束。
+  rule: 每次连接必须使用独立Runner Agent机器身份建立受控会话；平台验证runner_id、opaque token哈希、凭证状态和Agent实例约束，不执行人工BearerAuth或RBAC权限映射。
 - rule_id: RAUTH-002
   rule: 认证成功不代表Runner可调度；仍需启用、项目绑定、连接、健康、版本、能力和资源校验。
 - rule_id: RAUTH-003
-  rule: 身份凭证轮换期间只允许当前有效凭证或明确的过渡窗口；过期凭证不得接受任务。
+  rule: 身份凭证轮换后只允许当前有效token；旧token、已撤销token和已消费enrollment credential不得再认证，不设置隐式双token过渡窗口。
 - rule_id: RAUTH-004
   rule: 连接会话断开不自动撤销注册或项目绑定，但影响连接状态和任务租约处理。
 runner_binding_rules:
 - rule_id: RBIND-001
-  rule: Runner必须绑定项目后才能承接业务执行、AI探索或人工录制任务。
+  rule: Runner注册成功时必须立即绑定enrollment预先确定的Project；不允许创建或保留UNBOUND Runner。
 - rule_id: RBIND-002
-  rule: Runner绑定一个项目后不得同时绑定其他项目；同一项目可以绑定多个Runner。
+  rule: Runner只属于注册时绑定的一个Project且不得同时绑定或通过普通PATCH改绑其他Project；同一项目可以绑定多个Runner。
 - rule_id: RBIND-003
   rule: Runner离线不自动解除项目绑定。
 - rule_id: RBIND-004
@@ -23790,7 +23812,7 @@ runner_binding_rules:
 - rule_id: RBIND-005
   rule: 项目停用后Runner不接收新项目任务；项目归档前应排空并解除活动绑定，历史任务保留runner_id快照。
 - rule_id: RBIND-006
-  rule: 绑定和解绑由Runner管理员或具有明确高风险权限的项目负责人执行，必须二次确认和审计。
+  rule: 本阶段不提供解绑或跨Project rebind；未来如需Project归属变更，必须先建立独立正式业务规则、权限、确认和审计流程。
 - rule_id: RBIND-007
   rule: 项目绑定是长期关系实体，不得替代任务和会话的临时资源租约。
 runner_capabilities:
@@ -24125,12 +24147,10 @@ runner_state_dimensions:
 - state_dimension_id: RSTATE-005
   dimension_name: PROJECT_BINDING_STATUS
   values:
-  - UNBOUND
   - BOUND
-  - UNBINDING
-  initial_value: UNBOUND
-  rule: 各维度独立存储和校验；不得压缩为单一Runner状态
-  completion_status: VALID_RUNNER_COMPLETION
+  initial_value: BOUND
+  rule: Runner注册成功时即按project-scoped enrollment建立唯一Project归属；本阶段不支持UNBOUND、UNBINDING或普通PATCH rebind。
+  completion_status: USER_APPROVED_RUNNER_FOUNDATION
 - state_dimension_id: RSTATE-006
   dimension_name: SCHEDULING_STATUS
   values:
@@ -24700,11 +24720,11 @@ runner_draining_rules:
   state: DISABLED
   rule: 保留注册和项目绑定但不可调度；当前任务按明确选择完成或中止。
 - rule_id: RDRAIN-003
-  state: UNBOUND
-  rule: 解除项目长期绑定；前置必须无运行任务、有效租约和会话。
+  state: BOUND
+  rule: 本阶段保持注册时建立的Project绑定，不提供普通解绑或rebind。
 - rule_id: RDRAIN-004
-  state: DEREGISTERED
-  rule: 撤销Agent身份；历史执行继续保留Runner稳定标识和快照。
+  state: TOKEN_REVOKED
+  rule: 撤销Agent token但保持Runner registration为REGISTERED；历史执行继续保留Runner稳定标识和快照。
 - rule_id: RDRAIN-005
   state: FORCED
   rule: 排空超时后的强制中止只允许高风险角色，必须二次确认、记录原因并审计。
@@ -65010,7 +65030,7 @@ business_rules:
   preconditions:
   - 安装包和注册凭证有效
   - 平台注册入口可用
-  rule_statement: 注册仅作用于Runner自身平台技术范围；注册结果必须为UNBOUND，不产生任何项目成员关系或项目绑定。
+  rule_statement: 注册仅接受管理员预创建的project-scoped enrollment；project_id由enrollment确定，注册成功立即BOUND，Agent不得指定或变更Project。
   required_action: null
   prohibited_action: null
   expected_result: null
@@ -66637,10 +66657,10 @@ business_rules:
   preconditions:
   - 安装包和注册凭证有效
   - 平台注册入口可用
-  rule_statement: Runner获得唯一服务身份、认证和能力快照且保持UNBOUND；USR-SCN-021是唯一项目绑定入口。
+  rule_statement: Runner通过project-scoped enrollment获得唯一服务身份、Agent token和能力快照，注册成功即绑定enrollment预定Project；不支持UNBOUND。
   required_action: null
   prohibited_action: null
-  expected_result: Runner获得唯一服务身份、认证和能力快照且保持UNBOUND；USR-SCN-021是唯一项目绑定入口。
+  expected_result: Runner通过project-scoped enrollment获得唯一服务身份、Agent token和能力快照，注册成功即绑定enrollment预定Project；不支持UNBOUND。
   failure_result: null
   exception_conditions: []
   exception_behavior: null
@@ -66780,20 +66800,20 @@ business_rules:
     verification_rule: The current living authority root plus formal contract paths and any available acceptance/state-owner links were resolved before closing the governance-only
       refinement flag.
 - rule_id: BR-RUNNER-0030
-  rule_name: Runner绑定项目替代流程1
+  rule_name: 创建Runner project-scoped enrollment替代流程1
   rule_category: PROCESS_RULE
   subject: ROLE-RUNNER-ADMIN
-  target: Runner绑定项目
+  target: 创建Runner project-scoped enrollment
   scope: CURRENT_PRODUCT_SCOPE
-  trigger: 发起Runner绑定项目
+  trigger: 发起创建Runner project-scoped enrollment
   preconditions:
   - Runner已注册且无活动绑定冲突
   - 目标项目有效
   - 发起人具备Runner和项目范围
-  rule_statement: 先受控解绑旧项目，再绑定新项目
-  required_action: 先受控解绑旧项目，再绑定新项目
+  rule_statement: 创建时已确定project_id的project-scoped enrollment；不提供普通解绑或rebind
+  required_action: 创建时已确定project_id的project-scoped enrollment；不提供普通解绑或rebind
   prohibited_action: null
-  expected_result: 动作“先受控解绑旧项目，再绑定新项目”完成并形成可追溯结果。
+  expected_result: 动作“创建时已确定project_id的project-scoped enrollment；不提供普通解绑或rebind”完成并形成可追溯结果。
   failure_result: null
   exception_conditions: []
   exception_behavior: null
@@ -66850,18 +66870,18 @@ business_rules:
     verification_rule: The current living authority root plus formal contract paths and any available acceptance/state-owner links were resolved before closing the governance-only
       refinement flag.
 - rule_id: BR-RUNNER-0031
-  rule_name: Runner绑定项目审计1
+  rule_name: 创建Runner project-scoped enrollment审计1
   rule_category: AUDIT_RULE
   subject: ROLE-RUNNER-ADMIN
-  target: Runner绑定项目
+  target: 创建Runner project-scoped enrollment
   scope: CURRENT_PRODUCT_SCOPE
-  trigger: 发起Runner绑定项目
+  trigger: 发起创建Runner project-scoped enrollment
   preconditions:
   - Runner已注册且无活动绑定冲突
   - 目标项目有效
   - 发起人具备Runner和项目范围
-  rule_statement: 记录“Runner绑定项目”的发起主体、参与主体、对象ID、权限与数据范围判定、状态前后值、结果/原因码和时间。
-  required_action: 记录“Runner绑定项目”的发起主体、参与主体、对象ID、权限与数据范围判定、状态前后值、结果/原因码和时间。
+  rule_statement: 记录“创建Runner project-scoped enrollment”的发起主体、参与主体、对象ID、权限与数据范围判定、状态前后值、结果/原因码和时间。
+  required_action: 记录“创建Runner project-scoped enrollment”的发起主体、参与主体、对象ID、权限与数据范围判定、状态前后值、结果/原因码和时间。
   prohibited_action: null
   expected_result: null
   failure_result: null
@@ -66870,7 +66890,7 @@ business_rules:
   resource_requirements: []
   release_requirements: 若规则创建任务、会话、锁或租约，进入任何终态时必须按资源释放规则处理
   audit_requirements:
-  - 记录“Runner绑定项目”的发起主体、参与主体、对象ID、权限与数据范围判定、状态前后值、结果/原因码和时间。
+  - 记录“创建Runner project-scoped enrollment”的发起主体、参与主体、对象ID、权限与数据范围判定、状态前后值、结果/原因码和时间。
   related_processes:
   - PROC-003
   related_objects:
@@ -66923,17 +66943,17 @@ business_rules:
     verification_rule: The current living authority root plus formal contract paths and any available acceptance/state-owner links were resolved before closing the governance-only
       refinement flag.
 - rule_id: BR-RUNNER-0032
-  rule_name: Runner绑定项目审计2
+  rule_name: 创建Runner project-scoped enrollment审计2
   rule_category: AUDIT_RULE
   subject: ROLE-RUNNER-ADMIN
-  target: Runner绑定项目
+  target: 创建Runner project-scoped enrollment
   scope: CURRENT_PRODUCT_SCOPE
-  trigger: 发起Runner绑定项目
+  trigger: 发起创建Runner project-scoped enrollment
   preconditions:
   - Runner已注册且无活动绑定冲突
   - 目标项目有效
   - 发起人具备Runner和项目范围
-  rule_statement: 在“Runner绑定项目”中，审计必须满足：本地状态变化、不可变事件和审计在同一原子提交边界内完成；提交前审计失败则不提交或回滚本地变化。。
+  rule_statement: 在“创建Runner project-scoped enrollment”中，审计必须满足：本地状态变化、不可变事件和审计在同一原子提交边界内完成；提交前审计失败则不提交或回滚本地变化。。
   required_action: 本地状态变化、不可变事件和审计在同一原子提交边界内完成；提交前审计失败则不提交或回滚本地变化。
   prohibited_action: null
   expected_result: null
@@ -66998,17 +67018,17 @@ business_rules:
     verification_rule: The current living authority root plus formal contract paths and any available acceptance/state-owner links were resolved before closing the governance-only
       refinement flag.
 - rule_id: BR-RUNNER-0033
-  rule_name: Runner绑定项目并发校验1
+  rule_name: 创建Runner project-scoped enrollment并发校验1
   rule_category: CONCURRENCY_RULE
   subject: ROLE-RUNNER-ADMIN
-  target: Runner绑定项目
+  target: 创建Runner project-scoped enrollment
   scope: CURRENT_PRODUCT_SCOPE
-  trigger: 发起Runner绑定项目
+  trigger: 发起创建Runner project-scoped enrollment
   preconditions:
   - Runner已注册且无活动绑定冲突
   - 目标项目有效
   - 发起人具备Runner和项目范围
-  rule_statement: 绑定关系唯一；绑定/解绑使用CAS与资源门禁
+  rule_statement: project-scoped enrollment绑定关系唯一；本阶段不提供普通解绑或rebind
   required_action: null
   prohibited_action: null
   expected_result: null
@@ -67016,7 +67036,7 @@ business_rules:
   exception_conditions: []
   exception_behavior: null
   resource_requirements:
-  - 绑定关系唯一；绑定/解绑使用CAS与资源门禁
+  - project-scoped enrollment绑定关系唯一；本阶段不提供普通解绑或rebind
   release_requirements: 若规则创建任务、会话、锁或租约，进入任何终态时必须按资源释放规则处理
   audit_requirements: []
   related_processes:
@@ -67079,17 +67099,17 @@ business_rules:
     verification_rule: The current living authority root plus formal contract paths and any available acceptance/state-owner links were resolved before closing the governance-only
       refinement flag.
 - rule_id: BR-RUNNER-0034
-  rule_name: Runner绑定项目数据范围1
+  rule_name: 创建Runner project-scoped enrollment数据范围1
   rule_category: DATA_SCOPE_RULE
   subject: ROLE-RUNNER-ADMIN
-  target: Runner绑定项目
+  target: 创建Runner project-scoped enrollment
   scope: CURRENT_PRODUCT_SCOPE
-  trigger: 发起Runner绑定项目
+  trigger: 发起创建Runner project-scoped enrollment
   preconditions:
   - Runner已注册且无活动绑定冲突
   - 目标项目有效
   - 发起人具备Runner和项目范围
-  rule_statement: “Runner绑定项目”的读取、写入和历史查询仅作用于明确授权项目及active_scope/history_read_scope；敏感数据另行校验独立权限。
+  rule_statement: “创建Runner project-scoped enrollment”的读取、写入和历史查询仅作用于明确授权项目及active_scope/history_read_scope；敏感数据另行校验独立权限。
   required_action: null
   prohibited_action: null
   expected_result: null
@@ -67163,12 +67183,12 @@ business_rules:
     verification_rule: The current living authority root plus formal contract paths and any available acceptance/state-owner links were resolved before closing the governance-only
       refinement flag.
 - rule_id: BR-RUNNER-0035
-  rule_name: Runner绑定项目异常流程1
+  rule_name: 创建Runner project-scoped enrollment异常流程1
   rule_category: EXCEPTION_RULE
   subject: ROLE-RUNNER-ADMIN
-  target: Runner绑定项目
+  target: 创建Runner project-scoped enrollment
   scope: CURRENT_PRODUCT_SCOPE
-  trigger: 发起Runner绑定项目
+  trigger: 发起创建Runner project-scoped enrollment
   preconditions:
   - Runner已注册且无活动绑定冲突
   - 目标项目有效
@@ -67240,17 +67260,17 @@ business_rules:
     verification_rule: The current living authority root plus formal contract paths and any available acceptance/state-owner links were resolved before closing the governance-only
       refinement flag.
 - rule_id: BR-RUNNER-0036
-  rule_name: Runner绑定项目失败判定2
+  rule_name: 创建Runner project-scoped enrollment失败判定2
   rule_category: VALIDATION_RULE
   subject: ROLE-RUNNER-ADMIN
-  target: Runner绑定项目
+  target: 创建Runner project-scoped enrollment
   scope: CURRENT_PRODUCT_SCOPE
-  trigger: 发起Runner绑定项目
+  trigger: 发起创建Runner project-scoped enrollment
   preconditions:
   - Runner已注册且无活动绑定冲突
   - 目标项目有效
   - 发起人具备Runner和项目范围
-  rule_statement: 在“Runner绑定项目”中，失败判定必须满足：事务/补偿策略：LOCAL_TRANSACTION。。
+  rule_statement: 在“创建Runner project-scoped enrollment”中，失败判定必须满足：事务/补偿策略：LOCAL_TRANSACTION。。
   required_action: null
   prohibited_action: null
   expected_result: null
@@ -67312,17 +67332,17 @@ business_rules:
     verification_rule: The current living authority root plus formal contract paths and any available acceptance/state-owner links were resolved before closing the governance-only
       refinement flag.
 - rule_id: BR-RUNNER-0037
-  rule_name: Runner绑定项目主流程1
+  rule_name: 创建Runner project-scoped enrollment主流程1
   rule_category: PROCESS_RULE
   subject: ROLE-RUNNER-ADMIN
-  target: Runner绑定项目
+  target: 创建Runner project-scoped enrollment
   scope: CURRENT_PRODUCT_SCOPE
-  trigger: 发起Runner绑定项目
+  trigger: 发起创建Runner project-scoped enrollment
   preconditions:
   - Runner已注册且无活动绑定冲突
   - 目标项目有效
   - 发起人具备Runner和项目范围
-  rule_statement: 在“Runner绑定项目”中，主流程必须满足：选择Runner和目标项目。
+  rule_statement: 在“创建Runner project-scoped enrollment”中，主流程必须满足：选择Runner和目标项目。
   required_action: 选择Runner和目标项目
   prohibited_action: null
   expected_result: 动作“选择Runner和目标项目”完成并形成可追溯结果。
@@ -67400,12 +67420,12 @@ business_rules:
     verification_rule: The current living authority root plus formal contract paths and any available acceptance/state-owner links were resolved before closing the governance-only
       refinement flag.
 - rule_id: BR-RUNNER-0038
-  rule_name: Runner绑定项目主流程2
+  rule_name: 创建Runner project-scoped enrollment主流程2
   rule_category: PROCESS_RULE
   subject: ROLE-RUNNER-ADMIN
-  target: Runner绑定项目
+  target: 创建Runner project-scoped enrollment
   scope: CURRENT_PRODUCT_SCOPE
-  trigger: 发起Runner绑定项目
+  trigger: 发起创建Runner project-scoped enrollment
   preconditions:
   - Runner已注册且无活动绑定冲突
   - 目标项目有效
@@ -67488,12 +67508,12 @@ business_rules:
     verification_rule: The current living authority root plus formal contract paths and any available acceptance/state-owner links were resolved before closing the governance-only
       refinement flag.
 - rule_id: BR-RUNNER-0039
-  rule_name: Runner绑定项目主流程3
+  rule_name: 创建Runner project-scoped enrollment主流程3
   rule_category: PROCESS_RULE
   subject: ROLE-RUNNER-ADMIN
-  target: Runner绑定项目
+  target: 创建Runner project-scoped enrollment
   scope: CURRENT_PRODUCT_SCOPE
-  trigger: 发起Runner绑定项目
+  trigger: 发起创建Runner project-scoped enrollment
   preconditions:
   - Runner已注册且无活动绑定冲突
   - 目标项目有效
@@ -67576,12 +67596,12 @@ business_rules:
     verification_rule: The current living authority root plus formal contract paths and any available acceptance/state-owner links were resolved before closing the governance-only
       refinement flag.
 - rule_id: BR-RUNNER-0040
-  rule_name: Runner绑定项目主流程4
+  rule_name: 创建Runner project-scoped enrollment主流程4
   rule_category: PROCESS_RULE
   subject: ROLE-RUNNER-ADMIN
-  target: Runner绑定项目
+  target: 创建Runner project-scoped enrollment
   scope: CURRENT_PRODUCT_SCOPE
-  trigger: 发起Runner绑定项目
+  trigger: 发起创建Runner project-scoped enrollment
   preconditions:
   - Runner已注册且无活动绑定冲突
   - 目标项目有效
@@ -67664,12 +67684,12 @@ business_rules:
     verification_rule: The current living authority root plus formal contract paths and any available acceptance/state-owner links were resolved before closing the governance-only
       refinement flag.
 - rule_id: BR-RUNNER-0041
-  rule_name: Runner绑定项目主流程5
+  rule_name: 创建Runner project-scoped enrollment主流程5
   rule_category: PROCESS_RULE
   subject: ROLE-RUNNER-ADMIN
-  target: Runner绑定项目
+  target: 创建Runner project-scoped enrollment
   scope: CURRENT_PRODUCT_SCOPE
-  trigger: 发起Runner绑定项目
+  trigger: 发起创建Runner project-scoped enrollment
   preconditions:
   - Runner已注册且无活动绑定冲突
   - 目标项目有效
@@ -67752,17 +67772,17 @@ business_rules:
     verification_rule: The current living authority root plus formal contract paths and any available acceptance/state-owner links were resolved before closing the governance-only
       refinement flag.
 - rule_id: BR-RUNNER-0042
-  rule_name: Runner绑定项目权限校验1
+  rule_name: 创建Runner project-scoped enrollment权限校验1
   rule_category: AUTHORIZATION_RULE
   subject: ROLE-RUNNER-ADMIN
-  target: Runner绑定项目
+  target: 创建Runner project-scoped enrollment
   scope: CURRENT_PRODUCT_SCOPE
-  trigger: 发起Runner绑定项目
+  trigger: 发起创建Runner project-scoped enrollment
   preconditions:
   - Runner已注册且无活动绑定冲突
   - 目标项目有效
   - 发起人具备Runner和项目范围
-  rule_statement: ROLE-RUNNER-ADMIN发起“Runner绑定项目”前必须具备对应菜单、操作或服务授权；系统主体只按自身服务身份执行；越权时拒绝且不产生业务写入。
+  rule_statement: ROLE-RUNNER-ADMIN发起“创建Runner project-scoped enrollment”前必须具备对应菜单、操作或服务授权；系统主体只按自身服务身份执行；越权时拒绝且不产生业务写入。
   required_action: null
   prohibited_action: null
   expected_result: null
@@ -67837,12 +67857,12 @@ business_rules:
     verification_rule: The current living authority root plus formal contract paths and any available acceptance/state-owner links were resolved before closing the governance-only
       refinement flag.
 - rule_id: BR-RUNNER-0043
-  rule_name: Runner绑定项目前置条件1
+  rule_name: 创建Runner project-scoped enrollment前置条件1
   rule_category: ELIGIBILITY_RULE
   subject: ROLE-RUNNER-ADMIN
-  target: Runner绑定项目
+  target: 创建Runner project-scoped enrollment
   scope: CURRENT_PRODUCT_SCOPE
-  trigger: 发起Runner绑定项目
+  trigger: 发起创建Runner project-scoped enrollment
   preconditions:
   - Runner已注册且无活动绑定冲突
   rule_statement: Runner已注册且无活动绑定冲突
@@ -67909,15 +67929,15 @@ business_rules:
     verification_rule: The current living authority root plus formal contract paths and any available acceptance/state-owner links were resolved before closing the governance-only
       refinement flag.
 - rule_id: BR-RUNNER-0044
-  rule_name: Runner绑定项目前置条件2
+  rule_name: 创建Runner project-scoped enrollment前置条件2
   rule_category: ELIGIBILITY_RULE
   subject: ROLE-RUNNER-ADMIN
-  target: Runner绑定项目
+  target: 创建Runner project-scoped enrollment
   scope: CURRENT_PRODUCT_SCOPE
-  trigger: 发起Runner绑定项目
+  trigger: 发起创建Runner project-scoped enrollment
   preconditions:
   - 目标项目有效
-  rule_statement: 在“Runner绑定项目”中，前置条件必须满足：目标项目有效。
+  rule_statement: 在“创建Runner project-scoped enrollment”中，前置条件必须满足：目标项目有效。
   required_action: null
   prohibited_action: null
   expected_result: null
@@ -67981,15 +68001,15 @@ business_rules:
     verification_rule: The current living authority root plus formal contract paths and any available acceptance/state-owner links were resolved before closing the governance-only
       refinement flag.
 - rule_id: BR-RUNNER-0045
-  rule_name: Runner绑定项目前置条件3
+  rule_name: 创建Runner project-scoped enrollment前置条件3
   rule_category: ELIGIBILITY_RULE
   subject: ROLE-RUNNER-ADMIN
-  target: Runner绑定项目
+  target: 创建Runner project-scoped enrollment
   scope: CURRENT_PRODUCT_SCOPE
-  trigger: 发起Runner绑定项目
+  trigger: 发起创建Runner project-scoped enrollment
   preconditions:
   - 发起人具备Runner和项目范围
-  rule_statement: 在“Runner绑定项目”中，前置条件必须满足：发起人具备Runner和项目范围。
+  rule_statement: 在“创建Runner project-scoped enrollment”中，前置条件必须满足：发起人具备Runner和项目范围。
   required_action: null
   prohibited_action: null
   expected_result: null
@@ -68053,24 +68073,24 @@ business_rules:
     verification_rule: The current living authority root plus formal contract paths and any available acceptance/state-owner links were resolved before closing the governance-only
       refinement flag.
 - rule_id: BR-RUNNER-0046
-  rule_name: Runner绑定项目恢复2
+  rule_name: 创建Runner project-scoped enrollment恢复2
   rule_category: RECOVERY_RULE
   subject: ROLE-RUNNER-ADMIN
-  target: Runner绑定项目
+  target: 创建Runner project-scoped enrollment
   scope: CURRENT_PRODUCT_SCOPE
-  trigger: 发起Runner绑定项目
+  trigger: 发起创建Runner project-scoped enrollment
   preconditions:
   - Runner已注册且无活动绑定冲突
   - 目标项目有效
   - 发起人具备Runner和项目范围
-  rule_statement: 等待任务终态和租约释放后重新解绑/绑定
-  required_action: 等待任务终态和租约释放后重新解绑/绑定
+  rule_statement: 本阶段不支持普通解绑或rebind；如未来需要须走独立正式业务规则
+  required_action: 本阶段不支持普通解绑或rebind；如未来需要须走独立正式业务规则
   prohibited_action: null
   expected_result: null
   failure_result: null
   exception_conditions:
   - 场景失败或中断
-  exception_behavior: 等待任务终态和租约释放后重新解绑/绑定
+  exception_behavior: 本阶段不支持普通解绑或rebind；如未来需要须走独立正式业务规则
   resource_requirements: []
   release_requirements: 若规则创建任务、会话、锁或租约，进入任何终态时必须按资源释放规则处理
   audit_requirements: []
@@ -68136,20 +68156,20 @@ business_rules:
     verification_rule: The current living authority root plus formal contract paths and any available acceptance/state-owner links were resolved before closing the governance-only
       refinement flag.
 - rule_id: BR-RUNNER-0047
-  rule_name: Runner绑定项目状态流转1
+  rule_name: 创建Runner project-scoped enrollment状态流转1
   rule_category: STATE_TRANSITION_RULE
   subject: ROLE-RUNNER-ADMIN
-  target: Runner绑定项目
+  target: 创建Runner project-scoped enrollment
   scope: CURRENT_PRODUCT_SCOPE
-  trigger: 发起Runner绑定项目
+  trigger: 发起创建Runner project-scoped enrollment
   preconditions:
   - Runner已注册且无活动绑定冲突
   - 目标项目有效
   - 发起人具备Runner和项目范围
-  rule_statement: 'Runner绑定状态: UNBOUND→BOUND；解绑反向但需门禁'
+  rule_statement: 'Runner绑定状态: 注册成功即BOUND；本阶段不提供普通解绑或rebind'
   required_action: null
   prohibited_action: null
-  expected_result: 'Runner绑定状态: UNBOUND→BOUND；解绑反向但需门禁'
+  expected_result: 'Runner绑定状态: 注册成功即BOUND；本阶段不提供普通解绑或rebind'
   failure_result: null
   exception_conditions: []
   exception_behavior: null
@@ -68216,12 +68236,12 @@ business_rules:
     verification_rule: The current living authority root plus formal contract paths and any available acceptance/state-owner links were resolved before closing the governance-only
       refinement flag.
 - rule_id: BR-RUNNER-0048
-  rule_name: Runner绑定项目成功判定1
+  rule_name: 创建Runner project-scoped enrollment成功判定1
   rule_category: VALIDATION_RULE
   subject: ROLE-RUNNER-ADMIN
-  target: Runner绑定项目
+  target: 创建Runner project-scoped enrollment
   scope: CURRENT_PRODUCT_SCOPE
-  trigger: 发起Runner绑定项目
+  trigger: 发起创建Runner project-scoped enrollment
   preconditions:
   - Runner已注册且无活动绑定冲突
   - 目标项目有效
@@ -68288,17 +68308,17 @@ business_rules:
     verification_rule: The current living authority root plus formal contract paths and any available acceptance/state-owner links were resolved before closing the governance-only
       refinement flag.
 - rule_id: BR-RUNNER-0049
-  rule_name: Runner绑定项目触发规则
+  rule_name: 创建Runner project-scoped enrollment触发规则
   rule_category: PROCESS_RULE
   subject: ROLE-RUNNER-ADMIN
-  target: Runner绑定项目
+  target: 创建Runner project-scoped enrollment
   scope: CURRENT_PRODUCT_SCOPE
-  trigger: 发起Runner绑定项目
+  trigger: 发起创建Runner project-scoped enrollment
   preconditions:
   - Runner已注册且无活动绑定冲突
   - 目标项目有效
   - 发起人具备Runner和项目范围
-  rule_statement: 当“发起Runner绑定项目”发生时，ROLE-RUNNER-ADMIN可以发起“Runner绑定项目”；发起后必须先完成本场景前置、权限、范围、资源和并发门禁。
+  rule_statement: 当“发起创建Runner project-scoped enrollment”发生时，ROLE-RUNNER-ADMIN可以发起“创建Runner project-scoped enrollment”；发起后必须先完成本场景前置、权限、范围、资源和并发门禁。
   required_action: 先执行场景门禁，再进入首个业务副作用。
   prohibited_action: null
   expected_result: null
@@ -78586,15 +78606,15 @@ business_rules:
     verification_rule: The current living authority root plus formal contract paths and any available acceptance/state-owner links were resolved before closing the governance-only
       refinement flag.
 - rule_id: AIR-RDRAIN-003
-  rule_name: UNBOUND
+  rule_name: BOUND_FIXED
   rule_category: VALID_RUNNER_COMPLETION
   subject: 平台、调度服务或Runner Agent
   target: AI测试流程与Runner
   scope: CURRENT_PRODUCT_SCOPE
   trigger: null
   preconditions: []
-  rule_statement: 解除项目长期绑定；前置必须无运行任务、有效租约和会话。
-  required_action: 解除项目长期绑定；前置必须无运行任务、有效租约和会话。
+  rule_statement: 本阶段保持注册时建立的Project绑定，不提供普通解绑或rebind。
+  required_action: 本阶段保持注册时建立的Project绑定，不提供普通解绑或rebind。
   prohibited_action: null
   expected_result: 规则条件满足时产生唯一、可审计、可追溯结果
   failure_result: 拒绝、等待、失败或进入恢复流程，不产生未授权副作用
@@ -78630,15 +78650,15 @@ business_rules:
     verification_rule: The current living authority root plus formal contract paths and any available acceptance/state-owner links were resolved before closing the governance-only
       refinement flag.
 - rule_id: AIR-RDRAIN-004
-  rule_name: DEREGISTERED
+  rule_name: TOKEN_REVOKED
   rule_category: VALID_RUNNER_COMPLETION
   subject: 平台、调度服务或Runner Agent
   target: AI测试流程与Runner
   scope: CURRENT_PRODUCT_SCOPE
   trigger: null
   preconditions: []
-  rule_statement: 撤销Agent身份；历史执行继续保留Runner稳定标识和快照。
-  required_action: 撤销Agent身份；历史执行继续保留Runner稳定标识和快照。
+  rule_statement: 撤销Agent token但保持Runner registration为REGISTERED；历史执行继续保留Runner稳定标识和快照。
+  required_action: 撤销Agent token但保持Runner registration为REGISTERED；历史执行继续保留Runner稳定标识和快照。
   prohibited_action: null
   expected_result: 规则条件满足时产生唯一、可审计、可追溯结果
   failure_result: 拒绝、等待、失败或进入恢复流程，不产生未授权副作用
@@ -82396,13 +82416,13 @@ process_object_mappings:
 - mapping_id: POM-003
   process_id: PROC-003
   created_objects:
-  - Runner绑定项目的可追溯结果
+  - 创建Runner project-scoped enrollment的可追溯结果
   read_objects:
   - ENT-RUNNER
   - ENT-PROJECT
   - ENT-RUN-TASK
   modified_objects:
-  - 'Runner绑定状态: UNBOUND→BOUND；解绑反向但需门禁'
+  - 'Runner绑定状态: 注册成功即BOUND；本阶段不提供普通解绑或rebind'
   snapshot_objects:
   - 配置快照、用例版本、Runner能力快照或任务上下文（按流程适用）
   terminated_objects:
@@ -82887,18 +82907,18 @@ runner_state_operation_mappings:
   unbind: 排空完成后允许
   disable: 排空完成后
 - mapping_id: RSOM-007
-  state_combination: REVOKED/UNREGISTERED
+  state_combination: TOKEN_REVOKED/REGISTERED
   accept_new_task: false
   continue_current_task: false
   manual_recording: false
   unbind: 历史关系只读
   disable: true
 - mapping_id: RSOM-008
-  state_combination: ONLINE+HEALTHY+ENABLED+UNBOUND
+  state_combination: ONLINE+HEALTHY+ENABLED+BOUND
   accept_new_task: false
   continue_current_task: false
   manual_recording: false
-  unbind: true
+  unbind: false
   disable: true
 conflicts:
 - conflict_id: MCF-001
@@ -83092,7 +83112,7 @@ decisions:
 - decision_id: ADR-007
   title: Runner、Runner Agent和执行机分层且项目独占绑定
   status: ACCEPTED
-  final_decision: 执行机是物理/虚拟节点，Runner Agent是驻留代理，Runner是平台登记与调度对象；一个Runner绑定项目后不得同时绑定其他项目。
+  final_decision: 执行机是物理/虚拟节点，Runner Agent是驻留代理，Runner是平台登记与调度对象；一个创建Runner project-scoped enrollment后不得同时绑定其他项目。
   scope:
   - DOM-018
   completion_status: DIRECTLY_SUPPORTED

@@ -702,6 +702,18 @@ def test_project_profile_declares_capability_specific_acceptance_routing():
     assert model_route['execution_identity']['capability'] == (
         'model_configuration_browser_acceptance'
     )
+    assert model_route['canonical_acceptance_paths'] == [
+        'apps/web/e2e/model-configuration.spec.ts',
+        'tools/gates/model_configuration_browser_gate.py',
+    ]
+    assert model_route['owned_gate_ids'] == [
+        'MODEL_CONFIGURATION_BROWSER_RUNTIME_GATE'
+    ]
+    project_route = by_id['project_management_browser_acceptance']
+    assert project_route['canonical_acceptance_paths'] == [
+        'apps/web/e2e/project-management.spec.ts',
+        'tools/gates/project_acceptance_runtime.py',
+    ]
     assert gates['governance_contract_test']['timeout_seconds'] >= 900
     template = ROOT / 'agent-governance-lite/templates/project-profile/.governance/gates.yaml'
     template_gates = yaml.safe_load(template.read_text(encoding='utf-8'))['gates']
@@ -1009,7 +1021,7 @@ def test_governance_contract_timeout_terminates_child_process_tree(tmp_path: Pat
         encoding='utf-8',
     )
     monkeypatch.setenv('ATP_CONTRACT_CHILD_PID_FILE', str(pid_file))
-    result = _run_isolated_group(tmp_path, 'process-tree-probe', [test_file], timeout_seconds=5)
+    result = _run_isolated_group(tmp_path, 'process-tree-probe', [test_file], timeout_seconds=15)
     assert result['exit_code'] == 124
     child_pid = int(pid_file.read_text(encoding='utf-8'))
     deadline = time.time() + 5

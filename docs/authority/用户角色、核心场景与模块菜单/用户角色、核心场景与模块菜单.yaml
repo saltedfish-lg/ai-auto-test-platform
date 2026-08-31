@@ -1966,7 +1966,7 @@ business_scenarios:
   permission_checks:
   - 注册调用使用受控一次性凭证或Runner注册身份，并校验RUNNER_REGISTER；不要求人类菜单权限。
   data_scope_checks:
-  - 注册仅作用于Runner自身平台技术范围；注册结果必须为UNBOUND，不产生任何项目成员关系或项目绑定。
+  - 注册仅使用管理员预创建的project-scoped enrollment；注册结果立即绑定enrollment预定Project，不产生项目成员关系且不支持UNBOUND。
   concurrency_checks:
   - 注册凭证一次性消费；Runner身份唯一
   resource_checks:
@@ -1988,7 +1988,7 @@ business_scenarios:
   - 记录“Runner安装、注册和认证”的发起主体、参与主体、对象ID、权限与数据范围判定、状态前后值、结果/原因码和时间。
   - 本地状态变化、不可变事件和审计在同一原子提交边界内完成；提交前审计失败则不提交或回滚本地变化。
   success_criteria:
-  - Runner获得唯一服务身份、认证和能力快照且保持UNBOUND；USR-SCN-021是唯一项目绑定入口。
+  - Runner获得唯一服务身份、认证和能力快照，并在注册事务中立即绑定enrollment预定Project；不支持UNBOUND或普通rebind。
   failure_criteria:
   - 任一前置、权限、数据范围、并发或明确资源条件不满足，或未进入声明状态、产生越权/重复副作用、证据未密封、审计缺失时失败。
   - 事务/补偿策略：LOCAL_TRANSACTION。
@@ -2055,9 +2055,9 @@ business_scenarios:
   - 被测环境：NOT_APPLICABLE；predicate=FALSE_FOR_THIS_SCENARIO; 本场景不读取、不分配且不参与门禁。
   - 外部组件：NOT_APPLICABLE；predicate=FALSE_FOR_THIS_SCENARIO; 本场景不读取、不分配且不参与门禁。
   state_transitions:
-  - 'Runner绑定状态: UNBOUND→BOUND；解绑反向但需门禁'
+  - 'Runner归属状态: project-scoped enrollment注册时建立BOUND；本阶段无普通解绑或rebind'
   data_changes:
-  - '仅对ENT-RUNNER、ENT-PROJECT、ENT-RUN-TASK执行本场景定义的数据写入；状态变化为“Runner绑定状态: UNBOUND→BOUND；解绑反向但需门禁”；同步形成不可变事件和审计，不改写历史快照。'
+  - '仅对ENT-RUNNER、ENT-PROJECT、ENT-RUN-TASK执行本场景定义的数据写入；状态变化为“Runner归属状态: project-scoped enrollment注册时建立BOUND；本阶段无普通解绑或rebind”；同步形成不可变事件和审计，不改写历史快照。'
   output:
   - Runner绑定项目的可追溯结果
   artifacts:
@@ -8143,7 +8143,7 @@ scenario_variants:
   scenario_id: USR-SCN-020
   variant_type: NORMAL
   description: Runner安装、注册和认证—NORMAL分支：全部前置条件成立，所需权限/范围/资源/并发门禁通过。
-  expected_result: Runner获得唯一服务身份、认证和能力快照且保持UNBOUND；USR-SCN-021是唯一项目绑定入口。
+  expected_result: Runner获得唯一服务身份、认证和能力快照，并在注册事务中立即绑定enrollment预定Project；不支持UNBOUND或普通rebind。
   trigger_condition: 全部前置条件成立，所需权限/范围/资源/并发门禁通过。
   flow:
   - 安装Runner Agent
@@ -10538,7 +10538,7 @@ scenario_state_changes:
   owner_rule: 由对应主对象Owner服务在同一事务写事件、更新当前修订指针并递增并发版本标识；终态不回退
 - mapping_id: USR-SCN-021-STATE-0020
   scenario_id: USR-SCN-021
-  transition: 'Runner绑定状态: UNBOUND→BOUND；解绑反向但需门禁'
+  transition: 'Runner归属状态: project-scoped enrollment注册时建立BOUND；本阶段无普通解绑或rebind'
   owner_rule: 由对应主对象Owner服务在同一事务写事件、更新当前修订指针并递增并发版本标识；终态不回退
 - mapping_id: USR-SCN-022-STATE-0021
   scenario_id: USR-SCN-022
