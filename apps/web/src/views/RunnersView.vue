@@ -50,6 +50,11 @@ async function openProjectScope(): Promise<void> {
 }
 
 async function refresh(page = runners.page.page): Promise<void> {
+  if (!hasProjectScope.value) {
+    localError.value = "请先输入有效的 26 位 Project ID。";
+    return;
+  }
+  localError.value = "";
   await runners
     .load(
       projectId.value,
@@ -65,16 +70,31 @@ async function refresh(page = runners.page.page): Promise<void> {
 }
 
 function openCreate(): void {
-  Object.assign(createForm, { runner_code: "", display_name: "", reason: "" });
+  if (!hasProjectScope.value) {
+    return;
+  }
+
+  Object.assign(createForm, {
+    runner_code: "",
+    display_name: "",
+    reason: "",
+  });
+
   localError.value = "";
   createVisible.value = true;
 }
 
 async function submitCreate(): Promise<void> {
+  if (!hasProjectScope.value) {
+    localError.value = "请先选择有效的 Project 范围。";
+    return;
+  }
+
   if (!createForm.runner_code.trim() || !createForm.reason.trim()) {
     localError.value = "请填写 Runner Code 和创建原因。";
     return;
   }
+
   try {
     await runners.createEnrollment({
       project_id: projectId.value,
@@ -82,6 +102,7 @@ async function submitCreate(): Promise<void> {
       display_name: createForm.display_name.trim() || null,
       reason: createForm.reason.trim(),
     });
+
     createVisible.value = false;
     credentialVisible.value = true;
   } catch {
@@ -198,18 +219,56 @@ const commandLabels: Record<RunnerLifecycleAction | "rotate" | "revoke", string>
         <p>管理 Project 归属、Agent 注册、分离生命周期与运行健康，以及受控能力事实。</p>
       </div>
       <PermissionGate permission="RUNNER_BIND">
-        <el-button type="primary" @click="openCreate">创建 Enrollment</el-button>
+        <el-tooltip
+          :disabled="hasProjectScope"
+          content="请先输入 26 位 Project ID 并打开 Runner Project"
+          placement="bottom"
+        >
+          <span>
+            <el-button
+              type="primary"
+              :disabled="!hasProjectScope"
+              @click="openCreate"
+            >
+              创建 Enrollment
+            </el-button>
+          </span>
+        </el-tooltip>
       </PermissionGate>
     </div>
-
-    <el-card v-if="!route.params.projectId" shadow="never" class="filter-card">
+    <el-card
+      v-if="!route.params.projectId"
+      shadow="never"
+      class="filter-card"
+    >
+      <el-alert
+        v-if="localError"
+        :title="localError"
+        type="error"
+        :closable="false"
+        show-icon
+        class="workspace-alert"
+      />
       <el-form inline @submit.prevent="openProjectScope">
         <el-form-item label="Project ID">
-          <el-input v-model="projectInput" maxlength="26" placeholder="输入授权范围内的 Project ID" />
+          <el-input
+            v-model="projectInput"
+            maxlength="26"
+            placeholder="输入授权范围内的 Project ID"
+          />
         </el-form-item>
-        <el-button type="primary" @click="openProjectScope">打开 Runner Project</el-button>
+
+        <el-button
+          type="primary"
+          @click="openProjectScope"
+        >
+          打开 Runner Project
+        </el-button>
       </el-form>
-      <p>Project 范围由服务端按 Runner 管理权限实时校验。</p>
+
+      <p>
+        Project 范围由服务端按 Runner 管理权限实时校验。
+      </p>
     </el-card>
 
     <el-alert
@@ -332,13 +391,28 @@ const commandLabels: Record<RunnerLifecycleAction | "rotate" | "revoke", string>
     <el-dialog v-model="createVisible" title="创建 Project-scoped Enrollment" width="560px">
       <el-alert v-if="localError" :title="localError" type="error" :closable="false" />
       <el-form label-position="top">
-        <el-form-item label="Runner Code"
-          ><el-input v-model="createForm.runner_code"
-        /></el-form-item>
-        <el-form-item label="显示名称"><el-input v-model="createForm.display_name" /></el-form-item>
-        <el-form-item label="原因"
-          ><el-input v-model="createForm.reason" type="textarea"
-        /></el-form-item>
+        <el-form-item label="Project ID" required>
+          <el-input
+            :model-value="projectId"
+            aria-label="Project ID"
+            readonly
+          />
+        </el-form-item>
+
+        <el-form-item label="Runner Code" required>
+          <el-input v-model="createForm.runner_code" />
+        </el-form-item>
+
+        <el-form-item label="显示名称">
+          <el-input v-model="createForm.display_name" />
+        </el-form-item>
+
+        <el-form-item label="原因" required>
+          <el-input
+            v-model="createForm.reason"
+            type="textarea"
+          />
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="createVisible = false">取消</el-button>

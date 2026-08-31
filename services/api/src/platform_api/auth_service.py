@@ -474,12 +474,12 @@ class AuthenticationService:
             )
             applicable: list[tuple[str, str | None, str]] = []
             for (
-                binding_id,
-                binding_project_id,
-                role_id,
-                role_code,
-                decision,
-                conditions,
+                    binding_id,
+                    binding_project_id,
+                    role_id,
+                    role_code,
+                    decision,
+                    conditions,
             ) in mappings:
                 if role_code != "ROLE-SUPER-ADMIN":
                     if binding_project_id is not None and binding_project_id != project_id:
@@ -552,12 +552,21 @@ class AuthenticationService:
                     )
                 )
             )
-            applicable.extend(
-                (decision, conditions, role_code or "")
-                for decision, conditions, role_code in owner_mappings
-            )
-            if any(decision in {"DENIED", "FORBIDDEN"} for decision, _, _ in applicable):
-                self._raise_permission_denied(identity, operation_id, audit_context, db=db)
+
+            # Project Owner duty 是一条独立的项目范围授权路径。
+            # Owner 对某权限为 DENIED，只代表 Owner duty 本身不授予该权限，
+            # 不应覆盖主体通过独立有效 Role Binding 获得的权限，
+            # 例如 ROLE-SUPER-ADMIN 或显式授权的 Runner Admin。
+            if any(
+                decision in {"DENIED", "FORBIDDEN"}
+                for decision, _, _ in binding_applicable
+            ):
+                self._raise_permission_denied(
+                    identity,
+                    operation_id,
+                    audit_context,
+                    db=db,
+                )
             binding_allowed = any(
                 decision == "ALLOWED"
                 and self._condition_satisfied(conditions, identity.user.user_id, context)
@@ -576,7 +585,7 @@ class AuthenticationService:
         return (
             "DYNAMIC_PROJECT_OWNER_ALL"
             if scope_decisions
-            and all(item == "DYNAMIC_PROJECT_OWNER_ALL" for item in scope_decisions)
+               and all(item == "DYNAMIC_PROJECT_OWNER_ALL" for item in scope_decisions)
             else "ALLOWED"
         )
 
@@ -1101,11 +1110,11 @@ class AuthenticationService:
                         context.project_id is not None
                         and role_code != "ROLE-PLATFORM-ADMIN"
                         and not self._has_matching_project_duty(
-                            db,
-                            identity.user.user_id,
-                            context.project_id,
-                            binding_role_id,
-                        )
+                        db,
+                        identity.user.user_id,
+                        context.project_id,
+                        binding_role_id,
+                    )
                     ):
                         # Project-scoped realtime authorization is the intersection of
                         # the effective UserRoleBinding and the current project duty.
@@ -1210,15 +1219,15 @@ class AuthenticationService:
             credential = db.get(PlatformUserCredential, refresh_session.credential_id)
             user_id = credential.user_id if credential is not None else None
             if self._sessions.revoke(
-                    db,
-                    refresh_session,
-                    "LOGOUT",
-                    utc_now(),
-                    audit_context,
-                    actor_id=user_id,
-                    target_user_id=user_id,
-                    operation_id="logout_platform_user",
-                ):
+                db,
+                refresh_session,
+                "LOGOUT",
+                utc_now(),
+                audit_context,
+                actor_id=user_id,
+                target_user_id=user_id,
+                operation_id="logout_platform_user",
+            ):
                 result_code = "SUCCESS"
             else:
                 result_code = "ALREADY_INACTIVE"

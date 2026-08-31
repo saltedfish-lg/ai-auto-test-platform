@@ -105,7 +105,7 @@ async function submitCreate(): Promise<void> {
     !createForm.secret_value ||
     !createForm.reason.trim()
   ) {
-    localError.value = "请完整填写环境、账号标识、适用终端、凭据和原因。";
+    localError.value = "请完整填写环境、登录账号、适用终端、密码和原因。";
     return;
   }
   try {
@@ -120,7 +120,7 @@ async function submitCreate(): Promise<void> {
     createForm.secret_value = "";
     createVisible.value = false;
     await refresh(1);
-    ElMessage.success("测试账号已创建，凭据不会回显。");
+    ElMessage.success("测试账号已创建，密码不会回显。");
   } catch {
     createForm.secret_value = "";
   }
@@ -167,14 +167,14 @@ function openSecret(account: TestAccountResource): void {
 
 async function submitSecret(): Promise<void> {
   if (!selected.value || !secretForm.secret_value || !secretForm.reason.trim()) {
-    localError.value = "请填写新凭据和轮换原因。";
+    localError.value = "请填写新密码和轮换原因。";
     return;
   }
   try {
     await accounts.rotateSecret(selected.value, secretForm.secret_value, secretForm.reason.trim());
     secretForm.secret_value = "";
     secretVisible.value = false;
-    ElMessage.success("凭据已安全轮换，旧值不会回显。");
+    ElMessage.success("密码已安全轮换，旧值不会回显。");
   } catch {
     secretForm.secret_value = "";
   }
@@ -328,7 +328,7 @@ const lifecycleLabel: Record<TestAccountLifecycleAction, string> = {
       v-loading="accounts.status === 'loading'"
       empty-text="暂无测试账号"
     >
-      <el-table-column prop="account_identifier" label="账号标识" min-width="150" />
+      <el-table-column prop="account_identifier" label="登录账号" min-width="150" />
       <el-table-column prop="display_name" label="显示名称" min-width="140" />
       <el-table-column label="环境" min-width="150">
         <template #default="scope">{{ environmentName(scope.row.environment_id) }}</template>
@@ -367,7 +367,7 @@ const lifecycleLabel: Record<TestAccountLifecycleAction, string> = {
               link
               type="warning"
               @click="openSecret(scope.row)"
-              >更新凭据</el-button
+              >更新密码</el-button
             >
             <el-dropdown
               v-if="actions(scope.row).length"
@@ -417,9 +417,13 @@ const lifecycleLabel: Record<TestAccountLifecycleAction, string> = {
               :label="item.display_name || item.environment_code || item.environment_id"
               :value="item.environment_id" /></el-select
         ></el-form-item>
-        <el-form-item label="账号标识"
-          ><el-input v-model="createForm.account_identifier" autocomplete="off"
-        /></el-form-item>
+        <el-form-item label="登录账号" required>
+          <el-input
+            v-model="createForm.account_identifier"
+            placeholder="请输入被测系统登录账号"
+            autocomplete="off"
+          />
+        </el-form-item>
         <el-form-item label="显示名称"><el-input v-model="createForm.display_name" /></el-form-item>
         <el-form-item label="适用业务终端"
           ><el-select v-model="createForm.business_terminal_ids" multiple style="width: 100%"
@@ -429,13 +433,15 @@ const lifecycleLabel: Record<TestAccountLifecycleAction, string> = {
               :label="`${item.display_name || item.terminal_code} / ${item.terminal_type}`"
               :value="item.business_terminal_id" /></el-select
         ></el-form-item>
-        <el-form-item label="登录凭据"
-          ><el-input
+        <el-form-item label="登录密码" required>
+          <el-input
             v-model="createForm.secret_value"
             type="password"
             show-password
+            placeholder="请输入被测系统登录密码"
             autocomplete="new-password"
-        /></el-form-item>
+          />
+        </el-form-item>
         <el-form-item label="创建原因"
           ><el-input v-model="createForm.reason" type="textarea"
         /></el-form-item>
@@ -465,12 +471,12 @@ const lifecycleLabel: Record<TestAccountLifecycleAction, string> = {
 
     <el-dialog
       v-model="secretVisible"
-      title="更新登录凭据"
+      title="更新登录密码"
       width="520px"
       @closed="secretForm.secret_value = ''"
     >
       <el-alert
-        title="现有凭据不会回显；提交成功或失败后输入都会立即清除。"
+        title="现有密码不会回显；提交成功或失败后输入都会立即清除。"
         type="warning"
         :closable="false"
       />
@@ -509,7 +515,7 @@ const lifecycleLabel: Record<TestAccountLifecycleAction, string> = {
 
     <el-drawer v-model="detailVisible" title="测试账号详情" size="520px">
       <el-descriptions v-if="selected" :column="1" border>
-        <el-descriptions-item label="账号标识">{{
+        <el-descriptions-item label="登录账号">{{
           selected.account_identifier
         }}</el-descriptions-item>
         <el-descriptions-item label="显示名称">{{
@@ -519,7 +525,7 @@ const lifecycleLabel: Record<TestAccountLifecycleAction, string> = {
           environmentName(selected.environment_id)
         }}</el-descriptions-item>
         <el-descriptions-item label="状态">{{ selected.lifecycle_status }}</el-descriptions-item>
-        <el-descriptions-item label="凭据状态"
+        <el-descriptions-item label="密码状态"
           >{{ selected.credential_state }} · revision
           {{ selected.credential_revision_no }}</el-descriptions-item
         >
