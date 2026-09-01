@@ -85,6 +85,18 @@ describe("认证路由守卫（组件/路由层测试）", () => {
     expect(router.currentRoute.value.name).toBe("projects.runners");
   });
 
+  it("registers the project-scoped Execution Binding route", async () => {
+    vi.spyOn(apiClient, "refresh_platform_session").mockResolvedValue(
+      authenticationResponse(currentUser({ permissions: ["PROJECT_VIEW"] })),
+    );
+    const router = createPlatformRouter(createMemoryHistory());
+
+    await router.push(`/projects/${"P".repeat(26)}/execution-bindings`);
+    await router.isReady();
+
+    expect(router.currentRoute.value.name).toBe("projects.execution-bindings");
+  });
+
   it("registers the Runner administrator entry route", async () => {
     vi.spyOn(apiClient, "refresh_platform_session").mockResolvedValue(
       authenticationResponse(currentUser({ permissions: ["RUNNER_REGISTER"] })),

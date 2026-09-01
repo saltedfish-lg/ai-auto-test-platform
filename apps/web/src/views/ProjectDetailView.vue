@@ -121,6 +121,11 @@ async function submitTransition(): Promise<void> {
           <el-button @click="router.push({ name: 'projects.runners', params: { projectId } })">
             Runner 管理
           </el-button>
+          <el-button
+            @click="router.push({ name: 'projects.execution-bindings', params: { projectId } })"
+          >
+            执行绑定
+          </el-button>
         </PermissionGate>
         <PermissionGate permission="PROJECT_EDIT">
           <el-button

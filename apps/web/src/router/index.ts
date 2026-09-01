@@ -10,6 +10,7 @@ import EnvironmentsView from "../views/EnvironmentsView.vue";
 import BusinessTerminalsView from "../views/BusinessTerminalsView.vue";
 import TestAccountsView from "../views/TestAccountsView.vue";
 import RunnersView from "../views/RunnersView.vue";
+import ExecutionBindingsView from "../views/ExecutionBindingsView.vue";
 import ProjectDetailView from "../views/ProjectDetailView.vue";
 import ProjectsListView from "../views/ProjectsListView.vue";
 import WorkspaceHomeView from "../views/WorkspaceHomeView.vue";
@@ -68,6 +69,11 @@ export function createPlatformRouter(history: RouterHistory = createWebHistory()
             path: "projects/:projectId/runners",
             name: "projects.runners",
             component: RunnersView,
+          },
+          {
+            path: "projects/:projectId/execution-bindings",
+            name: "projects.execution-bindings",
+            component: ExecutionBindingsView,
           },
           {
             path: "runners",

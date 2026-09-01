@@ -74,7 +74,7 @@ def test_exact_project_foundation_operations_are_registered(key_ring_file: Path)
         for route in app.routes
         if hasattr(route, "methods")
         for method in route.methods
-        if route.path.startswith("/api/v1/project")
+        if route.path == "/api/v1/project" or route.path.startswith("/api/v1/project/")
     }
     assert operations == {
         ("GET", "/api/v1/project", "list_project"),

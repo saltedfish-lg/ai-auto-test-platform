@@ -1,4 +1,4 @@
--- Current Living Authority MySQL 8.4 V3 → V4 → V5 → V6 → V7 → V8 → V9 → V10 → V11 → V12 → V13 → V14 → V15 runtime assertions
+-- Current Living Authority MySQL 8.4 V3 → V4 → V5 → V6 → V7 → V8 → V9 → V10 → V11 → V12 → V13 → V14 → V15 → V16 runtime assertions
 DELIMITER //
 CREATE PROCEDURE assert_current_contract()
 BEGIN
@@ -8,8 +8,8 @@ BEGIN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Retired atp_platform_design_baseline_release must not exist at the current migration head';
   END IF;
 
-  IF (SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type='BASE TABLE') <> 98 THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Expected exactly 98 base tables after V3 → V4 → V5 → V6 → V7 → V8 → V9 → V10 → V11 → V12 → V13 → V14 → V15';
+  IF (SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type='BASE TABLE') <> 103 THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Expected exactly 103 base tables after V3 → V4 → V5 → V6 → V7 → V8 → V9 → V10 → V11 → V12 → V13 → V14 → V15 → V16';
   END IF;
   IF EXISTS (
     SELECT 1 FROM information_schema.columns

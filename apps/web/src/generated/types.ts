@@ -454,6 +454,7 @@ export type RunTaskResource = {
 
 export type ExecutionAttemptResource = {
   execution_attempt_id: string;
+  execution_binding_snapshot_id: string | null;
   display_name?: string | null;
   row_version: number;
   created_at: string;
@@ -3455,4 +3456,135 @@ export type CreateExternalTriggerRequest = {
 export type CreateExternalTriggerResponse = {
   data: GenericOperationResource;
   correlation_id: string;
+};
+
+export type ExecutionBindingInput = {
+  execution_attempt_id: string;
+  project_id: string;
+  environment_id: string;
+  business_terminal_id: string;
+  test_account_id: string;
+  runner_id: string;
+  runtime_policy_revision_id: string;
+  runner_resource_type: "FORMAL_EXECUTION_SLOT" | "BROWSER_SESSION";
+  runner_resource_identity: string;
+  owner_execution_identity: string;
+  required_capabilities?: Array<string>;
+};
+
+export type ExecutionBindingPreflightCheck = {
+  code: string;
+  status: "PASS" | "FAIL";
+  detail: string;
+};
+
+export type ExecutionBindingPreflightResult = {
+  ready: boolean;
+  checks: Array<ExecutionBindingPreflightCheck>;
+  terminal_access_revision_id?: string | null;
+  login_strategy_id?: string | null;
+  login_strategy_row_version?: number | null;
+  credential_revision_id?: string | null;
+  account_mapping_revision_id?: string | null;
+  sso_identity_key?: string | null;
+  runner_capability_codes: Array<string>;
+};
+
+export type ExecutionBindingPreflightResponse = {
+  data: ExecutionBindingPreflightResult;
+  correlation_id: string;
+};
+
+export type ExecutionBindingCommandRequest = {
+  owner_execution_identity: string;
+  expected_version: number;
+  identity_lease_generation: number;
+  runner_lease_generation: number;
+  reason: string;
+};
+
+export type ExecutionBindingRecoverRequest = ExecutionBindingCommandRequest & {
+  recovery_evidence: string;
+};
+
+export type ResourceLeaseResource = {
+  resource_lease_id: string;
+  resource_type: "IDENTITY" | "RUNNER";
+  resource_identity: string;
+  owner_type: string;
+  owner_id: string;
+  status: "ACTIVE" | "EXPIRED" | "FENCED" | "RELEASED";
+  acquired_at: string;
+  expires_at: string;
+  released_at?: string | null;
+  fencing_generation: number;
+  row_version: number;
+};
+
+export type RuntimePolicySnapshot = {
+  runtime_policy_revision_id: string;
+  revision_no: number;
+  browser_runtime: string;
+  artifact_policy: string;
+  timeout_seconds: number;
+  retry_mode: string;
+  network_requirement: string;
+  serial_execution_policy: "SINGLE_PROCESS_UNIFIED_RETRY";
+};
+
+export type ExecutionBindingSnapshotResource = {
+  execution_binding_snapshot_id: string;
+  execution_attempt_id: string;
+  project_id: string;
+  environment_id: string;
+  business_terminal_id: string;
+  terminal_access_revision_id: string;
+  login_strategy_id: string;
+  login_strategy_row_version: number;
+  test_account_id: string;
+  credential_revision_id: string;
+  account_mapping_revision_id: string;
+  runner_id: string;
+  runner_row_version: number;
+  runner_heartbeat_at: string;
+  runner_capabilities: Array<Record<string, unknown>>;
+  runtime_policy: RuntimePolicySnapshot;
+  identity_lease: ResourceLeaseResource;
+  runner_lease: ResourceLeaseResource;
+  owner_execution_identity: string;
+  correlation_id: string;
+  status: "READY" | "IN_USE" | "RELEASED" | "EXPIRED";
+  row_version: number;
+  created_at: string;
+  updated_at: string;
+  released_at?: string | null;
+  expired_at?: string | null;
+};
+
+export type ExecutionBindingSnapshotResponse = {
+  data: ExecutionBindingSnapshotResource;
+  correlation_id: string;
+};
+
+export type ExecutionBindingSnapshotListResponse = {
+  items: Array<ExecutionBindingSnapshotResource>;
+  page: PageMeta;
+};
+
+export type RuntimePolicyRevisionResource = {
+  runtime_policy_revision_id: string;
+  project_id: string;
+  revision_no: number;
+  browser_runtime: string;
+  artifact_policy: string;
+  timeout_seconds: number;
+  retry_mode: string;
+  network_requirement: string;
+  serial_execution_policy: "SINGLE_PROCESS_UNIFIED_RETRY";
+  lifecycle_status: "PUBLISHED" | "RETIRED";
+  row_version: number;
+};
+
+export type RuntimePolicyRevisionListResponse = {
+  items: Array<RuntimePolicyRevisionResource>;
 };

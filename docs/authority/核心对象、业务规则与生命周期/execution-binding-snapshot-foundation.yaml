@@ -1,0 +1,155 @@
+authority_model: SINGLE_LIVING_AUTHORITY
+artifact_id: EXECUTION-BINDING-SNAPSHOT-FOUNDATION
+status: CURRENT_LIVING_AUTHORITY_IMPLEMENTABLE
+decided_at: '2026-09-01'
+decision_source: USER_PRODUCT_DECISION
+
+preserved_execution_context:
+  object_id: OBJ-094
+  invariant: ExecutionContext继续作为RunTask聚合成员和类型化变量容器，不承担独立执行快照职责。
+
+execution_binding_snapshot:
+  object_id: EBS-OBJ-001
+  canonical_name_zh: 执行绑定快照
+  canonical_name_en: Execution Binding Snapshot
+  code_identifier: execution_binding_snapshot
+  object_type: AGGREGATE_ROOT
+  scope_level: EXECUTION_ATTEMPT_LEVEL
+  aggregate_id: EBS-AGG-001
+  lifecycle_id: EBS-LC-001
+  held_by_object_id: OBJ-036
+  identity_rule: execution_binding_snapshot_id由服务端生成，ExecutionAttempt最多引用一个成功创建的快照。
+  immutable_snapshot_fields:
+  - project_id
+  - environment_id
+  - business_terminal_id
+  - terminal_access_revision_id
+  - login_strategy_id
+  - login_strategy_revision
+  - test_account_id
+  - credential_revision_id
+  - runner_id
+  - runtime_policy_revision_id
+  - identity_lease_id
+  - identity_lease_generation
+  - runner_lease_id
+  - runner_lease_generation
+  - correlation_id
+  - owner_execution_identity
+  secret_boundary: 只保存稳定标识、revision和非Secret判断事实；禁止明文凭据、Token、验证码、localStorage和客户端capability JSON。
+
+aggregate:
+  aggregate_id: EBS-AGG-001
+  root_object_id: EBS-OBJ-001
+  held_by_object_id: OBJ-036
+  invariants:
+  - Preflight与两类Lease acquire全部成功后才创建快照。
+  - 创建后冻结全部immutable_snapshot_fields，后续上游对象变化不得改变历史执行语义。
+  - ExecutionAttempt只保存快照稳定标识；OBJ-094语义和聚合边界保持不变。
+
+lifecycle:
+  lifecycle_id: EBS-LC-001
+  initial_stage: READY
+  active_stages: [READY, IN_USE]
+  terminal_stages: [RELEASED, EXPIRED]
+  transitions:
+  - READY_TO_IN_USE
+  - IN_USE_TO_RELEASED
+  - READY_TO_RELEASED
+  - READY_TO_EXPIRED
+  - IN_USE_TO_EXPIRED
+  prohibited_transitions: [RELEASED_TO_ANY, EXPIRED_TO_ANY]
+  mutation_rule: 禁止普通PATCH直接修改状态；只能由consume、release或正式stale recovery命令转换。
+
+preflight:
+  required_checks:
+  - Project允许创建正式执行
+  - Environment属于Project且允许新执行
+  - BusinessTerminal属于Environment
+  - current published TerminalAccessRevision可消费
+  - LoginStrategy正式revision可消费
+  - TestAccount scope与BusinessTerminal mapping有效
+  - CredentialRevision有效
+  - Runner属于Project且lifecycle、enablement、connection、health、heartbeat和capability满足要求
+  - Project RuntimePolicy Revision可消费
+  - Identity Lease与Runner Resource Lease可取得
+  failure_rule: 任一检查或Lease acquire失败时不得创建ExecutionBindingSnapshot、Audit或Outbox部分记录。
+
+lease_policy:
+  time_source: MYSQL_SERVER_TIME
+  identity_lease:
+    resource_identity: [project_id, environment_id, sso_identity_key]
+    ttl_seconds: 600
+    renew_interval_seconds: 120
+    renewable: true
+    holder: FORMAL_ROOT_EXECUTION_TASK
+  runner_resource_lease:
+    resource_identity: [runner_id, resource_type, slot_or_capability_resource_identity]
+    ttl_seconds: 120
+    renew_interval_seconds: 30
+    renewable: true
+    holder: EXECUTION_ATTEMPT
+    whole_runner_exclusive: false
+    scheduler_semantics: 不引入capacity planner或multi-slot scheduler；仅对实际占用的资源身份建立租约。
+  fencing:
+    generation_allocation: 每个资源身份单调递增
+    renew_rule: ACTIVE且owner与generation匹配的正常续租不增加generation。
+    reacquire_rule: expiry、fence或正式recovery后的重新acquire必须分配更高generation。
+    stale_owner_rule: 旧generation的renew、release和执行写入全部fail-closed。
+  commands:
+    acquire: 只允许服务端preflight后的原子创建流程调用。
+    renew: 仅当前owner与generation匹配时允许，重复请求幂等。
+    release: 仅当前owner与generation匹配时允许，重复release返回既有结果且无副作用。
+    recover: 仅正式系统恢复主体或既有Authority允许的管理员角色执行，必须核对owner、generation、执行状态并写原因和审计。
+    generic_patch: RETIRED_AS_MUTATION_ENTRY
+
+runtime_policy:
+  scope: PROJECT
+  versioned_object: Project RuntimePolicy Revision
+  resolution_rule: 正式执行必须解析并冻结明确的Project RuntimePolicy Revision；平台默认模板只能用于生成或解析Project revision。
+  required_domains: [browser_runtime, artifact_policy, timeout, retry_mode, network_requirement, serial_execution_policy]
+  arbitrary_json_bag_forbidden: true
+
+transaction_boundary:
+  database: MySQL 8.4
+  mode: SINGLE_LOCAL_DATABASE_TRANSACTION
+  atomic_writes: [ExecutionBindingSnapshot, Identity_Lease, Runner_Resource_Lease, Audit, Outbox]
+  rollback_rule: 任一步失败全部rollback，不保留部分Binding或Lease。
+  saga: false
+  external_side_effects: 不在本事务中执行Browser、Runner dispatch或其他外部副作用。
+
+acquisition_order:
+- 权限与Project scope
+- 上游对象状态与revision
+- Environment lock
+- Identity Lease
+- Runner matching
+- Runner Resource Lease
+- ExecutionAttempt ownership
+- ExecutionBindingSnapshot
+failure_release_order: REVERSE_ACQUISITION_ORDER
+
+api_contract:
+  resource: /api/v1/execution-binding-snapshots
+  mutation_rule: 状态与Lease禁止普通PATCH；只允许owner/fencing-aware命令。
+  operations:
+  - preflight_execution_binding_snapshot
+  - create_execution_binding_snapshot
+  - list_execution_binding_snapshots
+  - get_execution_binding_snapshot
+  - consume_execution_binding_snapshot
+  - renew_execution_binding_snapshot_leases
+  - release_execution_binding_snapshot
+  - recover_execution_binding_snapshot
+
+event_contract:
+  event_version: 1.0.0
+  event_types:
+  - execution_binding_snapshot.ready
+  - execution_binding_snapshot.in_use
+  - execution_binding_snapshot.leases_renewed
+  - execution_binding_snapshot.released
+  - execution_binding_snapshot.expired
+  payload_rule: 仅包含Binding标识、ExecutionAttempt标识、状态、两类fencing generation、Project与标准关联字段；不得包含Secret。
+
+exclusions: [Scheduler, task_dispatch_queue, Runner_multi_slot_scheduler, AI_Exploration_Browser_Loop]

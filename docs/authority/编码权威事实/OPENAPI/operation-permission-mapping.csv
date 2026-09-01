@@ -141,9 +141,7 @@ create_trigger_rule,POST,/api/v1/trigger-rule,PROJECT_EDIT,CURRENT_LIVING_AUTHOR
 get_trigger_rule,GET,/api/v1/trigger-rule/{id},PROJECT_VIEW,CURRENT_LIVING_AUTHORITY
 update_trigger_rule,PATCH,/api/v1/trigger-rule/{id},PROJECT_EDIT,CURRENT_LIVING_AUTHORITY
 list_lease,GET,/api/v1/lease,PROJECT_VIEW,CURRENT_LIVING_AUTHORITY
-create_lease,POST,/api/v1/lease,PROJECT_EDIT,CURRENT_LIVING_AUTHORITY
 get_lease,GET,/api/v1/lease/{id},PROJECT_VIEW,CURRENT_LIVING_AUTHORITY
-update_lease,PATCH,/api/v1/lease/{id},PROJECT_EDIT,CURRENT_LIVING_AUTHORITY
 list_automation_asset,GET,/api/v1/automation-asset,PROJECT_VIEW,CURRENT_LIVING_AUTHORITY
 create_automation_asset,POST,/api/v1/automation-asset,PROJECT_EDIT,CURRENT_LIVING_AUTHORITY
 get_automation_asset,GET,/api/v1/automation-asset/{id},PROJECT_VIEW,CURRENT_LIVING_AUTHORITY
@@ -287,3 +285,12 @@ create_artifact_upload_session,POST,/api/v1/artifact-upload-sessions,TEST_ARTIFA
 complete_artifact_upload,POST,/api/v1/artifact-upload-sessions/{id}/complete,TEST_ARTIFACT_VIEW,CURRENT_LIVING_AUTHORITY
 list_recovery_items,GET,/api/v1/recovery-center,PROJECT_VIEW,CURRENT_LIVING_AUTHORITY
 create_external_trigger,POST,/api/v1/external-triggers,PROJECT_EDIT,CURRENT_LIVING_AUTHORITY
+preflight_execution_binding_snapshot,POST,/api/v1/execution-binding-snapshots/preflight,PROJECT_EDIT,CURRENT_LIVING_AUTHORITY
+create_execution_binding_snapshot,POST,/api/v1/execution-binding-snapshots,PROJECT_EDIT,CURRENT_LIVING_AUTHORITY
+list_execution_binding_snapshots,GET,/api/v1/execution-binding-snapshots,PROJECT_VIEW,CURRENT_LIVING_AUTHORITY
+get_execution_binding_snapshot,GET,/api/v1/execution-binding-snapshots/{id},PROJECT_VIEW,CURRENT_LIVING_AUTHORITY
+consume_execution_binding_snapshot,POST,/api/v1/execution-binding-snapshots/{id}/consume,PROJECT_EDIT,CURRENT_LIVING_AUTHORITY
+renew_execution_binding_snapshot_leases,POST,/api/v1/execution-binding-snapshots/{id}/leases/renew,PROJECT_EDIT,CURRENT_LIVING_AUTHORITY
+release_execution_binding_snapshot,POST,/api/v1/execution-binding-snapshots/{id}/release,PROJECT_EDIT,CURRENT_LIVING_AUTHORITY
+recover_execution_binding_snapshot,POST,/api/v1/execution-binding-snapshots/{id}/recover,PROJECT_EDIT,CURRENT_LIVING_AUTHORITY
+list_project_runtime_policy_revisions,GET,/api/v1/project-runtime-policy-revisions,PROJECT_VIEW,CURRENT_LIVING_AUTHORITY

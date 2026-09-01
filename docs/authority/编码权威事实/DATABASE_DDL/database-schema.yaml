@@ -3234,6 +3234,11 @@ tables:
     nullable: false
     primary_key: true
     default: null
+  - name: execution_binding_snapshot_id
+    type: VARCHAR(26)
+    nullable: true
+    primary_key: false
+    default: null
   - name: project_id
     type: VARCHAR(26)
     nullable: true
@@ -3336,6 +3341,9 @@ tables:
     columns:
     - run_task_id
     - attempt_no
+  - name: uq_atp_execution_attempt_binding
+    columns:
+    - execution_binding_snapshot_id
   check_constraints:
   - name: ck_atp_execution_attempt_execution_status
     expression: (execution_status IN ('ABORTED', 'BROKEN', 'CANCELLED', 'FAILED', 'PRESTART_BLOCKED', 'READY', 'RUNNING',
@@ -3392,6 +3400,12 @@ tables:
     column: project_id
     referenced_table: atp_project
     referenced_column: project_id
+    on_delete: RESTRICT
+    on_update: RESTRICT
+  - name: fk_atp_execution_attempt_binding
+    column: execution_binding_snapshot_id
+    referenced_table: atp_execution_binding_snapshot
+    referenced_column: execution_binding_snapshot_id
     on_delete: RESTRICT
     on_update: RESTRICT
   indexes: []
@@ -10149,6 +10163,116 @@ tables:
   - ai_call_id
   - actor_user_id
   - model_config_id
+- table_name: atp_project_runtime_policy_revision
+  columns:
+  - {name: runtime_policy_revision_id}
+  - {name: project_id}
+  - {name: revision_no}
+  - {name: browser_runtime}
+  - {name: artifact_policy}
+  - {name: timeout_seconds}
+  - {name: retry_mode}
+  - {name: network_requirement}
+  - {name: serial_execution_policy}
+  - {name: lifecycle_status}
+  - {name: row_version}
+  - {name: created_at}
+  - {name: updated_at}
+  - {name: created_by}
+  - {name: updated_by}
+  primary_key: [runtime_policy_revision_id]
+  unique_keys:
+  - [project_id, revision_no]
+  - [runtime_policy_revision_id, project_id]
+  data_owner: ExecutionBindingService
+- table_name: atp_resource_lease_generation
+  columns:
+  - {name: resource_type}
+  - {name: resource_identity_hash}
+  - {name: current_generation}
+  - {name: updated_at}
+  primary_key: [resource_type, resource_identity_hash]
+  unique_keys: []
+  data_owner: ExecutionBindingService
+- table_name: atp_resource_lease
+  columns:
+  - {name: resource_lease_id}
+  - {name: project_id}
+  - {name: resource_type}
+  - {name: resource_identity}
+  - {name: resource_identity_hash}
+  - {name: owner_type}
+  - {name: owner_id}
+  - {name: status}
+  - {name: acquired_at}
+  - {name: expires_at}
+  - {name: released_at}
+  - {name: fencing_generation}
+  - {name: correlation_id}
+  - {name: row_version}
+  - {name: created_at}
+  - {name: updated_at}
+  - {name: active_resource_identity_hash}
+  primary_key: [resource_lease_id]
+  unique_keys:
+  - [resource_type, active_resource_identity_hash]
+  data_owner: ExecutionBindingService
+- table_name: atp_execution_binding_snapshot
+  columns:
+  - {name: execution_binding_snapshot_id}
+  - {name: execution_attempt_id}
+  - {name: project_id}
+  - {name: environment_id}
+  - {name: business_terminal_id}
+  - {name: terminal_access_revision_id}
+  - {name: login_strategy_id}
+  - {name: login_strategy_row_version}
+  - {name: test_account_id}
+  - {name: credential_revision_id}
+  - {name: account_mapping_revision_id}
+  - {name: runner_id}
+  - {name: runner_row_version}
+  - {name: runner_heartbeat_at}
+  - {name: runner_capability_snapshot}
+  - {name: runtime_policy_revision_id}
+  - {name: identity_lease_id}
+  - {name: identity_lease_generation}
+  - {name: runner_lease_id}
+  - {name: runner_lease_generation}
+  - {name: owner_execution_identity}
+  - {name: correlation_id}
+  - {name: status}
+  - {name: row_version}
+  - {name: created_at}
+  - {name: updated_at}
+  - {name: released_at}
+  - {name: expired_at}
+  - {name: created_by}
+  primary_key: [execution_binding_snapshot_id]
+  unique_keys:
+  - [execution_attempt_id]
+  data_owner: ExecutionBindingService
+- table_name: atp_execution_binding_audit
+  columns:
+  - {name: audit_id}
+  - {name: execution_binding_snapshot_id}
+  - {name: project_id}
+  - {name: execution_attempt_id}
+  - {name: action}
+  - {name: actor_type}
+  - {name: actor_id}
+  - {name: previous_status}
+  - {name: new_status}
+  - {name: result_code}
+  - {name: reason}
+  - {name: lease_generations_json}
+  - {name: correlation_id}
+  - {name: occurred_at}
+  - {name: source_context_hash}
+  primary_key: [audit_id]
+  unique_keys: []
+  delete_behavior: APPEND_ONLY_UPDATE_DELETE_FORBIDDEN
+  data_owner: ExecutionBindingService
 rules:
 - 正式关系、状态、权限和唯一约束必须物理化，extension_json仅保存非契约扩展。
 - 对象事实源、对象表映射、DDL、OpenAPI与事件必须使用同一技术身份。
@@ -10205,3 +10329,20 @@ migration_execution:
     flyway_schema_history and validates checksum/head; direct MySQL execution remains only for isolated low-level schema/upgrade validation.
   retired_active_models:
   - OBJ-085 / atp_platform_design_baseline_release
+execution_binding_snapshot_schema_contract:
+  decision_id: EBS-SCHEMA-001
+  status: WIRED_AND_REQUIRED
+  migration_capability: EXECUTION_BINDING_SNAPSHOT_FOUNDATION_SCHEMA
+  mysql_version: '8.4'
+  tables:
+  - atp_project_runtime_policy_revision
+  - atp_execution_binding_snapshot
+  - atp_resource_lease
+  - atp_resource_lease_generation
+  - atp_execution_binding_audit
+  active_lease_uniqueness: resource_type与规范化resource_identity_hash最多存在一个ACTIVE租约。
+  fencing_storage: resource identity generation在独立generation行上使用SELECT FOR UPDATE单调分配；正常renew不递增，reacquire递增。
+  composite_scope_integrity: Project、Environment、Terminal、Account、Runner及其revision必须通过复合FK或事务内锁定校验保持同scope。
+  atomic_create: ExecutionBindingSnapshot、Identity Lease、Runner Resource Lease、Audit和Outbox在同一MySQL事务写入。
+  secret_boundary: 所有表均禁止明文凭据、Token、验证码、localStorage和Secret JSON。
+  scheduler_tables_forbidden: true

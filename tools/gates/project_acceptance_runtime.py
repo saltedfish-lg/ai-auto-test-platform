@@ -848,6 +848,419 @@ def _get_json(url: str, *, headers: dict[str, str]) -> tuple[int, dict[str, obje
         return int(error.code), json.loads(error.read().decode("utf-8"))
 
 
+def _prepare_execution_binding_acceptance(
+    database: str, project_code: str, username: str
+) -> dict[str, object]:
+    """Stage only the execution-owner facts that have no product create command yet."""
+
+    runner_id = new_ulid()
+    execution_slot_id = new_ulid()
+    policy_id = new_ulid()
+    run_task_id = new_ulid()
+    attempt_ids = [new_ulid() for _ in range(4)]
+    with _connection(database) as connection, connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT project_id,lifecycle_status FROM atp_project WHERE project_code=%s",
+            (project_code,),
+        )
+        project_id, previous_project_status = cursor.fetchone()
+        cursor.execute(
+            "SELECT environment_id FROM atp_environment WHERE project_id=%s "
+            "AND environment_code=%s AND lifecycle_status='ACTIVE'",
+            (project_id, f"ENV-{project_code}"),
+        )
+        environment_id = cursor.fetchone()[0]
+        cursor.execute(
+            "SELECT business_terminal_id,current_published_revision_id "
+            "FROM atp_business_terminal WHERE project_id=%s AND terminal_code=%s "
+            "AND lifecycle_status='ACTIVE'",
+            (project_id, f"ADMIN-{project_code}"),
+        )
+        terminal_id, terminal_revision_id = cursor.fetchone()
+        cursor.execute(
+            "SELECT test_account_id FROM atp_test_account WHERE project_id=%s "
+            "AND environment_id=%s AND account_identifier=%s AND lifecycle_status='ACTIVE'",
+            (project_id, environment_id, f"qa-{project_code}"),
+        )
+        account_id = cursor.fetchone()[0]
+        cursor.execute("SELECT user_id FROM atp_user WHERE username=%s", (username,))
+        actor_id = cursor.fetchone()[0]
+        cursor.execute(
+            "SELECT credential_revision_id FROM atp_credential_revision "
+            "WHERE test_account_id=%s AND lifecycle_status='PUBLISHED' "
+            "ORDER BY revision_no DESC LIMIT 1",
+            (account_id,),
+        )
+        credential_revision_id = cursor.fetchone()[0]
+
+        cursor.execute(
+            "UPDATE atp_project SET lifecycle_status='ACTIVE' WHERE project_id=%s",
+            (project_id,),
+        )
+        cursor.execute(
+            "INSERT INTO atp_runner "
+            "(runner_id,project_id,runner_code,registration_status,connection_status,"
+            "health_status,enable_status,project_binding_status,scheduling_status,"
+            "resource_status,version_compatibility,last_heartbeat_at,registered_at,"
+            "runtime_metadata_json,lifecycle_status,display_name,row_version,"
+            "created_by,updated_by) "
+            "VALUES (%s,%s,%s,'REGISTERED','ONLINE','HEALTHY','ENABLED','BOUND','IDLE',"
+            "'AVAILABLE','COMPATIBLE',CURRENT_TIMESTAMP(6),CURRENT_TIMESTAMP(6),"
+            "JSON_OBJECT('acceptance_fixture',TRUE),'ACTIVE',%s,1,%s,%s)",
+            (
+                runner_id,
+                project_id,
+                f"BINDING-{project_code}",
+                "Execution Binding Acceptance Runner",
+                actor_id,
+                actor_id,
+            ),
+        )
+        capabilities = {
+            "FORMAL_EXECUTION": "FLOW",
+            "TERMINAL_ADMIN_WEB": "TERMINAL",
+            "BROWSER_CHROMIUM": "BROWSER",
+            "CAPTURE_SCREENSHOT": "ARTIFACT",
+            "INTRANET_ACCESS": "NETWORK",
+        }
+        for code, capability_type in capabilities.items():
+            cursor.execute(
+                "INSERT INTO atp_runner_capability "
+                "(runner_capability_id,project_id,runner_id,capability_code,capability_type,"
+                "availability_status,validation_status,observed_version,reported_at,"
+                "lifecycle_status,display_name,row_version,created_by,updated_by) "
+                "VALUES (%s,%s,%s,%s,%s,'CONFIGURED','VALID','acceptance',"
+                "CURRENT_TIMESTAMP(6),'ACTIVE',%s,1,%s,%s)",
+                (
+                    new_ulid(),
+                    project_id,
+                    runner_id,
+                    code,
+                    capability_type,
+                    code,
+                    actor_id,
+                    actor_id,
+                ),
+            )
+        cursor.execute(
+            "INSERT INTO atp_project_runtime_policy_revision "
+            "(runtime_policy_revision_id,project_id,revision_no,browser_runtime,"
+            "artifact_policy,timeout_seconds,retry_mode,network_requirement,"
+            "serial_execution_policy,lifecycle_status,row_version,created_by,updated_by) "
+            "VALUES (%s,%s,1,'CHROMIUM','SCREENSHOT',300,'UNIFIED','INTRANET',"
+            "'SINGLE_PROCESS_UNIFIED_RETRY','PUBLISHED',1,%s,%s)",
+            (policy_id, project_id, actor_id, actor_id),
+        )
+        standard_case_id = new_ulid()
+        case_version_id = new_ulid()
+        case_suite_id = new_ulid()
+        cursor.execute(
+            "INSERT INTO atp_standard_case "
+            "(standard_case_id,project_id,case_code,lifecycle_status,display_name,row_version,"
+            "created_by,updated_by) VALUES (%s,%s,%s,'READY',%s,1,%s,%s)",
+            (
+                standard_case_id,
+                project_id,
+                f"BINDING-{project_code}",
+                "Binding acceptance case",
+                actor_id,
+                actor_id,
+            ),
+        )
+        cursor.execute(
+            "INSERT INTO atp_case_version "
+            "(case_version_id,project_id,case_id,version_no,standard_case_id,lifecycle_status,"
+            "display_name,row_version,created_by,updated_by) "
+            "VALUES (%s,%s,%s,'1',%s,'PUBLISHED',%s,1,%s,%s)",
+            (
+                case_version_id,
+                project_id,
+                standard_case_id,
+                standard_case_id,
+                "Binding acceptance case revision",
+                actor_id,
+                actor_id,
+            ),
+        )
+        cursor.execute(
+            "INSERT INTO atp_case_suite "
+            "(case_suite_id,project_id,suite_code,case_version_id,lifecycle_status,display_name,"
+            "row_version,created_by,updated_by) VALUES (%s,%s,%s,%s,'ACTIVE',%s,1,%s,%s)",
+            (
+                case_suite_id,
+                project_id,
+                f"BINDING-{project_code}",
+                case_version_id,
+                "Binding acceptance suite",
+                actor_id,
+                actor_id,
+            ),
+        )
+        cursor.execute(
+            "INSERT INTO atp_run_task "
+            "(run_task_id,project_id,idempotency_key,case_suite_id,environment_id,"
+            "lifecycle_status,task_state,final_result,display_name,row_version,"
+            "created_by,updated_by) "
+            "VALUES (%s,%s,%s,%s,%s,'WAITING_RESOURCE','WAITING_RESOURCE','UNKNOWN',%s,1,%s,%s)",
+            (
+                run_task_id,
+                project_id,
+                f"binding-{project_code}",
+                case_suite_id,
+                environment_id,
+                "Binding acceptance root task",
+                actor_id,
+                actor_id,
+            ),
+        )
+        cursor.execute(
+            "INSERT INTO atp_execution_slot "
+            "(execution_slot_id,project_id,runner_id,slot_no,lifecycle_status,display_name,"
+            "row_version,created_by,updated_by) VALUES (%s,%s,%s,'0','ACTIVE',%s,1,%s,%s)",
+            (
+                execution_slot_id,
+                project_id,
+                runner_id,
+                "Binding acceptance formal slot",
+                actor_id,
+                actor_id,
+            ),
+        )
+        for attempt_id in attempt_ids:
+            configuration_id = new_ulid()
+            batch_id = new_ulid()
+            case_attempt_id = new_ulid()
+            cursor.execute(
+                "INSERT INTO atp_configuration_snapshot "
+                "(configuration_snapshot_id,project_id,lifecycle_status,display_name,row_version,"
+                "created_by,updated_by) VALUES (%s,%s,'SEALED',%s,1,%s,%s)",
+                (configuration_id, project_id, "Binding acceptance config", actor_id, actor_id),
+            )
+            cursor.execute(
+                "INSERT INTO atp_execution_batch "
+                "(execution_batch_id,project_id,batch_no,lifecycle_status,display_name,row_version,"
+                "created_by,updated_by) VALUES (%s,%s,%s,'CREATED',%s,1,%s,%s)",
+                (batch_id, project_id, attempt_id, "Binding acceptance batch", actor_id, actor_id),
+            )
+            # V3 models the CaseAttempt/ExecutionAttempt pair with mutual mandatory FKs.
+            # The isolated fixture inserts the complete pair before restoring enforcement.
+            cursor.execute("SET FOREIGN_KEY_CHECKS=0")
+            try:
+                cursor.execute(
+                    "INSERT INTO atp_case_attempt "
+                    "(case_attempt_id,project_id,execution_attempt_id,result_status,"
+                    "lifecycle_status,display_name,row_version,created_by,updated_by) "
+                    "VALUES (%s,%s,%s,'BROKEN','CREATED',%s,1,%s,%s)",
+                    (
+                        case_attempt_id,
+                        project_id,
+                        attempt_id,
+                        "Binding acceptance case",
+                        actor_id,
+                        actor_id,
+                    ),
+                )
+                cursor.execute(
+                    "INSERT INTO atp_execution_attempt "
+                    "(execution_attempt_id,project_id,run_task_id,attempt_no,case_attempt_id,runner_id,"
+                    "configuration_snapshot_id,execution_batch_id,execution_status,"
+                    "finalization_status,lifecycle_status,display_name,row_version,"
+                    "created_by,updated_by) "
+                    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'READY','INITIAL','CREATED',%s,1,%s,%s)",
+                    (
+                        attempt_id,
+                        project_id,
+                        run_task_id,
+                        attempt_id,
+                        case_attempt_id,
+                        runner_id,
+                        configuration_id,
+                        batch_id,
+                        "Binding acceptance attempt",
+                        actor_id,
+                        actor_id,
+                    ),
+                )
+            finally:
+                cursor.execute("SET FOREIGN_KEY_CHECKS=1")
+
+        cursor.execute(
+            "SELECT COUNT(*) FROM atp_execution_attempt ea "
+            "JOIN atp_case_attempt ca ON ca.case_attempt_id=ea.case_attempt_id "
+            "AND ca.execution_attempt_id=ea.execution_attempt_id "
+            "WHERE ea.execution_attempt_id IN (%s,%s,%s,%s) AND ea.run_task_id=%s",
+            (*attempt_ids, run_task_id),
+        )
+        if int(cursor.fetchone()[0]) != 4:
+            raise RuntimeError("execution binding acceptance owner fixture is inconsistent")
+
+    return {
+        "project_id": str(project_id),
+        "previous_project_status": str(previous_project_status),
+        "environment_id": str(environment_id),
+        "terminal_id": str(terminal_id),
+        "terminal_revision_id": str(terminal_revision_id),
+        "account_id": str(account_id),
+        "credential_revision_id": str(credential_revision_id),
+        "runner_id": runner_id,
+        "policy_id": policy_id,
+        "attempt_ids": attempt_ids,
+        "runner_resource_identity": execution_slot_id,
+        "owner_execution_identity": run_task_id,
+    }
+
+
+def _restore_execution_binding_project(database: str, fixture: dict[str, object]) -> None:
+    with _connection(database) as connection, connection.cursor() as cursor:
+        cursor.execute(
+            "UPDATE atp_project SET lifecycle_status=%s WHERE project_id=%s",
+            (fixture["previous_project_status"], fixture["project_id"]),
+        )
+
+
+def _execution_binding_recovery_evidence(
+    database: str,
+    api_port: int,
+    username: str,
+    password: str,
+    fixture: dict[str, object],
+) -> dict[str, object]:
+    status, login = _post_json(
+        f"http://127.0.0.1:{api_port}/api/v1/auth/login",
+        {"username": username, "password": password},
+    )
+    if status != 200:
+        raise RuntimeError("execution binding recovery probe login failed")
+    token = str(dict(login["data"])["access_token"])
+    headers = {"Authorization": f"Bearer {token}"}
+    attempt_ids = tuple(fixture["attempt_ids"])
+    with _connection(database) as connection, connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT b.execution_binding_snapshot_id,b.execution_attempt_id,b.row_version,"
+            "b.owner_execution_identity,b.identity_lease_generation,b.runner_lease_generation,"
+            "b.identity_lease_id,b.runner_lease_id "
+            "FROM atp_execution_binding_snapshot b "
+            "WHERE b.execution_attempt_id IN (%s,%s,%s,%s) AND b.status='READY'",
+            attempt_ids,
+        )
+        active_rows = list(cursor.fetchall())
+        if len(active_rows) != 1:
+            raise RuntimeError("contention must leave exactly one active binding")
+        (
+            binding_id,
+            winner_attempt_id,
+            row_version,
+            owner_identity,
+            identity_generation,
+            runner_generation,
+            identity_lease_id,
+            runner_lease_id,
+        ) = active_rows[0]
+        cursor.execute(
+            "UPDATE atp_resource_lease SET "
+            "expires_at=DATE_SUB(UTC_TIMESTAMP(6),INTERVAL 1 SECOND) "
+            "WHERE resource_lease_id IN (%s,%s) AND status='ACTIVE'",
+            (identity_lease_id, runner_lease_id),
+        )
+
+    recover_status, recover_payload = _post_json(
+        f"http://127.0.0.1:{api_port}/api/v1/execution-binding-snapshots/{binding_id}/recover",
+        {
+            "owner_execution_identity": owner_identity,
+            "expected_version": int(row_version),
+            "identity_lease_generation": int(identity_generation),
+            "runner_lease_generation": int(runner_generation),
+            "reason": "real stale recovery acceptance",
+            "recovery_evidence": "both server-time lease expiries were forced stale in isolated DB",
+        },
+        headers={**headers, "Idempotency-Key": f"recover-{binding_id}"},
+    )
+    recovered = dict(recover_payload.get("data") or {})
+    if (
+        recover_status != 200
+        or recovered.get("status") != "EXPIRED"
+        or dict(recovered.get("identity_lease") or {}).get("status") != "EXPIRED"
+        or dict(recovered.get("runner_lease") or {}).get("status") != "EXPIRED"
+    ):
+        raise RuntimeError(
+            "server-time stale recovery did not expire binding and leases: "
+            f"http={recover_status}, code={recover_payload.get('code')}, "
+            f"binding_status={recovered.get('status')}, "
+            f"identity_status={dict(recovered.get('identity_lease') or {}).get('status')}, "
+            f"runner_status={dict(recovered.get('runner_lease') or {}).get('status')}"
+        )
+
+    with _connection(database) as connection, connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT COUNT(*),COUNT(DISTINCT execution_attempt_id) "
+            "FROM atp_execution_binding_snapshot WHERE execution_attempt_id IN (%s,%s,%s,%s)",
+            attempt_ids,
+        )
+        binding_count, bound_attempt_count = cursor.fetchone()
+        cursor.execute(
+            "SELECT l.resource_type,GROUP_CONCAT(l.fencing_generation ORDER BY l.fencing_generation) "
+            "FROM atp_resource_lease l JOIN atp_execution_binding_snapshot b "
+            "ON l.resource_lease_id IN (b.identity_lease_id,b.runner_lease_id) "
+            "WHERE b.execution_attempt_id IN (%s,%s,%s,%s) GROUP BY l.resource_type",
+            attempt_ids,
+        )
+        generations = {str(kind): str(values) for kind, values in cursor.fetchall()}
+        cursor.execute(
+            "SELECT action,COUNT(*) FROM atp_execution_binding_audit "
+            "WHERE execution_attempt_id IN (%s,%s,%s,%s) GROUP BY action",
+            attempt_ids,
+        )
+        audit_actions = {str(action): int(count) for action, count in cursor.fetchall()}
+        cursor.execute(
+            "SELECT event_type,COUNT(*) FROM atp_outbox_event WHERE aggregate_id IN ("
+            "SELECT execution_binding_snapshot_id FROM atp_execution_binding_snapshot "
+            "WHERE execution_attempt_id IN (%s,%s,%s,%s)) GROUP BY event_type",
+            attempt_ids,
+        )
+        outbox_events = {str(event_type): int(count) for event_type, count in cursor.fetchall()}
+        cursor.execute(
+            "SELECT COUNT(*) FROM atp_execution_binding_snapshot b "
+            "JOIN atp_resource_lease i ON i.resource_lease_id=b.identity_lease_id "
+            "JOIN atp_resource_lease r ON r.resource_lease_id=b.runner_lease_id "
+            "WHERE b.execution_attempt_id IN (%s,%s,%s,%s)",
+            attempt_ids,
+        )
+        atomically_complete_count = int(cursor.fetchone()[0])
+        cursor.execute(
+            "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() "
+            "AND table_name IN ('atp_execution_binding_snapshot','atp_resource_lease',"
+            "'atp_execution_binding_audit') AND column_name LIKE '%%secret%%'"
+        )
+        secret_column_count = int(cursor.fetchone()[0])
+
+    if int(binding_count) != 3 or int(bound_attempt_count) != 3:
+        raise RuntimeError("lease contention did not yield exactly one committed winner")
+    if generations != {"IDENTITY": "1,2,3", "RUNNER": "1,2,3"}:
+        raise RuntimeError("release/reacquire fencing generations are not monotonic")
+    if audit_actions != {"CREATE": 3, "RECOVER": 1, "RELEASE": 2, "RENEW": 1}:
+        raise RuntimeError("execution binding append-only audit evidence is incomplete")
+    required_events = {
+        "execution_binding_snapshot.ready": 3,
+        "execution_binding_snapshot.leases_renewed": 1,
+        "execution_binding_snapshot.released": 2,
+        "execution_binding_snapshot.expired": 1,
+    }
+    if outbox_events != required_events:
+        raise RuntimeError("execution binding outbox evidence is incomplete")
+    if atomically_complete_count != 3 or secret_column_count != 0:
+        raise RuntimeError("binding/lease atomicity or secret minimization evidence failed")
+    return {
+        "binding_count": int(binding_count),
+        "contention_winner_attempt_id": str(winner_attempt_id),
+        "generation_sequences": generations,
+        "audit_actions": audit_actions,
+        "outbox_events": outbox_events,
+        "stale_recovery_status": recover_status,
+        "atomic_binding_lease_count": atomically_complete_count,
+        "secret_column_count": secret_column_count,
+    }
+
+
 def _patch_json(
     url: str, payload: dict[str, object], *, headers: dict[str, str]
 ) -> tuple[int, dict[str, object]]:
@@ -1085,6 +1498,8 @@ def main() -> int:
             "RBAC_RUNTIME",
             "MYSQL_PERSISTENCE",
             "TEST_ACCOUNT_SECRET_ENCRYPTION",
+            "EXECUTION_BINDING_FENCING",
+            "RESOURCE_LEASE_CONTENTION",
             "ISOLATED_RUNTIME_CLEANUP",
         ],
     )
@@ -1126,6 +1541,8 @@ def main() -> int:
     database_evidence: dict[str, object] = {}
     audit_unavailable_evidence: dict[str, object] = {}
     dynamic_owner_evidence: dict[str, object] = {}
+    execution_binding_fixture: dict[str, object] = {}
+    execution_binding_evidence: dict[str, object] = {}
     stage = "mysql_connect"
     error_type: str | None = None
     error_code: str | None = None
@@ -1405,6 +1822,59 @@ def main() -> int:
                 authorized_password,
                 project_code,
             )
+            stage = "execution_binding_fixtures"
+            execution_binding_fixture = _prepare_execution_binding_acceptance(
+                database, project_code, authorized_username
+            )
+            browser_environment.update(
+                {
+                    "PLAYWRIGHT_TEST_FILE": "execution-binding.spec.ts",
+                    "ATP_BINDING_E2E_USERNAME": authorized_username,
+                    "ATP_BINDING_E2E_PASSWORD": authorized_password,
+                    "ATP_BINDING_E2E_PROJECT_ID": str(execution_binding_fixture["project_id"]),
+                    "ATP_BINDING_E2E_ENVIRONMENT_ID": str(
+                        execution_binding_fixture["environment_id"]
+                    ),
+                    "ATP_BINDING_E2E_TERMINAL_ID": str(execution_binding_fixture["terminal_id"]),
+                    "ATP_BINDING_E2E_TERMINAL_REVISION_ID": str(
+                        execution_binding_fixture["terminal_revision_id"]
+                    ),
+                    "ATP_BINDING_E2E_ACCOUNT_ID": str(execution_binding_fixture["account_id"]),
+                    "ATP_BINDING_E2E_CREDENTIAL_REVISION_ID": str(
+                        execution_binding_fixture["credential_revision_id"]
+                    ),
+                    "ATP_BINDING_E2E_RUNNER_ID": str(execution_binding_fixture["runner_id"]),
+                    "ATP_BINDING_E2E_POLICY_ID": str(execution_binding_fixture["policy_id"]),
+                    "ATP_BINDING_E2E_ATTEMPT_IDS": ",".join(
+                        str(value) for value in execution_binding_fixture["attempt_ids"]
+                    ),
+                    "ATP_BINDING_E2E_RESOURCE_IDENTITY": str(
+                        execution_binding_fixture["runner_resource_identity"]
+                    ),
+                    "ATP_BINDING_E2E_OWNER_IDENTITY": str(
+                        execution_binding_fixture["owner_execution_identity"]
+                    ),
+                }
+            )
+            stage = "execution_binding_chromium_test"
+            binding_completed = subprocess.run(
+                command,
+                cwd=ROOT,
+                env=browser_environment,
+                check=False,
+            )
+            if binding_completed.returncode != 0:
+                browser_exit = binding_completed.returncode
+                raise RuntimeError("execution binding browser acceptance command failed")
+            stage = "execution_binding_recovery_evidence"
+            execution_binding_evidence = _execution_binding_recovery_evidence(
+                database,
+                api_port,
+                authorized_username,
+                authorized_password,
+                execution_binding_fixture,
+            )
+            _restore_execution_binding_project(database, execution_binding_fixture)
             stage = "database_evidence"
             database_evidence = _database_evidence(database, project_code, runner_project_id)
         status = "PASS"
@@ -1422,7 +1892,11 @@ def main() -> int:
         elif stage == "web_startup":
             error_code = _startup_error_code(runtime_directory / "web.log")
             error_diagnostic = _safe_startup_diagnostic(runtime_directory / "web.log")
-        elif stage == "database_evidence" and isinstance(exc, RuntimeError):
+        elif stage in {
+            "database_evidence",
+            "execution_binding_fixtures",
+            "execution_binding_recovery_evidence",
+        } and isinstance(exc, RuntimeError):
             error_code = "DATABASE_EVIDENCE_INVARIANT_FAILED"
             error_diagnostic = str(exc)
         exit_code = 1
@@ -1471,7 +1945,8 @@ def main() -> int:
             },
             "test_runner": "playwright",
             "test_cases": [
-                "apps/web/e2e/project-management.spec.ts::project and Test Account browser closure"
+                "apps/web/e2e/project-management.spec.ts::project and Test Account browser closure",
+                "apps/web/e2e/execution-binding.spec.ts::binding and fenced lease browser closure",
             ],
             "browser_exit_code": browser_exit,
             "checks": {
@@ -1482,11 +1957,13 @@ def main() -> int:
                     "PASS" if audit_unavailable_evidence else "NOT_RUN"
                 ),
                 "dynamic_owner_revocation": ("PASS" if dynamic_owner_evidence else "NOT_RUN"),
+                "execution_binding_fencing": ("PASS" if execution_binding_evidence else "NOT_RUN"),
                 "cleanup": "PASS" if cleanup_success else "FAIL",
             },
             "database_evidence": database_evidence,
             "audit_unavailable_evidence": audit_unavailable_evidence,
             "dynamic_owner_evidence": dynamic_owner_evidence,
+            "execution_binding_evidence": execution_binding_evidence,
             "cleanup_status": {
                 "temporary_database_removed": removed if created else True,
                 "runtime_directory_removed": runtime_removed,

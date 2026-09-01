@@ -11420,88 +11420,6 @@ paths:
       x-permission-code: PROJECT_VIEW
       security:
       - BearerAuth: []
-    post:
-      operationId: create_lease
-      summary: 创建租约
-      tags:
-      - 租约
-      parameters:
-      - name: X-Correlation-Id
-        in: header
-        required: false
-        schema:
-          type: string
-      - name: Idempotency-Key
-        in: header
-        required: true
-        schema:
-          type: string
-      responses:
-        '201':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CreateLeaseResponse'
-        '400':
-          description: Bad request
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
-          description: Unauthenticated
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '404':
-          description: Not found
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '409':
-          description: Conflict
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '422':
-          $ref: '#/components/responses/RequestValidationFailed'
-        '429':
-          description: Rate limited
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '500':
-          description: Internal error
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '503':
-          description: Service unavailable
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateLeaseRequest'
-      x-permission-code: PROJECT_EDIT
-      security:
-      - BearerAuth: []
   /api/v1/lease/{id}:
     get:
       operationId: get_lease
@@ -11578,94 +11496,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
       x-permission-code: PROJECT_VIEW
-      security:
-      - BearerAuth: []
-    patch:
-      operationId: update_lease
-      summary: 更新租约
-      tags:
-      - 租约
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          minLength: 1
-      - name: X-Correlation-Id
-        in: header
-        required: false
-        schema:
-          type: string
-      - name: Idempotency-Key
-        in: header
-        required: true
-        schema:
-          type: string
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/UpdateLeaseResponse'
-        '400':
-          description: Bad request
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
-          description: Unauthenticated
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '404':
-          description: Not found
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '409':
-          description: Conflict
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '422':
-          $ref: '#/components/responses/RequestValidationFailed'
-        '429':
-          description: Rate limited
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '500':
-          description: Internal error
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '503':
-          description: Service unavailable
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UpdateLeaseRequest'
-      x-permission-code: PROJECT_EDIT
       security:
       - BearerAuth: []
   /api/v1/automation-asset:
@@ -22881,6 +22711,279 @@ paths:
       x-permission-code: PROJECT_EDIT
       security:
       - BearerAuth: []
+  /api/v1/execution-binding-snapshots/preflight:
+    post:
+      operationId: preflight_execution_binding_snapshot
+      summary: 检查本次执行绑定是否可原子创建
+      tags: [执行绑定]
+      parameters:
+      - $ref: '#/components/parameters/CorrelationId'
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema: {type: string, minLength: 1, maxLength: 191}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecutionBindingInput'
+      responses:
+        '200':
+          description: Preflight result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecutionBindingPreflightResponse'
+        '400': {$ref: '#/components/responses/ExecutionBindingProblem'}
+        '401': {$ref: '#/components/responses/ExecutionBindingProblem'}
+        '403': {$ref: '#/components/responses/ExecutionBindingProblem'}
+        '404': {$ref: '#/components/responses/ExecutionBindingProblem'}
+        '409': {$ref: '#/components/responses/ExecutionBindingProblem'}
+        '422': {$ref: '#/components/responses/RequestValidationFailed'}
+        '429': {$ref: '#/components/responses/ExecutionBindingProblem'}
+        '500': {$ref: '#/components/responses/ExecutionBindingProblem'}
+        '503': {$ref: '#/components/responses/ExecutionBindingProblem'}
+      x-permission-code: PROJECT_EDIT
+      security: [{BearerAuth: []}]
+  /api/v1/execution-binding-snapshots:
+    post:
+      operationId: create_execution_binding_snapshot
+      summary: 原子创建执行绑定、两类Lease、Audit与Outbox
+      tags: [执行绑定]
+      parameters:
+      - $ref: '#/components/parameters/CorrelationId'
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema: {type: string, minLength: 1, maxLength: 191}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecutionBindingInput'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecutionBindingSnapshotResponse'
+        '400': {$ref: '#/components/responses/ExecutionBindingProblem'}
+        '401': {$ref: '#/components/responses/ExecutionBindingProblem'}
+        '403': {$ref: '#/components/responses/ExecutionBindingProblem'}
+        '404': {$ref: '#/components/responses/ExecutionBindingProblem'}
+        '409': {$ref: '#/components/responses/ExecutionBindingProblem'}
+        '422': {$ref: '#/components/responses/RequestValidationFailed'}
+        '429': {$ref: '#/components/responses/ExecutionBindingProblem'}
+        '500': {$ref: '#/components/responses/ExecutionBindingProblem'}
+        '503': {$ref: '#/components/responses/ExecutionBindingProblem'}
+      x-permission-code: PROJECT_EDIT
+      security: [{BearerAuth: []}]
+    get:
+      operationId: list_execution_binding_snapshots
+      summary: 查询Project执行绑定
+      tags: [执行绑定]
+      parameters:
+      - $ref: '#/components/parameters/CorrelationId'
+      - name: project_id
+        in: query
+        required: true
+        schema: {type: string, minLength: 26, maxLength: 26}
+      - name: status
+        in: query
+        required: false
+        schema: {type: string, enum: [READY, IN_USE, RELEASED, EXPIRED]}
+      - name: page
+        in: query
+        required: false
+        schema: {type: integer, minimum: 1, default: 1}
+      - name: page_size
+        in: query
+        required: false
+        schema: {type: integer, minimum: 1, maximum: 200, default: 50}
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecutionBindingSnapshotListResponse'
+        '400': {$ref: '#/components/responses/ExecutionBindingProblem'}
+        '401': {$ref: '#/components/responses/ExecutionBindingProblem'}
+        '403': {$ref: '#/components/responses/ExecutionBindingProblem'}
+        '404': {$ref: '#/components/responses/ExecutionBindingProblem'}
+        '409': {$ref: '#/components/responses/ExecutionBindingProblem'}
+        '422': {$ref: '#/components/responses/RequestValidationFailed'}
+        '429': {$ref: '#/components/responses/ExecutionBindingProblem'}
+        '500': {$ref: '#/components/responses/ExecutionBindingProblem'}
+        '503': {$ref: '#/components/responses/ExecutionBindingProblem'}
+      x-permission-code: PROJECT_VIEW
+      security: [{BearerAuth: []}]
+  /api/v1/execution-binding-snapshots/{id}:
+    get:
+      operationId: get_execution_binding_snapshot
+      summary: 查看执行绑定冻结事实与Lease状态
+      tags: [执行绑定]
+      parameters:
+      - $ref: '#/components/parameters/CorrelationId'
+      - name: id
+        in: path
+        required: true
+        schema: {type: string, minLength: 26, maxLength: 26}
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecutionBindingSnapshotResponse'
+        '400': {$ref: '#/components/responses/ExecutionBindingProblem'}
+        '401': {$ref: '#/components/responses/ExecutionBindingProblem'}
+        '403': {$ref: '#/components/responses/ExecutionBindingProblem'}
+        '404': {$ref: '#/components/responses/ExecutionBindingProblem'}
+        '409': {$ref: '#/components/responses/ExecutionBindingProblem'}
+        '422': {$ref: '#/components/responses/RequestValidationFailed'}
+        '429': {$ref: '#/components/responses/ExecutionBindingProblem'}
+        '500': {$ref: '#/components/responses/ExecutionBindingProblem'}
+        '503': {$ref: '#/components/responses/ExecutionBindingProblem'}
+      x-permission-code: PROJECT_VIEW
+      security: [{BearerAuth: []}]
+  /api/v1/execution-binding-snapshots/{id}/consume:
+    post:
+      operationId: consume_execution_binding_snapshot
+      summary: 将READY执行绑定置为IN_USE
+      tags: [执行绑定]
+      parameters:
+      - $ref: '#/components/parameters/CorrelationId'
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema: {type: string, minLength: 1, maxLength: 191}
+      - name: id
+        in: path
+        required: true
+        schema: {type: string, minLength: 26, maxLength: 26}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ExecutionBindingCommandRequest'}
+      responses: &execution_binding_command_responses
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ExecutionBindingSnapshotResponse'}
+        '400': {$ref: '#/components/responses/ExecutionBindingProblem'}
+        '401': {$ref: '#/components/responses/ExecutionBindingProblem'}
+        '403': {$ref: '#/components/responses/ExecutionBindingProblem'}
+        '404': {$ref: '#/components/responses/ExecutionBindingProblem'}
+        '409': {$ref: '#/components/responses/ExecutionBindingProblem'}
+        '422': {$ref: '#/components/responses/RequestValidationFailed'}
+        '429': {$ref: '#/components/responses/ExecutionBindingProblem'}
+        '500': {$ref: '#/components/responses/ExecutionBindingProblem'}
+        '503': {$ref: '#/components/responses/ExecutionBindingProblem'}
+      x-permission-code: PROJECT_EDIT
+      security: [{BearerAuth: []}]
+  /api/v1/execution-binding-snapshots/{id}/leases/renew:
+    post:
+      operationId: renew_execution_binding_snapshot_leases
+      summary: 按owner与fencing generation续租两类Lease
+      tags: [执行绑定]
+      parameters:
+      - $ref: '#/components/parameters/CorrelationId'
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema: {type: string, minLength: 1, maxLength: 191}
+      - name: id
+        in: path
+        required: true
+        schema: {type: string, minLength: 26, maxLength: 26}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ExecutionBindingCommandRequest'}
+      responses: *execution_binding_command_responses
+      x-permission-code: PROJECT_EDIT
+      security: [{BearerAuth: []}]
+  /api/v1/execution-binding-snapshots/{id}/release:
+    post:
+      operationId: release_execution_binding_snapshot
+      summary: 释放执行绑定及其两类Lease
+      tags: [执行绑定]
+      parameters:
+      - $ref: '#/components/parameters/CorrelationId'
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema: {type: string, minLength: 1, maxLength: 191}
+      - name: id
+        in: path
+        required: true
+        schema: {type: string, minLength: 26, maxLength: 26}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ExecutionBindingCommandRequest'}
+      responses: *execution_binding_command_responses
+      x-permission-code: PROJECT_EDIT
+      security: [{BearerAuth: []}]
+  /api/v1/execution-binding-snapshots/{id}/recover:
+    post:
+      operationId: recover_execution_binding_snapshot
+      summary: 对stale执行绑定执行受控回收
+      tags: [执行绑定]
+      parameters:
+      - $ref: '#/components/parameters/CorrelationId'
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema: {type: string, minLength: 1, maxLength: 191}
+      - name: id
+        in: path
+        required: true
+        schema: {type: string, minLength: 26, maxLength: 26}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ExecutionBindingRecoverRequest'}
+      responses: *execution_binding_command_responses
+      x-permission-code: PROJECT_EDIT
+      security: [{BearerAuth: []}]
+  /api/v1/project-runtime-policy-revisions:
+    get:
+      operationId: list_project_runtime_policy_revisions
+      summary: 查询Project正式RuntimePolicy Revision
+      tags: [执行绑定]
+      parameters:
+      - $ref: '#/components/parameters/CorrelationId'
+      - name: project_id
+        in: query
+        required: true
+        schema: {type: string, minLength: 26, maxLength: 26}
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RuntimePolicyRevisionListResponse'}
+        '400': {$ref: '#/components/responses/ExecutionBindingProblem'}
+        '401': {$ref: '#/components/responses/ExecutionBindingProblem'}
+        '403': {$ref: '#/components/responses/ExecutionBindingProblem'}
+        '404': {$ref: '#/components/responses/ExecutionBindingProblem'}
+        '409': {$ref: '#/components/responses/ExecutionBindingProblem'}
+        '422': {$ref: '#/components/responses/RequestValidationFailed'}
+        '429': {$ref: '#/components/responses/ExecutionBindingProblem'}
+        '500': {$ref: '#/components/responses/ExecutionBindingProblem'}
+        '503': {$ref: '#/components/responses/ExecutionBindingProblem'}
+      x-permission-code: PROJECT_VIEW
+      security: [{BearerAuth: []}]
 components:
   parameters:
     ModelConfigId:
@@ -25232,6 +25335,12 @@ components:
           type: string
           minLength: 26
           maxLength: 26
+        execution_binding_snapshot_id:
+          type:
+          - string
+          - 'null'
+          minLength: 26
+          maxLength: 26
         display_name:
           type:
           - string
@@ -25328,6 +25437,7 @@ components:
           - COMPLETED
       required:
       - execution_attempt_id
+      - execution_binding_snapshot_id
       - row_version
       - created_at
       - updated_at
@@ -25336,6 +25446,7 @@ components:
       - lifecycle_status
       example:
         execution_attempt_id: 01J00000000000000000000000
+        execution_binding_snapshot_id: null
         row_version: 0
         created_at: '2026-08-06T06:46:00Z'
         updated_at: '2026-08-06T06:46:00Z'
@@ -31626,6 +31737,7 @@ components:
       example:
         data:
           execution_attempt_id: 01J00000000000000000000000
+          execution_binding_snapshot_id: null
           row_version: 0
           created_at: '2026-08-06T06:46:00Z'
           updated_at: '2026-08-06T06:46:00Z'
@@ -31647,6 +31759,7 @@ components:
       example:
         data:
           execution_attempt_id: 01J00000000000000000000000
+          execution_binding_snapshot_id: null
           row_version: 0
           created_at: '2026-08-06T06:46:00Z'
           updated_at: '2026-08-06T06:46:00Z'
@@ -31736,6 +31849,7 @@ components:
       example:
         data:
           execution_attempt_id: 01J00000000000000000000000
+          execution_binding_snapshot_id: null
           row_version: 0
           created_at: '2026-08-06T06:46:00Z'
           updated_at: '2026-08-06T06:46:00Z'
@@ -37345,6 +37459,179 @@ components:
           operation_id: example
           status: example
         correlation_id: example
+    ExecutionBindingInput:
+      type: object
+      additionalProperties: false
+      required: [execution_attempt_id, project_id, environment_id, business_terminal_id, test_account_id, runner_id, runtime_policy_revision_id, runner_resource_type, runner_resource_identity, owner_execution_identity]
+      properties:
+        execution_attempt_id: {type: string, minLength: 26, maxLength: 26}
+        project_id: {type: string, minLength: 26, maxLength: 26}
+        environment_id: {type: string, minLength: 26, maxLength: 26}
+        business_terminal_id: {type: string, minLength: 26, maxLength: 26}
+        test_account_id: {type: string, minLength: 26, maxLength: 26}
+        runner_id: {type: string, minLength: 26, maxLength: 26}
+        runtime_policy_revision_id: {type: string, minLength: 26, maxLength: 26}
+        runner_resource_type: {type: string, enum: [FORMAL_EXECUTION_SLOT, BROWSER_SESSION]}
+        runner_resource_identity: {type: string, minLength: 1, maxLength: 191}
+        owner_execution_identity: {type: string, minLength: 1, maxLength: 191}
+        required_capabilities:
+          type: array
+          maxItems: 16
+          uniqueItems: true
+          items: {type: string, minLength: 1, maxLength: 64}
+    ExecutionBindingPreflightCheck:
+      type: object
+      additionalProperties: false
+      required: [code, status, detail]
+      properties:
+        code: {type: string}
+        status: {type: string, enum: [PASS, FAIL]}
+        detail: {type: string}
+    ExecutionBindingPreflightResult:
+      type: object
+      additionalProperties: false
+      required: [ready, checks, runner_capability_codes]
+      properties:
+        ready: {type: boolean}
+        checks:
+          type: array
+          items: {$ref: '#/components/schemas/ExecutionBindingPreflightCheck'}
+        terminal_access_revision_id: {type: [string, 'null']}
+        login_strategy_id: {type: [string, 'null']}
+        login_strategy_row_version: {type: [integer, 'null']}
+        credential_revision_id: {type: [string, 'null']}
+        account_mapping_revision_id: {type: [string, 'null']}
+        sso_identity_key: {type: [string, 'null'], description: 归一化identity的不可逆摘要，不返回原始账号标识。}
+        runner_capability_codes:
+          type: array
+          items: {type: string}
+    ExecutionBindingPreflightResponse:
+      type: object
+      additionalProperties: false
+      required: [data, correlation_id]
+      properties:
+        data: {$ref: '#/components/schemas/ExecutionBindingPreflightResult'}
+        correlation_id: {type: string}
+    ExecutionBindingCommandRequest:
+      type: object
+      additionalProperties: false
+      required: [owner_execution_identity, expected_version, identity_lease_generation, runner_lease_generation, reason]
+      properties:
+        owner_execution_identity: {type: string, minLength: 1, maxLength: 191}
+        expected_version: {type: integer, minimum: 1}
+        identity_lease_generation: {type: integer, minimum: 1}
+        runner_lease_generation: {type: integer, minimum: 1}
+        reason: {type: string, minLength: 1, maxLength: 1000}
+    ExecutionBindingRecoverRequest:
+      allOf:
+      - $ref: '#/components/schemas/ExecutionBindingCommandRequest'
+      - type: object
+        additionalProperties: false
+        required: [recovery_evidence]
+        properties:
+          recovery_evidence: {type: string, minLength: 1, maxLength: 2000}
+    ResourceLeaseResource:
+      type: object
+      additionalProperties: false
+      required: [resource_lease_id, resource_type, resource_identity, owner_type, owner_id, status, acquired_at, expires_at, fencing_generation, row_version]
+      properties:
+        resource_lease_id: {type: string}
+        resource_type: {type: string, enum: [IDENTITY, RUNNER]}
+        resource_identity: {type: string}
+        owner_type: {type: string}
+        owner_id: {type: string}
+        status: {type: string, enum: [ACTIVE, EXPIRED, FENCED, RELEASED]}
+        acquired_at: {type: string, format: date-time}
+        expires_at: {type: string, format: date-time}
+        released_at: {type: [string, 'null'], format: date-time}
+        fencing_generation: {type: integer, minimum: 1}
+        row_version: {type: integer, minimum: 1}
+    RuntimePolicySnapshot:
+      type: object
+      additionalProperties: false
+      required: [runtime_policy_revision_id, revision_no, browser_runtime, artifact_policy, timeout_seconds, retry_mode, network_requirement, serial_execution_policy]
+      properties:
+        runtime_policy_revision_id: {type: string}
+        revision_no: {type: integer, minimum: 1}
+        browser_runtime: {type: string}
+        artifact_policy: {type: string}
+        timeout_seconds: {type: integer, minimum: 1}
+        retry_mode: {type: string}
+        network_requirement: {type: string}
+        serial_execution_policy: {type: string, enum: [SINGLE_PROCESS_UNIFIED_RETRY]}
+    ExecutionBindingSnapshotResource:
+      type: object
+      additionalProperties: false
+      required: [execution_binding_snapshot_id, execution_attempt_id, project_id, environment_id, business_terminal_id, terminal_access_revision_id, login_strategy_id, login_strategy_row_version, test_account_id, credential_revision_id, account_mapping_revision_id, runner_id, runner_row_version, runner_heartbeat_at, runner_capabilities, runtime_policy, identity_lease, runner_lease, owner_execution_identity, correlation_id, status, row_version, created_at, updated_at]
+      properties:
+        execution_binding_snapshot_id: {type: string}
+        execution_attempt_id: {type: string}
+        project_id: {type: string}
+        environment_id: {type: string}
+        business_terminal_id: {type: string}
+        terminal_access_revision_id: {type: string}
+        login_strategy_id: {type: string}
+        login_strategy_row_version: {type: integer}
+        test_account_id: {type: string}
+        credential_revision_id: {type: string}
+        account_mapping_revision_id: {type: string}
+        runner_id: {type: string}
+        runner_row_version: {type: integer}
+        runner_heartbeat_at: {type: string, format: date-time}
+        runner_capabilities:
+          type: array
+          items: {type: object, additionalProperties: true}
+        runtime_policy: {$ref: '#/components/schemas/RuntimePolicySnapshot'}
+        identity_lease: {$ref: '#/components/schemas/ResourceLeaseResource'}
+        runner_lease: {$ref: '#/components/schemas/ResourceLeaseResource'}
+        owner_execution_identity: {type: string}
+        correlation_id: {type: string}
+        status: {type: string, enum: [READY, IN_USE, RELEASED, EXPIRED]}
+        row_version: {type: integer, minimum: 1}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+        released_at: {type: [string, 'null'], format: date-time}
+        expired_at: {type: [string, 'null'], format: date-time}
+    ExecutionBindingSnapshotResponse:
+      type: object
+      additionalProperties: false
+      required: [data, correlation_id]
+      properties:
+        data: {$ref: '#/components/schemas/ExecutionBindingSnapshotResource'}
+        correlation_id: {type: string}
+    ExecutionBindingSnapshotListResponse:
+      type: object
+      additionalProperties: false
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/ExecutionBindingSnapshotResource'}
+        page: {$ref: '#/components/schemas/PageMeta'}
+    RuntimePolicyRevisionResource:
+      type: object
+      additionalProperties: false
+      required: [runtime_policy_revision_id, project_id, revision_no, browser_runtime, artifact_policy, timeout_seconds, retry_mode, network_requirement, serial_execution_policy, lifecycle_status, row_version]
+      properties:
+        runtime_policy_revision_id: {type: string}
+        project_id: {type: string}
+        revision_no: {type: integer, minimum: 1}
+        browser_runtime: {type: string}
+        artifact_policy: {type: string}
+        timeout_seconds: {type: integer, minimum: 1}
+        retry_mode: {type: string}
+        network_requirement: {type: string}
+        serial_execution_policy: {type: string, enum: [SINGLE_PROCESS_UNIFIED_RETRY]}
+        lifecycle_status: {type: string, enum: [PUBLISHED, RETIRED]}
+        row_version: {type: integer, minimum: 1}
+    RuntimePolicyRevisionListResponse:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/RuntimePolicyRevisionResource'}
   securitySchemes:
     BearerAuth:
       type: http
@@ -37355,6 +37642,12 @@ components:
       in: header
       name: X-Runner-Agent-Token
   responses:
+    ExecutionBindingProblem:
+      description: Execution binding command failed
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
     ModelConfigurationProblem:
       description: Model configuration request failed
       content:
@@ -37384,3 +37677,20 @@ x-contract-rules:
   pending_decisions: []
   authority_model: SINGLE_LIVING_AUTHORITY
   code_readiness: IMPLEMENTATION_INPUT_READY
+x-execution-binding-snapshot-contract:
+  decision_id: EBS-API-001
+  status: IMPLEMENTATION_INPUT_READY
+  resource: /api/v1/execution-binding-snapshots
+  operations:
+  - preflight_execution_binding_snapshot
+  - create_execution_binding_snapshot
+  - list_execution_binding_snapshots
+  - get_execution_binding_snapshot
+  - consume_execution_binding_snapshot
+  - renew_execution_binding_snapshot_leases
+  - release_execution_binding_snapshot
+  - recover_execution_binding_snapshot
+  mutation_rule: 状态与Lease禁止普通PATCH；只允许owner/fencing-aware命令。
+  create_rule: Preflight、Binding、两类Lease、Audit与Outbox同一MySQL事务；失败不产生部分状态。
+  secret_boundary: 请求和响应禁止target_url、明文凭据、Token、验证码、localStorage和客户端capability JSON。
+  legacy_generic_lease_patch: RETIRED_AS_MUTATION_ENTRY

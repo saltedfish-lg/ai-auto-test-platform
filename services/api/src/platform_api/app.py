@@ -26,6 +26,8 @@ from platform_api.database import create_database_engine, create_session_factory
 from platform_api.environment_router import router as environment_router
 from platform_api.environment_service import EnvironmentService
 from platform_api.errors import PlatformError, ProblemDetails
+from platform_api.execution_binding_router import router as execution_binding_router
+from platform_api.execution_binding_service import ExecutionBindingService
 from platform_api.idempotency import IdempotencyCoordinator
 from platform_api.middleware import CorrelationIdMiddleware
 from platform_api.model_configuration_router import (
@@ -181,6 +183,11 @@ def create_app(settings: ApiSettings) -> FastAPI:
         app.state.auth_service,
         idempotency,
     )
+    app.state.execution_binding_service = ExecutionBindingService(
+        app.state.session_factory,
+        app.state.auth_service,
+        idempotency,
+    )
     app.state.ai_exploration_service = AIExplorationService(
         app.state.session_factory,
         app.state.auth_service,
@@ -195,6 +202,7 @@ def create_app(settings: ApiSettings) -> FastAPI:
     app.include_router(business_terminal_router)
     app.include_router(test_account_router)
     app.include_router(runner_router)
+    app.include_router(execution_binding_router)
     app.include_router(model_configuration_router)
     app.include_router(ai_exploration_router)
 
