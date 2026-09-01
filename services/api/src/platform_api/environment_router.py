@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Annotated
 
 from fastapi import APIRouter, Header, Path, Query, Request
@@ -11,6 +12,7 @@ from platform_api.environment_schemas import (
     CreateEnvironmentRequest,
     EnvironmentListData,
     EnvironmentResponse,
+    LifecycleCommandRequest,
     UpdateEnvironmentRequest,
 )
 from platform_api.environment_service import EnvironmentService
@@ -103,3 +105,42 @@ def update_environment(
         _bearer(authorization), id, body, idempotency_key, _audit_context(request)
     )
     return EnvironmentResponse(data=resource, correlation_id=_correlation_id(request))
+
+
+def _environment_command(
+    action: str,
+    id: str,
+    body: LifecycleCommandRequest,
+    request: Request,
+    key: str,
+    authorization: str | None,
+) -> EnvironmentResponse:
+    resource = _service(request).transition_environment(
+        _bearer(authorization), id, action, body, key, _audit_context(request)
+    )
+    return EnvironmentResponse(data=resource, correlation_id=_correlation_id(request))
+
+
+def _command_route(action: str) -> Callable[..., EnvironmentResponse]:
+    def command(
+        id: Annotated[str, Path(min_length=26, max_length=26)],
+        body: LifecycleCommandRequest,
+        request: Request,
+        idempotency_key: str = Header(min_length=1, max_length=191, alias="Idempotency-Key"),
+        authorization: str | None = Header(default=None),
+    ) -> EnvironmentResponse:
+        return _environment_command(action, id, body, request, idempotency_key, authorization)
+
+    command.__name__ = f"{action}_environment"
+    return command
+
+
+for _action in ("validate", "reconfigure", "activate"):
+    router.add_api_route(
+        f"/api/v1/environment/{{id}}/{_action}",
+        _command_route(_action),
+        methods=["POST"],
+        response_model=EnvironmentResponse,
+        response_model_exclude_none=True,
+        operation_id=f"{_action}_environment",
+    )

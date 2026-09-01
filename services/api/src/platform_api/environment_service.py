@@ -17,6 +17,7 @@ from platform_api.environment_schemas import (
     CreateEnvironmentRequest,
     EnvironmentListData,
     EnvironmentResource,
+    LifecycleCommandRequest,
     PageMeta,
     UpdateEnvironmentRequest,
 )
@@ -30,6 +31,16 @@ from platform_api.models import (
     Project,
 )
 from platform_api.security import new_ulid, utc_now
+
+_ENVIRONMENT_TRANSITIONS: dict[str, tuple[frozenset[str], str, str]] = {
+    "validate": (frozenset({"CONFIGURING"}), "VALIDATING", "environment.validating"),
+    "reconfigure": (frozenset({"VALIDATING"}), "CONFIGURING", "environment.configuring"),
+    "activate": (
+        frozenset({"VALIDATING", "RECOVERING"}),
+        "ACTIVE",
+        "environment.active",
+    ),
+}
 
 
 class EnvironmentService:
@@ -451,6 +462,149 @@ class EnvironmentService:
                     expected_version=body.expected_version,
                     change_summary={"changed_fields": sorted(mutable)},
                 )
+            resource = _resource(environment)
+            self._idempotency.complete(
+                record, 200, {"environment": resource.model_dump(mode="json")}
+            )
+            return resource
+
+    def transition_environment(
+        self,
+        token: str,
+        environment_id: str,
+        action: str,
+        body: LifecycleCommandRequest,
+        idempotency_key: str,
+        audit_context: AuditContext,
+    ) -> EnvironmentResource:
+        transition = _ENVIRONMENT_TRANSITIONS.get(action)
+        if transition is None:
+            raise _state_forbidden("Unknown environment lifecycle command.")
+        failure_evidence: dict[str, object] = {}
+        try:
+            return self._transition_environment_transaction(
+                token,
+                environment_id,
+                action,
+                body,
+                idempotency_key,
+                audit_context,
+                failure_evidence,
+            )
+        except PlatformError as error:
+            if failure_evidence and error.code in {
+                "ENVIRONMENT_CONCURRENCY_CONFLICT",
+                "ENVIRONMENT_OPERATION_FORBIDDEN_FOR_STATE",
+            }:
+                self._append_failed_audit(
+                    audit_context,
+                    action=f"ENVIRONMENT_{transition[1]}",
+                    operation_id=f"{action}_environment",
+                    result_code=error.code,
+                    reason=body.reason,
+                    **failure_evidence,
+                )
+            raise
+
+    def _transition_environment_transaction(
+        self,
+        token: str,
+        environment_id: str,
+        action: str,
+        body: LifecycleCommandRequest,
+        idempotency_key: str,
+        audit_context: AuditContext,
+        failure_evidence: dict[str, object],
+    ) -> EnvironmentResource:
+        allowed, target, event_type = _ENVIRONMENT_TRANSITIONS[action]
+        operation_id = f"{action}_environment"
+        with self._factory.begin() as db:
+            actor = self._authentication.authenticate_access_in_transaction(
+                db, token, operation_id, audit_context
+            )
+            project_id = db.scalar(
+                select(Environment.project_id).where(Environment.environment_id == environment_id)
+            )
+            if project_id is None:
+                raise _not_found("The environment does not exist.")
+            scope = self._authentication.require_project_permissions_in_transaction(
+                db,
+                actor,
+                operation_id,
+                ("PROJECT_EDIT",),
+                project_id,
+                audit_context,
+            )
+            record, replay = self._claim(
+                db,
+                actor.user.user_id,
+                operation_id,
+                idempotency_key,
+                _canonical_payload(body, environment_id),
+            )
+            if replay:
+                return _stored_environment(record.response_json)
+            environment = db.scalar(
+                select(Environment)
+                .where(
+                    Environment.environment_id == environment_id,
+                    Environment.project_id == project_id,
+                )
+                .with_for_update()
+            )
+            if environment is None or environment.environment_code is None:
+                raise _not_found("The environment does not exist.")
+            failure_evidence.update(
+                environment_id=environment.environment_id,
+                project_id=project_id,
+                environment_code=environment.environment_code,
+                actor_user_id=actor.user.user_id,
+                required_permission="PROJECT_EDIT",
+                scope_decision=scope,
+                previous_status=environment.lifecycle_status,
+            )
+            if environment.row_version != body.expected_version:
+                raise PlatformError(
+                    title="Environment concurrency conflict",
+                    detail="The expected environment version no longer matches.",
+                    status=409,
+                    code="ENVIRONMENT_CONCURRENCY_CONFLICT",
+                )
+            if environment.lifecycle_status not in allowed:
+                raise _state_forbidden(
+                    f"{action} is not allowed from {environment.lifecycle_status}."
+                )
+            previous_status = environment.lifecycle_status
+            before = _projection(environment)
+            environment.lifecycle_status = target
+            environment.row_version += 1
+            environment.updated_at = utc_now()
+            environment.updated_by = actor.user.user_id
+            after = _projection(environment)
+            self._append_audit(
+                db,
+                environment,
+                audit_context,
+                actor.user.user_id,
+                scope,
+                action=f"ENVIRONMENT_{target}",
+                operation_id=operation_id,
+                previous_status=previous_status,
+                before=before,
+                after=after,
+                reason=body.reason,
+            )
+            self._append_event(
+                db,
+                environment,
+                event_type,
+                actor.user.user_id,
+                context=audit_context,
+                causation_id=idempotency_key,
+                previous_status=previous_status,
+                expected_version=body.expected_version,
+                change_summary={"reason_supplied": True},
+            )
             resource = _resource(environment)
             self._idempotency.complete(
                 record, 200, {"environment": resource.model_dump(mode="json")}

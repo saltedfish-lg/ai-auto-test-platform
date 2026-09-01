@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/vue";
-import ElementPlus from "element-plus";
+import ElementPlus, { ElMessageBox } from "element-plus";
 import { createPinia, setActivePinia } from "pinia";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -26,7 +26,10 @@ const environment: EnvironmentResource = {
 describe("Environment management view", () => {
   beforeEach(() => vi.restoreAllMocks());
 
-  async function setup(permissions = ["PROJECT_VIEW", "PROJECT_EDIT"]) {
+  async function setup(
+    permissions = ["PROJECT_VIEW", "PROJECT_EDIT"],
+    listedEnvironment = environment,
+  ) {
     const pinia = createPinia();
     setActivePinia(pinia);
     vi.spyOn(apiClient, "login_platform_user").mockResolvedValue(
@@ -34,7 +37,7 @@ describe("Environment management view", () => {
     );
     await useSessionStore().login({ username: "admin", password: "input-only" });
     vi.spyOn(apiClient, "list_environment").mockResolvedValue({
-      items: [environment],
+      items: [listedEnvironment],
       page: { page: 1, page_size: 50, total: 1 },
     });
     const router = createRouter({
@@ -77,5 +80,39 @@ describe("Environment management view", () => {
     expect(body).toMatchObject({ project_id: environment.project_id, environment_code: "TEST-2" });
     expect(body).not.toHaveProperty("base_url");
     expect(body).not.toHaveProperty("environment_terminal_access_revision_id");
+  });
+
+  it("submits CONFIGURING for validation through the generated lifecycle client", async () => {
+    await setup();
+    vi.spyOn(ElMessageBox, "prompt").mockResolvedValue({ value: "配置完成" } as never);
+    const validate = vi.spyOn(apiClient, "validate_environment").mockResolvedValue({
+      data: { ...environment, lifecycle_status: "VALIDATING", row_version: 2 },
+      correlation_id: "corr-validate",
+    });
+
+    await fireEvent.click(await screen.findByRole("button", { name: "提交校验" }));
+    await waitFor(() =>
+      expect(validate).toHaveBeenCalledWith(
+        environment.environment_id,
+        { expected_version: 1, reason: "配置完成" },
+        expect.objectContaining({
+          headers: expect.objectContaining({ "Idempotency-Key": expect.any(String) }),
+        }),
+      ),
+    );
+    await waitFor(() => expect(screen.getAllByText("VALIDATING").length).toBeGreaterThan(0));
+  });
+
+  it("exposes only the Authority commands available from VALIDATING", async () => {
+    await setup(undefined, { ...environment, lifecycle_status: "VALIDATING", row_version: 2 });
+    expect(await screen.findByRole("button", { name: "退回配置" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "激活" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "提交校验" })).toBeNull();
+  });
+
+  it("labels RECOVERING activation as completing recovery", async () => {
+    await setup(undefined, { ...environment, lifecycle_status: "RECOVERING", row_version: 4 });
+    expect(await screen.findByRole("button", { name: "完成恢复" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "激活" })).toBeNull();
   });
 });

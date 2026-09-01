@@ -114,8 +114,8 @@ describe("Test Account management view", () => {
       .spyOn(apiClient, "rotate_test_account_secret")
       .mockRejectedValue(new Error("network down"));
     await setup();
-    await fireEvent.click(await screen.findByRole("button", { name: "更新凭据" }));
-    const dialog = await screen.findByRole("dialog", { name: "更新登录凭据" });
+    await fireEvent.click(await screen.findByRole("button", { name: "更新密码" }));
+    const dialog = await screen.findByRole("dialog", { name: "更新登录密码" });
     const input = dialog.querySelector('input[type="password"]') as HTMLInputElement;
     await fireEvent.update(input, submittedSecret);
     await fireEvent.update(screen.getByLabelText("轮换原因"), "定期轮换");
@@ -130,6 +130,6 @@ describe("Test Account management view", () => {
     expect(await screen.findByText("qa-admin")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "新建测试账号" })).toBeNull();
     expect(screen.queryByRole("button", { name: "编辑" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "更新凭据" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "更新密码" })).toBeNull();
   });
 });

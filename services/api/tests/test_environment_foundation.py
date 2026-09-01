@@ -5,8 +5,13 @@ from types import SimpleNamespace
 import pytest
 from jsonschema import Draft202012Validator
 from platform_api.environment_router import router
-from platform_api.environment_schemas import CreateEnvironmentRequest, UpdateEnvironmentRequest
+from platform_api.environment_schemas import (
+    CreateEnvironmentRequest,
+    LifecycleCommandRequest,
+    UpdateEnvironmentRequest,
+)
 from platform_api.environment_service import (
+    _ENVIRONMENT_TRANSITIONS,
     EnvironmentService,
     _apply_state_changes,
     _environment_integrity_error,
@@ -28,7 +33,35 @@ def test_environment_operations_match_formal_openapi_contract() -> None:
         ("POST", "/api/v1/environment", "create_environment"),
         ("GET", "/api/v1/environment/{id}", "get_environment"),
         ("PATCH", "/api/v1/environment/{id}", "update_environment"),
+        ("POST", "/api/v1/environment/{id}/validate", "validate_environment"),
+        ("POST", "/api/v1/environment/{id}/reconfigure", "reconfigure_environment"),
+        ("POST", "/api/v1/environment/{id}/activate", "activate_environment"),
     }
+
+
+def test_environment_lifecycle_commands_match_lc_009_without_patch_escape() -> None:
+    assert {
+        "validate": (
+            frozenset({"CONFIGURING"}),
+            "VALIDATING",
+            "environment.validating",
+        ),
+        "reconfigure": (
+            frozenset({"VALIDATING"}),
+            "CONFIGURING",
+            "environment.configuring",
+        ),
+        "activate": (
+            frozenset({"VALIDATING", "RECOVERING"}),
+            "ACTIVE",
+            "environment.active",
+        ),
+    } == _ENVIRONMENT_TRANSITIONS
+    command = LifecycleCommandRequest(expected_version=2, reason="通过验证")
+    assert command.model_dump() == {"expected_version": 2, "reason": "通过验证"}
+    assert "lifecycle_status" not in UpdateEnvironmentRequest.model_fields
+    with pytest.raises(ValidationError):
+        LifecycleCommandRequest(expected_version=2, reason="")
 
 
 def test_environment_contract_has_no_terminal_revision_owner_pointer() -> None:

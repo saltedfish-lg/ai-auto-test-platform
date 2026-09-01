@@ -222,6 +222,27 @@ def _database_evidence(
         )
         environment_failed_audits = int(cursor.fetchone()[0])
         cursor.execute(
+            "SELECT operation_id,result_code,COUNT(*) FROM atp_environment_audit "
+            "WHERE environment_id=%s AND operation_id='validate_environment' "
+            "AND result_code IN ('ENVIRONMENT_CONCURRENCY_CONFLICT',"
+            "'ENVIRONMENT_OPERATION_FORBIDDEN_FOR_STATE') "
+            "GROUP BY operation_id,result_code",
+            (environment_id,),
+        )
+        environment_lifecycle_failure_results = {
+            f"{operation_id}:{result_code}": int(count)
+            for operation_id, result_code, count in cursor.fetchall()
+        }
+        cursor.execute(
+            "SELECT operation_id,COUNT(*) FROM atp_idempotency_record "
+            "WHERE operation_id IN ('validate_environment','reconfigure_environment',"
+            "'activate_environment') AND response_status=200 AND completed_at IS NOT NULL "
+            "GROUP BY operation_id"
+        )
+        environment_lifecycle_idempotency = {
+            str(operation_id): int(count) for operation_id, count in cursor.fetchall()
+        }
+        cursor.execute(
             "SELECT event_type,COUNT(*) FROM atp_outbox_event "
             "WHERE aggregate_id=%s GROUP BY event_type",
             (environment_id,),
@@ -556,22 +577,43 @@ def _database_evidence(
         raise RuntimeError("project idempotency terminal evidence is incomplete")
     if (
         environment_display_name != "真实事务更新环境"
-        or environment_status != "CONFIGURING"
-        or int(environment_row_version) != 2
+        or environment_status != "ACTIVE"
+        or int(environment_row_version) != 6
     ):
         raise RuntimeError("Environment persistence does not match the browser/API workflow")
-    if not {"ENVIRONMENT_CREATED", "ENVIRONMENT_UPDATED"}.issubset(environment_audit_actions):
+    if not {
+        "ENVIRONMENT_CREATED",
+        "ENVIRONMENT_UPDATED",
+        "ENVIRONMENT_VALIDATING",
+        "ENVIRONMENT_CONFIGURING",
+        "ENVIRONMENT_ACTIVE",
+    }.issubset(environment_audit_actions):
         raise RuntimeError("Environment success audit evidence is incomplete")
     if environment_failed_audits < 2:
         raise RuntimeError("Environment failure audit evidence is incomplete")
-    if environment_event_types.get("environment.configuring") != 1:
+    if environment_lifecycle_failure_results != {
+        "validate_environment:ENVIRONMENT_CONCURRENCY_CONFLICT": 1,
+        "validate_environment:ENVIRONMENT_OPERATION_FORBIDDEN_FOR_STATE": 1,
+    }:
+        raise RuntimeError("Environment lifecycle failure audit evidence is incomplete")
+    if environment_lifecycle_idempotency != {
+        "validate_environment": 2,
+        "reconfigure_environment": 1,
+        "activate_environment": 1,
+    }:
+        raise RuntimeError("Environment lifecycle idempotency evidence is incomplete")
+    if (
+        environment_event_types.get("environment.configuring") != 2
+        or environment_event_types.get("environment.validating") != 2
+        or environment_event_types.get("environment.active") != 1
+    ):
         raise RuntimeError("Environment outbox evidence is incomplete")
     if cross_project_environment_count != 2:
         raise RuntimeError("Environment project-scoped uniqueness evidence is incomplete")
     if (
         current_revision_id is None
-        or terminal_status != "CONFIGURING"
-        or int(terminal_row_version) != 2
+        or terminal_status != "ACTIVE"
+        or int(terminal_row_version) != 4
         or int(revision_no) != 1
         or revision_status != "PUBLISHED"
         or login_strategy_id is None
@@ -585,9 +627,15 @@ def _database_evidence(
         "TERMINAL_ACCESS_REVISION_CREATED",
         "TERMINAL_ACCESS_REVISION_VALIDATING",
         "TERMINAL_ACCESS_REVISION_PUBLISHED",
+        "BUSINESS_TERMINAL_VALIDATING",
+        "BUSINESS_TERMINAL_ACTIVE",
     }.issubset(terminal_audit_actions):
         raise RuntimeError("BusinessTerminal audit evidence is incomplete")
-    if terminal_event_types.get("business_terminal.configuring") != 1:
+    if (
+        terminal_event_types.get("business_terminal.configuring") != 1
+        or terminal_event_types.get("business_terminal.validating") != 1
+        or terminal_event_types.get("business_terminal.active") != 1
+    ):
         raise RuntimeError("BusinessTerminal aggregate outbox evidence is incomplete")
     if (
         not {
@@ -609,9 +657,9 @@ def _database_evidence(
         raise RuntimeError("LoginStrategy lifecycle outbox evidence is incomplete")
     if (
         test_account_display_name != "浏览器验收测试账号（已更新）"  # noqa: RUF001
-        or test_account_status != "VALIDATING"
+        or test_account_status != "ACTIVE"
         or credential_state != "VALID"
-        or int(test_account_row_version) != 4
+        or int(test_account_row_version) != 5
     ):
         raise RuntimeError("TestAccount persistence does not match the browser workflow")
     if len(mapping_rows) != 1 or (
@@ -639,6 +687,7 @@ def _database_evidence(
         "TEST_ACCOUNT_UPDATED",
         "TEST_ACCOUNT_CREDENTIAL_ROTATED",
         "TEST_ACCOUNT_VALIDATING",
+        "TEST_ACCOUNT_ACTIVE",
     }
     if not required_test_account_audits.issubset(test_account_audit_actions):
         raise RuntimeError("TestAccount append-only audit evidence is incomplete")
@@ -651,6 +700,7 @@ def _database_evidence(
         "test_account.updated",
         "test_account.credential_rotated",
         "test_account.validating",
+        "test_account.active",
     }
     if not required_test_account_events.issubset(test_account_event_types):
         raise RuntimeError("TestAccount outbox evidence is incomplete")
@@ -732,6 +782,8 @@ def _database_evidence(
         "environment_row_version": int(environment_row_version),
         "environment_audit_actions": environment_audit_actions,
         "environment_failed_audit_count": environment_failed_audits,
+        "environment_lifecycle_failure_results": environment_lifecycle_failure_results,
+        "environment_lifecycle_idempotency": environment_lifecycle_idempotency,
         "environment_outbox_event_types": environment_event_types,
         "cross_project_environment_count": cross_project_environment_count,
         "business_terminal_status": terminal_status,

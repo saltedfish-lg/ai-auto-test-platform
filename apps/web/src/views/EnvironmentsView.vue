@@ -5,7 +5,7 @@ import { useRoute, useRouter } from "vue-router";
 
 import PermissionGate from "../components/PermissionGate.vue";
 import type { EnvironmentResource } from "../generated/types";
-import { useEnvironmentsStore } from "../stores/environments";
+import { type EnvironmentLifecycleAction, useEnvironmentsStore } from "../stores/environments";
 
 const route = useRoute();
 const router = useRouter();
@@ -92,6 +92,51 @@ async function toggleEnablement(environment: EnvironmentResource): Promise<void>
       reason: value.trim(),
     });
     ElMessage.success(`${action}操作已完成。`);
+  } catch (error) {
+    if (error !== "cancel" && error !== "close") {
+      // Store exposes the formal backend error.
+    }
+  }
+}
+
+const lifecycleActionCopy: Record<EnvironmentLifecycleAction, { label: string; title: string }> = {
+  validate: { label: "提交校验", title: "提交环境校验" },
+  reconfigure: { label: "退回配置", title: "退回环境配置" },
+  activate: { label: "激活", title: "激活环境" },
+};
+
+function lifecycleCopy(
+  environment: EnvironmentResource,
+  action: EnvironmentLifecycleAction,
+): { label: string; title: string } {
+  if (environment.lifecycle_status === "RECOVERING" && action === "activate") {
+    return { label: "完成恢复", title: "完成环境恢复" };
+  }
+  return lifecycleActionCopy[action];
+}
+
+function lifecycleActions(environment: EnvironmentResource): EnvironmentLifecycleAction[] {
+  if (environment.lifecycle_status === "CONFIGURING") return ["validate"];
+  if (environment.lifecycle_status === "VALIDATING") return ["reconfigure", "activate"];
+  if (environment.lifecycle_status === "RECOVERING") return ["activate"];
+  return [];
+}
+
+async function runLifecycle(
+  environment: EnvironmentResource,
+  action: EnvironmentLifecycleAction,
+): Promise<void> {
+  const copy = lifecycleCopy(environment, action);
+  try {
+    const { value } = await ElMessageBox.prompt(`请填写${copy.label}原因`, copy.title, {
+      inputPattern: /\S+/,
+      inputErrorMessage: "操作原因不能为空。",
+      confirmButtonText: `确认${copy.label}`,
+      cancelButtonText: "取消",
+      type: action === "activate" ? "success" : "info",
+    });
+    await environments.lifecycle(environment, action, value.trim());
+    ElMessage.success(`${copy.label}操作已完成。`);
   } catch (error) {
     if (error !== "cancel" && error !== "close") {
       // Store exposes the formal backend error.
@@ -192,7 +237,7 @@ async function changePageSize(size: number): Promise<void> {
         <el-table-column prop="enablement_state" label="启用状态" min-width="110" />
         <el-table-column prop="accessibility_state" label="可达性" min-width="110" />
         <el-table-column prop="updated_at" label="更新时间" min-width="190" />
-        <el-table-column label="操作" width="230" fixed="right">
+        <el-table-column label="操作" width="380" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" @click="openDetail(row)">详情</el-button>
             <PermissionGate permission="PROJECT_EDIT">
@@ -207,9 +252,20 @@ async function changePageSize(size: number): Promise<void> {
                 v-if="['ACTIVE', 'DISABLED'].includes(row.lifecycle_status)"
                 link
                 :type="row.enablement_state === 'ENABLED' ? 'warning' : 'success'"
+                :disabled="environments.status === 'saving'"
                 @click="toggleEnablement(row)"
               >
                 {{ row.enablement_state === "ENABLED" ? "停用" : "恢复" }}
+              </el-button>
+              <el-button
+                v-for="action in lifecycleActions(row)"
+                :key="action"
+                link
+                :type="action === 'activate' ? 'success' : 'primary'"
+                :disabled="environments.status === 'saving'"
+                @click="runLifecycle(row, action)"
+              >
+                {{ lifecycleCopy(row, action).label }}
               </el-button>
             </PermissionGate>
           </template>

@@ -156,6 +156,18 @@ export class ApiClient {
     let path = "/api/v1/environment/{id}".replace('{id}', encodeURIComponent(id));
     return this.request<UpdateEnvironmentResponse>(path, { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...(options.headers ?? {}) }, signal: options.signal, body: JSON.stringify(body) });
   }
+  async validate_environment(id: string, body: LifecycleCommandRequest, options: RequiredHeaderOptions<"Idempotency-Key">): Promise<UpdateEnvironmentResponse> {
+    let path = "/api/v1/environment/{id}/validate".replace('{id}', encodeURIComponent(id));
+    return this.request<UpdateEnvironmentResponse>(path, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(options.headers ?? {}) }, signal: options.signal, body: JSON.stringify(body) });
+  }
+  async reconfigure_environment(id: string, body: LifecycleCommandRequest, options: RequiredHeaderOptions<"Idempotency-Key">): Promise<UpdateEnvironmentResponse> {
+    let path = "/api/v1/environment/{id}/reconfigure".replace('{id}', encodeURIComponent(id));
+    return this.request<UpdateEnvironmentResponse>(path, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(options.headers ?? {}) }, signal: options.signal, body: JSON.stringify(body) });
+  }
+  async activate_environment(id: string, body: LifecycleCommandRequest, options: RequiredHeaderOptions<"Idempotency-Key">): Promise<UpdateEnvironmentResponse> {
+    let path = "/api/v1/environment/{id}/activate".replace('{id}', encodeURIComponent(id));
+    return this.request<UpdateEnvironmentResponse>(path, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(options.headers ?? {}) }, signal: options.signal, body: JSON.stringify(body) });
+  }
   async list_business_terminal(options: QueryRequestOptions<{ page?: number; page_size?: number; sort?: string; filter?: string }> = {}): Promise<ListBusinessTerminalResponse> {
     let path = "/api/v1/business-terminal";
     const query = new URLSearchParams();

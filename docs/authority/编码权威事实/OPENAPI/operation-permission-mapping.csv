@@ -28,6 +28,9 @@ list_environment,GET,/api/v1/environment,PROJECT_VIEW,CURRENT_LIVING_AUTHORITY
 create_environment,POST,/api/v1/environment,PROJECT_EDIT,CURRENT_LIVING_AUTHORITY
 get_environment,GET,/api/v1/environment/{id},PROJECT_VIEW,CURRENT_LIVING_AUTHORITY
 update_environment,PATCH,/api/v1/environment/{id},PROJECT_EDIT,CURRENT_LIVING_AUTHORITY
+validate_environment,POST,/api/v1/environment/{id}/validate,PROJECT_EDIT,CURRENT_LIVING_AUTHORITY
+reconfigure_environment,POST,/api/v1/environment/{id}/reconfigure,PROJECT_EDIT,CURRENT_LIVING_AUTHORITY
+activate_environment,POST,/api/v1/environment/{id}/activate,PROJECT_EDIT,CURRENT_LIVING_AUTHORITY
 list_business_terminal,GET,/api/v1/business-terminal,BUSINESS_TERMINAL_VIEW,CURRENT_LIVING_AUTHORITY
 create_business_terminal,POST,/api/v1/business-terminal,BUSINESS_TERMINAL_CREATE,CURRENT_LIVING_AUTHORITY
 get_business_terminal,GET,/api/v1/business-terminal/{id},BUSINESS_TERMINAL_VIEW,CURRENT_LIVING_AUTHORITY

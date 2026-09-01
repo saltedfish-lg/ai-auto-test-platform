@@ -10,6 +10,8 @@ import type {
   UpdateEnvironmentRequest,
 } from "../generated/types";
 
+export type EnvironmentLifecycleAction = "validate" | "reconfigure" | "activate";
+
 function mutationOptions() {
   return { headers: { "Idempotency-Key": globalThis.crypto.randomUUID() } };
 }
@@ -35,6 +37,22 @@ export const useEnvironmentsStore = defineStore("environments", () => {
     throw error;
   }
 
+  function applyResource(environmentId: string, resource: EnvironmentResource): void {
+    const index = items.value.findIndex((item) => item.environment_id === environmentId);
+    const stillMatches =
+      !activeLifecycleStatus.value || resource.lifecycle_status === activeLifecycleStatus.value;
+    if (index >= 0 && !stillMatches) {
+      items.value.splice(index, 1);
+      page.value = { ...page.value, total: Math.max(0, page.value.total - 1) };
+    } else if (index >= 0) {
+      items.value.splice(index, 1, resource);
+      items.value.sort((left, right) =>
+        (left.environment_code ?? "").localeCompare(right.environment_code ?? ""),
+      );
+    }
+    current.value = resource;
+  }
+
   async function load(
     projectId: string,
     lifecycleStatus?: string,
@@ -49,7 +67,9 @@ export const useEnvironmentsStore = defineStore("environments", () => {
       const filter = [
         `project_id=${projectId}`,
         lifecycleStatus ? `lifecycle_status=${lifecycleStatus}` : "",
-      ].filter(Boolean).join(";");
+      ]
+        .filter(Boolean)
+        .join(";");
       const response = await apiClient.list_environment({
         query: { page: pageNumber, page_size: pageSize, sort: "environment_code", filter },
       });
@@ -69,15 +89,17 @@ export const useEnvironmentsStore = defineStore("environments", () => {
     clearError();
     try {
       const response = await apiClient.create_environment(body, mutationOptions());
-      const matchesQuery = body.project_id === activeProjectId.value
-        && (!activeLifecycleStatus.value
-          || response.data.lifecycle_status === activeLifecycleStatus.value);
+      const matchesQuery =
+        body.project_id === activeProjectId.value &&
+        (!activeLifecycleStatus.value ||
+          response.data.lifecycle_status === activeLifecycleStatus.value);
       if (matchesQuery) {
         page.value = { ...page.value, total: page.value.total + 1 };
         if (page.value.page === 1) {
           items.value = [...items.value, response.data]
-            .sort((left, right) => (left.environment_code ?? "")
-              .localeCompare(right.environment_code ?? ""))
+            .sort((left, right) =>
+              (left.environment_code ?? "").localeCompare(right.environment_code ?? ""),
+            )
             .slice(0, page.value.page_size);
         }
       }
@@ -102,20 +124,7 @@ export const useEnvironmentsStore = defineStore("environments", () => {
         { expected_version: environment.row_version, ...changes },
         mutationOptions(),
       );
-      const index = items.value.findIndex(
-        (item) => item.environment_id === environment.environment_id,
-      );
-      const stillMatches = !activeLifecycleStatus.value
-        || response.data.lifecycle_status === activeLifecycleStatus.value;
-      if (index >= 0 && !stillMatches) {
-        items.value.splice(index, 1);
-        page.value = { ...page.value, total: Math.max(0, page.value.total - 1) };
-      } else if (index >= 0) {
-        items.value.splice(index, 1, response.data);
-        items.value.sort((left, right) => (left.environment_code ?? "")
-          .localeCompare(right.environment_code ?? ""));
-      }
-      current.value = response.data;
+      applyResource(environment.environment_id, response.data);
       return response.data;
     } catch (error) {
       return capture(error, "环境保存失败，请刷新后重试。");
@@ -124,5 +133,53 @@ export const useEnvironmentsStore = defineStore("environments", () => {
     }
   }
 
-  return { items, page, current, status, errorMessage, correlationId, clearError, load, create, update };
+  async function lifecycle(
+    environment: EnvironmentResource,
+    action: EnvironmentLifecycleAction,
+    reason: string,
+  ): Promise<EnvironmentResource> {
+    status.value = "saving";
+    clearError();
+    const body = { expected_version: environment.row_version, reason };
+    try {
+      const response =
+        action === "validate"
+          ? await apiClient.validate_environment(
+              environment.environment_id,
+              body,
+              mutationOptions(),
+            )
+          : action === "reconfigure"
+            ? await apiClient.reconfigure_environment(
+                environment.environment_id,
+                body,
+                mutationOptions(),
+              )
+            : await apiClient.activate_environment(
+                environment.environment_id,
+                body,
+                mutationOptions(),
+              );
+      applyResource(environment.environment_id, response.data);
+      return response.data;
+    } catch (error) {
+      return capture(error, "环境生命周期操作失败，请刷新后重试。");
+    } finally {
+      status.value = "idle";
+    }
+  }
+
+  return {
+    items,
+    page,
+    current,
+    status,
+    errorMessage,
+    correlationId,
+    clearError,
+    load,
+    create,
+    update,
+    lifecycle,
+  };
 });

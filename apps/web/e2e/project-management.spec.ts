@@ -122,9 +122,7 @@ test("project management browser closure", async ({ page, request }) => {
   const enrollmentCredentialDialog = page.getByRole("dialog", {
     name: "一次性 Enrollment Credential",
   });
-  await expect(enrollmentCredentialDialog.locator("textarea")).toHaveValue(
-    enrollmentCredential,
-  );
+  await expect(enrollmentCredentialDialog.locator("textarea")).toHaveValue(enrollmentCredential);
   await expect(page.getByText(/平台无法恢复明文/)).toBeVisible();
   await page.getByRole("button", { name: "我已安全保存" }).click();
 
@@ -362,7 +360,86 @@ test("project management browser closure", async ({ page, request }) => {
   });
   expect(missingProjectEnvironment.status()).toBe(404);
   expect((await missingProjectEnvironment.json()).code).toBe("ENVIRONMENT_NOT_FOUND");
-  await expect(page.getByText(environmentCode, { exact: true })).toBeVisible();
+  await page.reload();
+  const environmentRow = page.getByRole("row").filter({
+    has: page.getByText(environmentCode, { exact: true }),
+  });
+  await expect(environmentRow).toBeVisible();
+
+  async function environmentTransition(
+    action: "validate" | "reconfigure" | "activate",
+    actionLabel: string,
+    title: string,
+    expectedStatus: string,
+  ) {
+    const transitioned = page.waitForResponse(
+      (response) =>
+        response.url().endsWith(`/api/v1/environment/${environmentId}/${action}`) &&
+        response.request().method() === "POST",
+    );
+    await environmentRow.getByRole("button", { name: actionLabel, exact: true }).click();
+    const commandBox = page.locator(".el-message-box", {
+      has: page.getByText(title, { exact: true }),
+    });
+    await commandBox.locator("input").fill(`浏览器验证 Environment ${action}`);
+    await commandBox.getByRole("button", { name: `确认${actionLabel}` }).click();
+    const response = await transitioned;
+    expect(response.status()).toBe(200);
+    await expect(environmentRow.getByText(expectedStatus, { exact: true })).toBeVisible();
+    return response;
+  }
+
+  await environmentTransition("validate", "提交校验", "提交环境校验", "VALIDATING");
+  await environmentTransition("reconfigure", "退回配置", "退回环境配置", "CONFIGURING");
+  await environmentTransition("validate", "提交校验", "提交环境校验", "VALIDATING");
+  const activationResponse = await environmentTransition("activate", "激活", "激活环境", "ACTIVE");
+  const activationKey = activationResponse.request().headers()["idempotency-key"];
+  const activationBody = activationResponse.request().postDataJSON() as {
+    expected_version: number;
+    reason: string;
+  };
+  expect(activationKey).toBeTruthy();
+  expect(activationBody.expected_version).toBe(5);
+  const activationReplay = await request.post(`/api/v1/environment/${environmentId}/activate`, {
+    headers: { ...authorizedHeaders, "Idempotency-Key": activationKey },
+    data: activationBody,
+  });
+  expect(activationReplay.status()).toBe(200);
+  expect((await activationReplay.json()).data.row_version).toBe(6);
+  const activationMismatchedReplay = await request.post(
+    `/api/v1/environment/${environmentId}/activate`,
+    {
+      headers: { ...authorizedHeaders, "Idempotency-Key": activationKey },
+      data: { ...activationBody, reason: "相同幂等键不得复用不同生命周期载荷" },
+    },
+  );
+  expect(activationMismatchedReplay.status()).toBe(409);
+  const staleEnvironmentLifecycle = await request.post(
+    `/api/v1/environment/${environmentId}/validate`,
+    {
+      headers: {
+        ...authorizedHeaders,
+        "Idempotency-Key": `environment-lifecycle-stale-${projectCode}`,
+      },
+      data: { expected_version: 5, reason: "生命周期命令必须执行 CAS" },
+    },
+  );
+  expect(staleEnvironmentLifecycle.status()).toBe(409);
+  expect((await staleEnvironmentLifecycle.json()).code).toBe("ENVIRONMENT_CONCURRENCY_CONFLICT");
+  const forbiddenEnvironmentLifecycle = await request.post(
+    `/api/v1/environment/${environmentId}/validate`,
+    {
+      headers: {
+        ...authorizedHeaders,
+        "Idempotency-Key": `environment-lifecycle-state-${projectCode}`,
+      },
+      data: { expected_version: 6, reason: "ACTIVE 不得重新提交校验" },
+    },
+  );
+  expect(forbiddenEnvironmentLifecycle.status()).toBe(409);
+  expect((await forbiddenEnvironmentLifecycle.json()).code).toBe(
+    "ENVIRONMENT_OPERATION_FORBIDDEN_FOR_STATE",
+  );
   await page.getByRole("button", { name: /返回项目详情/ }).click();
 
   const automationAsset = await request.post("/api/v1/automation-asset", {
@@ -484,6 +561,29 @@ test("project management browser closure", async ({ page, request }) => {
   expect(terminalRead.status()).toBe(200);
   expect((await terminalRead.json()).data.current_published_revision_id).toBe(revisionId);
   await page.getByRole("dialog", { name: "业务终端详情" }).locator(".el-dialog__headerbtn").click();
+
+  async function businessTerminalTransition(
+    action: "validate" | "activate",
+    actionLabel: "校验" | "启用",
+    expectedStatus: "VALIDATING" | "ACTIVE",
+  ) {
+    const transitioned = page.waitForResponse(
+      (response) =>
+        response.url().endsWith(`/api/v1/business-terminal/${terminalId}/${action}`) &&
+        response.request().method() === "POST",
+    );
+    await terminalRow.getByRole("button", { name: actionLabel, exact: true }).click();
+    const commandBox = page.locator(".el-message-box", {
+      has: page.getByText("业务终端生命周期操作", { exact: true }),
+    });
+    await commandBox.locator("input").fill(`浏览器验证 BusinessTerminal ${action}`);
+    await commandBox.locator(".el-message-box__btns .el-button--primary").click();
+    expect((await transitioned).status()).toBe(200);
+    await expect(terminalRow.getByText(expectedStatus, { exact: true })).toBeVisible();
+  }
+
+  await businessTerminalTransition("validate", "校验", "VALIDATING");
+  await businessTerminalTransition("activate", "启用", "ACTIVE");
   await page.getByRole("button", { name: /返回项目详情/ }).click();
 
   await page.getByRole("button", { name: "测试账号" }).click();
@@ -495,7 +595,7 @@ test("project management browser closure", async ({ page, request }) => {
     .locator(".el-select__wrapper")
     .click();
   await page.getByRole("option", { name: "真实事务更新环境" }).click();
-  await accountDialog.getByLabel("账号标识").fill(`qa-${projectCode}`);
+  await accountDialog.getByLabel("登录账号").fill(`qa-${projectCode}`);
   await accountDialog.getByLabel("显示名称").fill("浏览器验收测试账号");
   await accountDialog
     .locator(".el-form-item", { hasText: "适用业务终端" })
@@ -503,7 +603,7 @@ test("project management browser closure", async ({ page, request }) => {
     .click();
   await page.getByRole("option", { name: /浏览器验收管理端 \/ MANAGEMENT/ }).click();
   const initialAccountSecret = `initial-test-account-${projectCode}`;
-  await accountDialog.getByLabel("登录凭据").fill(initialAccountSecret);
+  await accountDialog.getByLabel("登录密码").fill(initialAccountSecret);
   await accountDialog.getByLabel("创建原因").fill("验证 TestAccount 加密与范围闭环");
   const accountCreated = page.waitForResponse(
     (response) =>
@@ -545,8 +645,8 @@ test("project management browser closure", async ({ page, request }) => {
   accountRow = page.getByRole("row").filter({
     has: page.getByText(`qa-${projectCode}`, { exact: true }),
   });
-  await accountRow.getByRole("button", { name: "更新凭据" }).click();
-  const secretDialog = page.getByRole("dialog", { name: "更新登录凭据" });
+  await accountRow.getByRole("button", { name: "更新密码" }).click();
+  const secretDialog = page.getByRole("dialog", { name: "更新登录密码" });
   const rotatedAccountSecret = `rotated-test-account-${projectCode}`;
   const secretInput = secretDialog.getByLabel("新凭据");
   await secretInput.fill(rotatedAccountSecret);
@@ -586,6 +686,20 @@ test("project management browser closure", async ({ page, request }) => {
   expect(accountReadText).not.toContain(initialAccountSecret);
   expect(accountReadText).not.toContain(rotatedAccountSecret);
   expect(accountReadText).not.toContain("secret_value");
+  await accountRow.getByRole("button", { name: "状态操作" }).click();
+  await page.getByText("激活", { exact: true }).click();
+  const accountActivationDialog = page.getByRole("dialog", { name: "激活" });
+  await accountActivationDialog.getByLabel("操作原因").fill("ACTIVE Environment 下激活账号");
+  const accountActivated = page.waitForResponse(
+    (response) =>
+      response.url().endsWith(`/api/v1/test-account/${accountId}/activate`) &&
+      response.request().method() === "POST",
+  );
+  await accountActivationDialog.getByRole("button", { name: "确认" }).click();
+  const accountActivatedResponse = await accountActivated;
+  expect(accountActivatedResponse.status()).toBe(200);
+  expect((await accountActivatedResponse.json()).data.lifecycle_status).toBe("ACTIVE");
+  await expect(accountRow.getByText("ACTIVE", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: /返回项目详情/ }).click();
 
   const projectListLoaded = page.waitForResponse(
@@ -738,6 +852,18 @@ test("project management browser closure", async ({ page, request }) => {
   });
   expect(denied.status()).toBe(403);
   expect((await denied.json()).code).toBe("AUTH_PERMISSION_DENIED");
+  const deniedEnvironmentLifecycle = await request.post(
+    `/api/v1/environment/${environmentId}/validate`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Idempotency-Key": `deny-environment-${projectCode}`,
+      },
+      data: { expected_version: 6, reason: "无项目权限不得执行 Environment 命令" },
+    },
+  );
+  expect(deniedEnvironmentLifecycle.status()).toBe(403);
+  expect((await deniedEnvironmentLifecycle.json()).code).toBe("AUTH_PERMISSION_DENIED");
 
   expect(consoleErrors).toEqual([]);
   expect(pageErrors).toEqual([]);

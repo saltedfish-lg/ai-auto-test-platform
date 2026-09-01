@@ -76,6 +76,13 @@ class UpdateEnvironmentRequest(BaseModel):
     accessibility_state: AccessibilityState | None = None
 
 
+class LifecycleCommandRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expected_version: int = Field(ge=0)
+    reason: str = Field(min_length=1, max_length=1000)
+
+
 class EnvironmentResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
     data: EnvironmentResource
