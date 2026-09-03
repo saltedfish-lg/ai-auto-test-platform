@@ -86,3 +86,206 @@ references:
   - HRO-014
   - PROC-008
   - AI_TASK_CREATE
+
+browser_loop_decision:
+  decision_id: PD-AI-EXPLORATION-BROWSER-LOOP
+  decision_status: RESOLVED
+  decided_at: '2026-09-01'
+  decision_source: USER_CONTROLLED_DECISION
+  capability_code: AI_EXPLORATION_BROWSER_LOOP
+  scope_exclusions:
+    - RESULT_TO_STANDARD_TEST_CASE
+    - TEST_SUITE_AUTO_GENERATION
+    - SCHEDULER
+    - DISTRIBUTED_QUEUE
+    - RUNNER_MULTI_SLOT_SCHEDULING
+    - RESUME
+  execution_ownership:
+    business_owner: AI_TASK
+    session_member: AIExplorationSession
+    execution_owner: ExecutionAttempt
+    relationship: AIExplorationSession在首次Start时exactly-one绑定ExecutionAttempt。
+    invariants:
+      - AIExplorationStep只是Session下的有序证据实体，不成为execution owner。
+      - RUNNING期间禁止更换ExecutionAttempt、ExecutionBindingSnapshot或Runner。
+      - ExecutionBindingSnapshot是Project、Environment、Terminal、LoginStrategy、TestAccount、CredentialRevision、Runner、RuntimePolicy与两类Lease的唯一执行来源。
+      - 不接受arbitrary target_url、明文credential、arbitrary localStorage、captcha value、Runner Agent token、browser executable或客户端capability JSON作为Browser Loop运行输入。
+  public_operations:
+    start:
+      operation_id: start_ai_exploration_session
+      method: POST
+      path: /api/v1/ai-exploration-sessions/{session_id}/start
+      idempotency_required: true
+      input: [execution_attempt_id, expected_row_version]
+    status:
+      operation_id: get_ai_exploration_session
+      method: GET
+      path: /api/v1/ai-exploration-sessions/{session_id}
+    steps:
+      operation_id: list_ai_exploration_steps
+      method: GET
+      path: /api/v1/ai-exploration-sessions/{session_id}/steps
+    cancel:
+      operation_id: cancel_ai_exploration_session
+      method: POST
+      path: /api/v1/ai-exploration-sessions/{session_id}/cancel
+      idempotency_required: true
+      input: [expected_row_version]
+    unsupported: [resume_ai_exploration_session, retry_ai_exploration_session]
+  preflight:
+    required_checks:
+      - Session必须处于READY且父AI Task允许执行。
+      - ExecutionAttempt有效且尚未被其他Session持有。
+      - ExecutionBindingSnapshot可消费且owner_execution_identity匹配ExecutionAttempt。
+      - Environment为ACTIVE。
+      - TerminalAccessRevision已published且LoginStrategy revision与快照一致。
+      - TestAccount、CredentialRevision与project/environment/terminal mapping可消费。
+      - Runner lifecycle、enablement、connection、health与capability满足browser runtime。
+      - Identity Lease与Runner Resource Lease有效且fencing generation当前。
+      - capability=AI_EXPLORATION的冻结Model Snapshot可消费。
+    failure_rule: 任一检查失败时不得启动Browser、改选Account/Revision/Runner或留下部分Runtime。
+  model_snapshot:
+    rule: Planning与Browser Loop必须复用Session创建时冻结的同一个Model Snapshot。
+    prohibited: 运行中因平台默认模型变化切换Model Configuration、Provider或model_name。
+  runner_dispatch:
+    mode: BOUND_DIRECT_EXECUTION
+    owner: EXECUTION_ATTEMPT_OWNER_SERVICE
+    target: ExecutionBindingSnapshot.runner_id
+    machine_auth_required: true
+    prohibited_capabilities:
+      - RUNNER_SELECTION
+      - QUEUE
+      - CAPACITY_PLANNING
+      - FALLBACK
+      - RESCHEDULE
+      - SCHEDULER_RETRY
+    rule: direct execution只向Binding已确定的Runner下发带Attempt、Binding与fencing identity的命令。
+  runtime_policy_defaults:
+    max_steps: 50
+    total_timeout_seconds: 1800
+    model_transient_retry_per_step: 2
+    browser_action_retry: REOBSERVE_REQUIRED_NO_BLIND_RETRY
+    action_timeout: REUSE_VERSIONED_RUNTIME_POLICY_TIMEOUT
+    hardcoded_action_timeout_forbidden: true
+  loop_contract:
+    sequence: [OBSERVE, DECIDE, VALIDATE_ACTION, EXECUTE, OBSERVE]
+    provider_transaction_rule: Model Provider调用期间不得持有数据库长事务或聚合锁。
+    stale_response_rule: Provider返回后必须重新校验Session、Attempt、Binding、Lease、fencing、row version与终态；stale response必须丢弃且不得执行Action。
+    long_action_batch_default: false
+    next_action_requires_new_observation: true
+  step_evidence:
+    entity: AIExplorationStep
+    owner: AIExplorationSession
+    ordered_by: sequence
+    sequence_rule: 单个Session内从1开始单调递增且唯一。
+    required_identity:
+      - ai_exploration_step_id
+      - session_id
+      - execution_attempt_id
+      - sequence
+      - model_call_identity
+      - observation_identity
+      - action_identity
+    required_evidence:
+      - sanitized_observation_summary
+      - structured_action
+      - action_result
+      - state_version
+      - identity_lease_generation
+      - runner_lease_generation
+      - started_at
+      - completed_at
+      - terminal_or_non_terminal_result
+    prohibited_persistence:
+      - PRIVATE_CHAIN_OF_THOUGHT
+      - FULL_DOM_OR_HTML_BY_DEFAULT
+      - PLAINTEXT_SECRET
+      - SCREENSHOT_OR_VIDEO_BINARY
+  observation_contract:
+    default_fields:
+      - current_url
+      - title
+      - visible_semantic_elements
+      - relevant_text_and_controls
+      - focused_element
+      - previous_action_result
+      - navigation_or_error
+      - necessary_local_accessibility_or_dom_slice
+      - artifact_references
+    token_efficiency:
+      - 使用adaptive observation、rolling summary和current plan state。
+      - 去除重复或低相关内容；不得以硬Token Budget破坏正确性。
+      - 完整DOM或HTML只允许在正式诊断升级时按需取得，不默认发送给模型。
+  browser_action_dsl:
+    contract_type: CLOSED_TYPED_UNION
+    allowed_actions:
+      - Navigate
+      - Click
+      - Fill
+      - Select
+      - Check
+      - Uncheck
+      - PressKey
+      - WaitFor
+      - Inspect
+      - Read
+      - Scroll
+      - goal_completed
+    selector_priority:
+      - ROLE_AND_ACCESSIBLE_NAME
+      - LABEL
+      - PLACEHOLDER_OR_TEST_ID
+      - STABLE_ATTRIBUTE
+      - CSS_OR_XPATH_FALLBACK
+    prohibited:
+      - ARBITRARY_JAVASCRIPT
+      - PAGE_EVALUATE_MODEL_TEXT
+      - SHELL
+      - PYTHON
+      - POWERSHELL
+      - NODE
+      - SQL
+      - FORCE_CLICK_BY_DEFAULT
+      - GENERATED_CLASS_OR_INDEX_ONLY_SELECTOR_BY_DEFAULT
+    validation_rule: 模型自由文本不得直接驱动Playwright；所有Action必须先通过typed schema、navigation scope与每动作fencing校验。
+  navigation_scope:
+    default: DENY
+    initial_entry: TERMINAL_ACCESS_REVISION_ENTRY_URL
+    allowed:
+      - PROJECT_RUNTIME_POLICY_ORIGIN_ALLOWLIST
+      - FORMAL_AUTHENTICATION_REDIRECT_ORIGINS
+    covered_events: [NAVIGATION, REDIRECT, POPUP, NEW_TAB]
+    rule: 每次导航前后都必须校验origin；未声明origin fail-closed。
+  completion:
+    proposal_action: goal_completed
+    rule: goal_completed只是completion proposal。
+    runtime_validation:
+      - 当前Observation仍是最新且属于当前Session和Attempt。
+      - exploration goal与plan completion条件满足。
+      - Attempt、Binding、Browser Session与Runner归属仍有效。
+      - 两类Lease有效且fencing generation当前。
+      - Session与AI Task未进入终态或取消fence。
+    transition: RUNNING_TO_SUCCEEDED
+  cancel:
+    order:
+      - 原子进入取消fence并阻止新Provider调用和Browser Action。
+      - 终止当前Browser Context与bound direct execution。
+      - 释放Runner Resource Lease与Identity Lease。
+      - 写入同事务Audit与正式Outbox事件。
+    stale_rule: 所有迟到Provider或Browser response必须丢弃，不得恢复运行、重建Lease或覆盖终态。
+  terminal_semantics:
+    terminal_states: [SUCCEEDED, FAILED, CANCELLED]
+    resume_supported: false
+    retry_supported: false
+    restart_rule: FAILED或CANCELLED后重新探索必须创建新的AIExplorationSession与ExecutionAttempt。
+    start_replay_rule: 网络结果不确定时只允许相同request fingerprint与相同Idempotency-Key返回原Session/Attempt结果。
+  secret_boundary:
+    model_visible: [credential_slot_available]
+    runtime_only:
+      - PLAINTEXT_PASSWORD
+      - CREDENTIAL_REVISION_SECRET
+      - RUNNER_AGENT_TOKEN
+      - COOKIE_OR_SESSION_SECRET
+      - CAPTCHA_REALTIME_VALUE
+      - PROVIDER_SECRET
+    login_resolution: TerminalAccessRevision、LoginStrategy与TestAccount/CredentialRevision只能在受信Runtime或Runner边界解析并注入。

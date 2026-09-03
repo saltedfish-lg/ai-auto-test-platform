@@ -664,6 +664,11 @@ class ProjectRuntimePolicyRevision(Base):
     browser_runtime: Mapped[str] = mapped_column(String(32))
     artifact_policy: Mapped[str] = mapped_column(String(32))
     timeout_seconds: Mapped[int] = mapped_column(Integer)
+    max_steps: Mapped[int] = mapped_column(MySQLInteger(unsigned=True))
+    total_exploration_timeout_seconds: Mapped[int] = mapped_column(MySQLInteger(unsigned=True))
+    model_transient_retry_per_step: Mapped[int] = mapped_column(MySQLInteger(unsigned=True))
+    allowed_origins: Mapped[list[str]] = mapped_column(JSON)
+    authentication_redirect_origins: Mapped[list[str]] = mapped_column(JSON)
     retry_mode: Mapped[str] = mapped_column(String(32))
     network_requirement: Mapped[str] = mapped_column(String(32))
     serial_execution_policy: Mapped[str] = mapped_column(String(32))
@@ -994,6 +999,21 @@ class AIExplorationSession(Base):
     ai_call_id: Mapped[str] = mapped_column(
         String(26), ForeignKey("atp_ai_call.ai_call_id"), unique=True
     )
+    execution_attempt_id: Mapped[str | None] = mapped_column(
+        String(26), ForeignKey("atp_execution_attempt.execution_attempt_id"), unique=True
+    )
+    execution_binding_snapshot_id: Mapped[str | None] = mapped_column(
+        String(26),
+        ForeignKey("atp_execution_binding_snapshot.execution_binding_snapshot_id"),
+        unique=True,
+    )
+    browser_session_id: Mapped[str | None] = mapped_column(String(191))
+    current_observation_id: Mapped[str | None] = mapped_column(String(26))
+    current_step_sequence: Mapped[int] = mapped_column(BigInteger, default=0)
+    max_steps: Mapped[int | None] = mapped_column(MySQLInteger(unsigned=True))
+    total_timeout_seconds: Mapped[int | None] = mapped_column(MySQLInteger(unsigned=True))
+    model_transient_retry_per_step: Mapped[int | None] = mapped_column(MySQLInteger(unsigned=True))
+    row_version: Mapped[int] = mapped_column(BigInteger, default=1)
     idempotency_key: Mapped[str] = mapped_column(
         String(191), ForeignKey("atp_idempotency_record.idempotency_key"), unique=True
     )
@@ -1016,9 +1036,46 @@ class AIExplorationSession(Base):
     failure_message: Mapped[str | None] = mapped_column(String(1000))
     planning_started_at: Mapped[datetime] = mapped_column(DateTime)
     planning_deadline_at: Mapped[datetime] = mapped_column(DateTime)
+    total_deadline_at: Mapped[datetime | None] = mapped_column(DateTime)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime)
+    terminal_at: Mapped[datetime | None] = mapped_column(DateTime)
+    cancel_requested_at: Mapped[datetime | None] = mapped_column(DateTime)
     created_by: Mapped[str] = mapped_column(String(26), ForeignKey("atp_user.user_id"))
     created_at: Mapped[datetime] = mapped_column(DateTime)
     updated_at: Mapped[datetime] = mapped_column(DateTime)
+
+
+class AIExplorationStep(Base):
+    """Ordered Browser Loop evidence owned by an AI exploration session."""
+
+    __tablename__ = "atp_ai_exploration_step"
+    __table_args__ = (
+        UniqueConstraint("session_id", "sequence", name="uq_atp_ai_exploration_step_sequence"),
+    )
+    ai_exploration_step_id: Mapped[str] = mapped_column(String(26), primary_key=True)
+    session_id: Mapped[str] = mapped_column(
+        String(26), ForeignKey("atp_ai_exploration_session.session_id")
+    )
+    execution_attempt_id: Mapped[str] = mapped_column(
+        String(26), ForeignKey("atp_execution_attempt.execution_attempt_id")
+    )
+    ai_call_id: Mapped[str] = mapped_column(String(26), ForeignKey("atp_ai_call.ai_call_id"))
+    sequence: Mapped[int] = mapped_column(BigInteger)
+    model_call_identity: Mapped[str] = mapped_column(String(191))
+    observation_identity: Mapped[str] = mapped_column(String(26), unique=True)
+    action_identity: Mapped[str] = mapped_column(String(26), unique=True)
+    status: Mapped[str] = mapped_column(String(24))
+    observation_json: Mapped[dict[str, Any]] = mapped_column(JSON)
+    action_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    action_result_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    sanitized_reason: Mapped[str | None] = mapped_column(String(1000))
+    failure_code: Mapped[str | None] = mapped_column(String(64))
+    state_version: Mapped[int] = mapped_column(BigInteger)
+    identity_lease_generation: Mapped[int] = mapped_column(BigInteger)
+    runner_lease_generation: Mapped[int] = mapped_column(BigInteger)
+    started_at: Mapped[datetime] = mapped_column(DateTime)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
 
 
 class AIExplorationAudit(Base):

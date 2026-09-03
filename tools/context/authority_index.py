@@ -29,7 +29,7 @@ _STOP = {
     'the','and','for','with','from','into','this','that','task','change','modify','update','fix','add','remove',
     '实现','修改','新增','删除','调整','修复','功能','规则','页面','代码','任务','需要','进行','当前','平台',
 }
-_INDEX_SCHEMA_VERSION = '5'
+_INDEX_SCHEMA_VERSION = '8'
 _MISSING = object()
 
 
@@ -297,6 +297,33 @@ def _title(record: dict[str, Any]) -> str:
     return ''
 
 
+def _canonical_fingerprint_value(value: Any) -> Any:
+    """Encode every node with a type tag for deterministic, type-sensitive hashing."""
+    if isinstance(value, dict):
+        pairs = [
+            [_canonical_fingerprint_value(key), _canonical_fingerprint_value(item)]
+            for key, item in value.items()
+        ]
+        pairs.sort(key=lambda pair: json.dumps(pair[0], ensure_ascii=False, separators=(',', ':')))
+        return ['mapping', pairs]
+    if isinstance(value, list):
+        return ['list', [_canonical_fingerprint_value(item) for item in value]]
+    if isinstance(value, tuple):
+        return ['tuple', [_canonical_fingerprint_value(item) for item in value]]
+    if isinstance(value, set):
+        items=[_canonical_fingerprint_value(item) for item in value]
+        items.sort(key=lambda item: json.dumps(item, ensure_ascii=False, separators=(',', ':')))
+        return ['set', items]
+    type_tag=f'{type(value).__module__}.{type(value).__qualname__}'
+    if value is None or isinstance(value, (bool, str, int)):
+        return [type_tag, value]
+    if isinstance(value, float):
+        return [type_tag, repr(value)]
+    if isinstance(value, bytes):
+        return [type_tag, value.hex()]
+    return [type_tag, str(value)]
+
+
 def _record_tuple(
     *,
     root: Path,
@@ -332,6 +359,9 @@ def _record_tuple(
         x for x in [display_id, structural_id or '', section, selector, title, _scalar_text(record)] if x
     )[:2200]
     identity_kind = 'CANONICAL' if canonical_id else ('STRUCTURAL' if structural_id else 'LOCATOR')
+    record_sha256 = hashlib.sha256(
+        json.dumps(_canonical_fingerprint_value(record), ensure_ascii=False, separators=(',', ':')).encode('utf-8')
+    ).hexdigest()
     return (
         canonical_id,
         canonical_key,
@@ -346,6 +376,7 @@ def _record_tuple(
         json.dumps(domains[:16], ensure_ascii=False),
         json.dumps(references, ensure_ascii=False),
         json.dumps(reference_ids, ensure_ascii=False),
+        record_sha256,
         search_text,
     )
 
@@ -560,6 +591,7 @@ def build_authority_index(root: Path, *, force: bool = False) -> dict[str, Any]:
               domains_json TEXT NOT NULL,
               references_json TEXT NOT NULL,
               reference_ids_json TEXT NOT NULL,
+              record_sha256 TEXT NOT NULL,
               search_text TEXT NOT NULL
             );
             CREATE INDEX idx_records_canonical_id ON records(canonical_record_id);
@@ -568,8 +600,8 @@ def build_authority_index(root: Path, *, force: bool = False) -> dict[str, Any]:
             CREATE INDEX idx_records_display_path ON records(display_path);
         ''')
         insert_sql = '''INSERT INTO records(
-            canonical_record_id,canonical_id_key,structural_id,identity_kind,locator_key,section,selector,path,display_path,title,domains_json,references_json,reference_ids_json,search_text
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)'''
+            canonical_record_id,canonical_id_key,structural_id,identity_kind,locator_key,section,selector,path,display_path,title,domains_json,references_json,reference_ids_json,record_sha256,search_text
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'''
         for path in files:
             rel = path.relative_to(root).as_posix()
             parser = path.suffix.lower().lstrip('.')
@@ -704,6 +736,7 @@ def _row_to_ref(row: sqlite3.Row, *, authority_group: str | None = None, authori
         'domains': json.loads(row['domains_json']),
         'references': json.loads(row['references_json']),
         'reference_ids': json.loads(row['reference_ids_json']),
+        'record_sha256': row['record_sha256'],
         'authority_group': authority_group,
         'authority_domains': list(authority_domains or []),
     }
@@ -731,7 +764,7 @@ def _candidate_rows(conn: sqlite3.Connection, *, selected_paths: set[str], expli
             params.append('%' + domain.lower() + '%')
         if sub:
             clauses.append('(' + ' OR '.join(sub) + ')')
-    sql = '''SELECT canonical_record_id,canonical_id_key,structural_id,identity_kind,locator_key,section,selector,path,display_path,title,domains_json,references_json,reference_ids_json,search_text FROM records'''
+    sql = '''SELECT canonical_record_id,canonical_id_key,structural_id,identity_kind,locator_key,section,selector,path,display_path,title,domains_json,references_json,reference_ids_json,record_sha256,search_text FROM records'''
     if clauses:
         sql += ' WHERE ' + ' AND '.join(clauses)
     sql += ' LIMIT 20000'
@@ -1241,7 +1274,7 @@ def refs_by_id(
     selected = {str(x).replace('\\', '/') for x in authority_paths}
     try:
         rows = list(conn.execute(
-            '''SELECT canonical_record_id,canonical_id_key,structural_id,identity_kind,locator_key,section,selector,path,display_path,title,domains_json,references_json,reference_ids_json,search_text
+            '''SELECT canonical_record_id,canonical_id_key,structural_id,identity_kind,locator_key,section,selector,path,display_path,title,domains_json,references_json,reference_ids_json,record_sha256,search_text
                FROM records WHERE canonical_record_id=? OR structural_id=? OR locator_key=? OR reference_ids_json LIKE ? ORDER BY path, selector''',
             (record_id, record_id, record_id, '%\"' + record_id.replace('%','') + '\"%'),
         ))
@@ -1265,6 +1298,33 @@ def refs_by_id(
         return refs
     finally:
         conn.close()
+
+
+def refs_by_locators(root: Path, locator_keys: Iterable[str], *, verified_index_state: dict[str, Any] | None = None) -> dict[str, dict[str, Any]]:
+    """Resolve exact indexed records for already-structured evidence in bounded batches."""
+    root = root.resolve()
+    state = verified_index_state if verified_index_state is not None else authority_index_status(root)
+    if state['status'] not in {'READY', 'PARTIAL'}:
+        return {}
+    keys = list(dict.fromkeys(str(value) for value in locator_keys if str(value)))
+    if not keys:
+        return {}
+    resolved: dict[str, dict[str, Any]] = {}
+    conn = _open_index(root)
+    try:
+        for offset in range(0, len(keys), 400):
+            batch = keys[offset:offset + 400]
+            placeholders = ','.join('?' for _ in batch)
+            rows = conn.execute(
+                f'''SELECT canonical_record_id,canonical_id_key,structural_id,identity_kind,locator_key,section,selector,path,display_path,title,domains_json,references_json,reference_ids_json,record_sha256,search_text
+                    FROM records WHERE locator_key IN ({placeholders})''',
+                batch,
+            )
+            for row in rows:
+                resolved[str(row['locator_key'])] = _row_to_ref(row)
+    finally:
+        conn.close()
+    return resolved
 
 
 def _load_source(root: Path, path: str, source_cache: dict[str, Any]) -> Any:
@@ -1352,7 +1412,8 @@ def expand_authority_refs(root: Path, refs: list[dict[str, Any]], *, max_chars: 
         if allowed<=0: break
         full=len(serialized)<=allowed; content=value if full else serialized[:max(0,allowed-1)]+'…'; chars=len(serialized) if full else len(content)
         rid=ref.get('record_id'); locator=ref.get('fallback_locator') or f'{path}#{selector}'
-        slices.append({'record_id':rid,'canonical_record_id':ref.get('canonical_record_id'),'identity_kind':ref.get('identity_kind'),'fallback_locator':locator,
+        slices.append({'record_id':rid,'canonical_record_id':ref.get('canonical_record_id'),'canonical_id_key':ref.get('canonical_id_key'),
+                       'structural_id':ref.get('structural_id'),'identity_kind':ref.get('identity_kind'),'record_sha256':ref.get('record_sha256'),'fallback_locator':locator,
                        'section':ref.get('section'),'selector':selector,'path':path,'display_path':ref.get('display_path'),'relevance_score':ref.get('relevance_score'),
                        'relevance_reasons':ref.get('relevance_reasons'),'content':content,'content_chars':chars,'full_record':full,
                        'expand_command':(f'python -m tools.context.authority_query --root . --id {json.dumps(str(rid))} --expand' if rid and ref.get('canonical_record_id') else f'python -m tools.context.authority_query --root . --authority-path {json.dumps(path)} --selector {json.dumps(selector)} --expand')})

@@ -21851,6 +21851,100 @@ paths:
       x-permission-code: AI_TASK_CREATE
       security:
       - BearerAuth: []
+  /api/v1/ai-exploration-sessions/{session_id}:
+    get:
+      operationId: get_ai_exploration_session
+      summary: 获取AI探索会话当前执行状态
+      tags: [AI探索执行]
+      parameters:
+      - {name: session_id, in: path, required: true, schema: {type: string, minLength: 26, maxLength: 26}}
+      - {name: X-Correlation-Id, in: header, required: false, schema: {type: string}}
+      responses:
+        '200':
+          description: 当前会话状态
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AIExplorationSessionResponse'}
+        '401': {description: Unauthenticated, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '403': {description: Forbidden, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '404': {description: Not found, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '422': {$ref: '#/components/responses/RequestValidationFailed'}
+      x-permission-code: AI_TASK_CREATE
+      security: [{BearerAuth: []}]
+  /api/v1/ai-exploration-sessions/{session_id}/start:
+    post:
+      operationId: start_ai_exploration_session
+      summary: 使用已绑定ExecutionAttempt启动AI浏览器探索
+      tags: [AI探索执行]
+      parameters:
+      - {name: session_id, in: path, required: true, schema: {type: string, minLength: 26, maxLength: 26}}
+      - {name: Idempotency-Key, in: header, required: true, schema: {type: string, minLength: 1, maxLength: 191}}
+      - {name: X-Correlation-Id, in: header, required: false, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/StartAIExplorationSessionRequest'}
+      responses:
+        '202':
+          description: Browser Loop已通过bound direct execution启动
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AIExplorationSessionResponse'}
+        '401': {description: Unauthenticated, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '403': {description: Forbidden, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '404': {description: Not found, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '409': {description: State, owner, binding, lease or fencing conflict, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '422': {$ref: '#/components/responses/RequestValidationFailed'}
+      x-permission-code: AI_TASK_CREATE
+      security: [{BearerAuth: []}]
+  /api/v1/ai-exploration-sessions/{session_id}/steps:
+    get:
+      operationId: list_ai_exploration_steps
+      summary: 获取AI探索有序Step证据
+      tags: [AI探索执行]
+      parameters:
+      - {name: session_id, in: path, required: true, schema: {type: string, minLength: 26, maxLength: 26}}
+      - {name: X-Correlation-Id, in: header, required: false, schema: {type: string}}
+      responses:
+        '200':
+          description: 有序Step证据
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AIExplorationStepListResponse'}
+        '401': {description: Unauthenticated, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '403': {description: Forbidden, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '404': {description: Not found, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '422': {$ref: '#/components/responses/RequestValidationFailed'}
+      x-permission-code: AI_TASK_CREATE
+      security: [{BearerAuth: []}]
+  /api/v1/ai-exploration-sessions/{session_id}/cancel:
+    post:
+      operationId: cancel_ai_exploration_session
+      summary: 原子fence并取消AI浏览器探索
+      tags: [AI探索执行]
+      parameters:
+      - {name: session_id, in: path, required: true, schema: {type: string, minLength: 26, maxLength: 26}}
+      - {name: Idempotency-Key, in: header, required: true, schema: {type: string, minLength: 1, maxLength: 191}}
+      - {name: X-Correlation-Id, in: header, required: false, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CancelAIExplorationSessionRequest'}
+      responses:
+        '200':
+          description: 会话已终态化为CANCELLED
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AIExplorationSessionResponse'}
+        '401': {description: Unauthenticated, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '403': {description: Forbidden, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '404': {description: Not found, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '409': {description: Version or terminal-state conflict, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '422': {$ref: '#/components/responses/RequestValidationFailed'}
+      x-permission-code: AI_TASK_CREATE
+      security: [{BearerAuth: []}]
   /api/v1/manual-recordings:
     post:
       operationId: create_manual_recording
@@ -36974,11 +37068,20 @@ components:
       required:
       - session_id
       - ai_task_id
+      - execution_attempt_id
+      - execution_binding_snapshot_id
+      - browser_session_id
       - project_id
       - source_case_id
       - objective
       - target_url
       - lifecycle_status
+      - current_step_sequence
+      - current_observation_id
+      - max_steps
+      - total_timeout_seconds
+      - model_transient_retry_per_step
+      - row_version
       - resolved_model_config_id
       - resolved_model_display_name
       - resolved_provider_code
@@ -36986,6 +37089,10 @@ components:
       - plan
       - failure_code
       - failure_message
+      - total_deadline_at
+      - started_at
+      - terminal_at
+      - cancel_requested_at
       - created_by
       - created_at
       - updated_at
@@ -36998,6 +37105,17 @@ components:
           type: string
           minLength: 26
           maxLength: 26
+        execution_attempt_id:
+          type: [string, 'null']
+          minLength: 26
+          maxLength: 26
+        execution_binding_snapshot_id:
+          type: [string, 'null']
+          minLength: 26
+          maxLength: 26
+        browser_session_id:
+          type: [string, 'null']
+          maxLength: 191
         project_id:
           type: string
           minLength: 26
@@ -37025,6 +37143,13 @@ components:
           - FAILED
           - RUNNING
           - SUCCEEDED
+          - CANCELLED
+        current_step_sequence: {type: integer, minimum: 0}
+        current_observation_id: {type: [string, 'null'], minLength: 26, maxLength: 26}
+        max_steps: {type: [integer, 'null'], minimum: 1}
+        total_timeout_seconds: {type: [integer, 'null'], minimum: 1}
+        model_transient_retry_per_step: {type: [integer, 'null'], minimum: 0, maximum: 10}
+        row_version: {type: integer, minimum: 1}
         resolved_model_config_id:
           type: string
           minLength: 26
@@ -37059,12 +37184,23 @@ components:
           - AI_EXPLORATION_MODEL_RESPONSE_INVALID
           - AI_EXPLORATION_PLANNING_FAILED
           - AI_EXPLORATION_PLANNING_INTERRUPTED
+          - AI_EXPLORATION_PREFLIGHT_FAILED
+          - AI_EXPLORATION_MODEL_CALL_FAILED
+          - AI_EXPLORATION_ACTION_FAILED
+          - AI_EXPLORATION_LEASE_LOST
+          - AI_EXPLORATION_TIMEOUT
+          - AI_EXPLORATION_MAX_STEPS
+          - AI_EXPLORATION_RUNNER_UNAVAILABLE
           - null
         failure_message:
           type:
           - string
           - 'null'
           maxLength: 1000
+        total_deadline_at: {type: [string, 'null'], format: date-time}
+        started_at: {type: [string, 'null'], format: date-time}
+        terminal_at: {type: [string, 'null'], format: date-time}
+        cancel_requested_at: {type: [string, 'null'], format: date-time}
         created_by:
           type: string
           minLength: 26
@@ -37075,6 +37211,76 @@ components:
         updated_at:
           type: string
           format: date-time
+    StartAIExplorationSessionRequest:
+      type: object
+      additionalProperties: false
+      required: [execution_attempt_id, expected_row_version]
+      properties:
+        execution_attempt_id: {type: string, minLength: 26, maxLength: 26}
+        expected_row_version: {type: integer, minimum: 1}
+    CancelAIExplorationSessionRequest:
+      type: object
+      additionalProperties: false
+      required: [expected_row_version]
+      properties:
+        expected_row_version: {type: integer, minimum: 1}
+    AIExplorationBrowserAction:
+      type: object
+      additionalProperties: false
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [Navigate, Click, Fill, Select, Check, Uncheck, PressKey, WaitFor, Inspect, Read, Scroll, goal_completed]
+        selector: {type: [string, 'null'], maxLength: 1000}
+        url: {type: [string, 'null'], format: uri, maxLength: 2048}
+        value: {type: [string, 'null'], maxLength: 4000}
+        key: {type: [string, 'null'], maxLength: 64}
+        direction: {type: [string, 'null'], enum: [up, down, left, right, null]}
+        amount: {type: [integer, 'null'], minimum: 1, maximum: 10000}
+        reason: {type: [string, 'null'], maxLength: 1000}
+    AIExplorationStepResource:
+      type: object
+      additionalProperties: false
+      required: [ai_exploration_step_id, session_id, execution_attempt_id, sequence, model_call_identity, observation_identity, action_identity, status, observation, action, action_result, sanitized_reason, failure_code, state_version, identity_lease_generation, runner_lease_generation, started_at, completed_at]
+      properties:
+        ai_exploration_step_id: {type: string, minLength: 26, maxLength: 26}
+        session_id: {type: string, minLength: 26, maxLength: 26}
+        execution_attempt_id: {type: string, minLength: 26, maxLength: 26}
+        sequence: {type: integer, minimum: 1}
+        model_call_identity: {type: string, minLength: 1, maxLength: 191}
+        observation_identity: {type: string, minLength: 26, maxLength: 26}
+        action_identity: {type: string, minLength: 26, maxLength: 26}
+        status: {type: string, enum: [DECIDING, EXECUTING, SUCCEEDED, FAILED, COMPLETION_PROPOSED, DISCARDED]}
+        observation: {type: object, additionalProperties: true}
+        action:
+          oneOf:
+          - {$ref: '#/components/schemas/AIExplorationBrowserAction'}
+          - {type: 'null'}
+        action_result: {type: [object, 'null'], additionalProperties: true}
+        sanitized_reason: {type: [string, 'null'], maxLength: 1000}
+        failure_code: {type: [string, 'null'], maxLength: 64}
+        state_version: {type: integer, minimum: 1}
+        identity_lease_generation: {type: integer, minimum: 1}
+        runner_lease_generation: {type: integer, minimum: 1}
+        started_at: {type: string, format: date-time}
+        completed_at: {type: [string, 'null'], format: date-time}
+    AIExplorationSessionResponse:
+      type: object
+      additionalProperties: false
+      required: [data, correlation_id]
+      properties:
+        data: {$ref: '#/components/schemas/AIExplorationSessionResource'}
+        correlation_id: {type: string}
+    AIExplorationStepListResponse:
+      type: object
+      additionalProperties: false
+      required: [items, correlation_id]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/AIExplorationStepResource'}
+        correlation_id: {type: string}
     CreateAiExplorationSessionRequest:
       type: object
       additionalProperties: false
@@ -37121,11 +37327,20 @@ components:
         data:
           session_id: 01J00000000000000000000001
           ai_task_id: 01J00000000000000000000003
+          execution_attempt_id: null
+          execution_binding_snapshot_id: null
+          browser_session_id: null
           project_id: 01J00000000000000000000000
           source_case_id: null
           objective: 验证有效用户能够登录并进入工作台
           target_url: https://example.test/login
           lifecycle_status: READY
+          current_step_sequence: 0
+          current_observation_id: null
+          max_steps: null
+          total_timeout_seconds: null
+          model_transient_retry_per_step: null
+          row_version: 1
           resolved_model_config_id: 01J00000000000000000000002
           resolved_model_display_name: AI探索默认模型
           resolved_provider_code: OPENAI
@@ -37140,6 +37355,10 @@ components:
               expected_observation: 页面展示登录表单
           failure_code: null
           failure_message: null
+          total_deadline_at: null
+          started_at: null
+          terminal_at: null
+          cancel_requested_at: null
           created_by: 01J00000000000000000000003
           created_at: '2026-08-25T00:00:00Z'
           updated_at: '2026-08-25T00:00:01Z'
@@ -37549,13 +37768,22 @@ components:
     RuntimePolicySnapshot:
       type: object
       additionalProperties: false
-      required: [runtime_policy_revision_id, revision_no, browser_runtime, artifact_policy, timeout_seconds, retry_mode, network_requirement, serial_execution_policy]
+      required: [runtime_policy_revision_id, revision_no, browser_runtime, artifact_policy, timeout_seconds, max_steps, total_exploration_timeout_seconds, model_transient_retry_per_step, allowed_origins, authentication_redirect_origins, retry_mode, network_requirement, serial_execution_policy]
       properties:
         runtime_policy_revision_id: {type: string}
         revision_no: {type: integer, minimum: 1}
         browser_runtime: {type: string}
         artifact_policy: {type: string}
         timeout_seconds: {type: integer, minimum: 1}
+        max_steps: {type: integer, minimum: 1}
+        total_exploration_timeout_seconds: {type: integer, minimum: 1}
+        model_transient_retry_per_step: {type: integer, minimum: 0, maximum: 10}
+        allowed_origins:
+          type: array
+          items: {type: string}
+        authentication_redirect_origins:
+          type: array
+          items: {type: string}
         retry_mode: {type: string}
         network_requirement: {type: string}
         serial_execution_policy: {type: string, enum: [SINGLE_PROCESS_UNIFIED_RETRY]}
@@ -37611,7 +37839,7 @@ components:
     RuntimePolicyRevisionResource:
       type: object
       additionalProperties: false
-      required: [runtime_policy_revision_id, project_id, revision_no, browser_runtime, artifact_policy, timeout_seconds, retry_mode, network_requirement, serial_execution_policy, lifecycle_status, row_version]
+      required: [runtime_policy_revision_id, project_id, revision_no, browser_runtime, artifact_policy, timeout_seconds, max_steps, total_exploration_timeout_seconds, model_transient_retry_per_step, allowed_origins, authentication_redirect_origins, retry_mode, network_requirement, serial_execution_policy, lifecycle_status, row_version]
       properties:
         runtime_policy_revision_id: {type: string}
         project_id: {type: string}
@@ -37619,6 +37847,15 @@ components:
         browser_runtime: {type: string}
         artifact_policy: {type: string}
         timeout_seconds: {type: integer, minimum: 1}
+        max_steps: {type: integer, minimum: 1}
+        total_exploration_timeout_seconds: {type: integer, minimum: 1}
+        model_transient_retry_per_step: {type: integer, minimum: 0, maximum: 10}
+        allowed_origins:
+          type: array
+          items: {type: string}
+        authentication_redirect_origins:
+          type: array
+          items: {type: string}
         retry_mode: {type: string}
         network_requirement: {type: string}
         serial_execution_policy: {type: string, enum: [SINGLE_PROCESS_UNIFIED_RETRY]}

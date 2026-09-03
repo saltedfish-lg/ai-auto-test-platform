@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import threading
 import urllib.request
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
@@ -8,7 +9,11 @@ from typing import ClassVar
 
 import pytest
 from platform_api.ai_exploration_router import router
-from platform_api.ai_exploration_schemas import CreateAIExplorationRequest, ExplorationPlan
+from platform_api.ai_exploration_schemas import (
+    AIExplorationBrowserAction,
+    CreateAIExplorationRequest,
+    ExplorationPlan,
+)
 from platform_api.ai_exploration_service import AIExplorationService
 from platform_api.audit import AuditContext
 from platform_api.errors import PlatformError
@@ -18,10 +23,12 @@ from platform_api.models import (
     AICall,
     AIExplorationAudit,
     AIExplorationSession,
+    AIExplorationStep,
     AITask,
     IdempotencyRecord,
     Project,
 )
+from platform_api.runner_browser_channel import RunnerBrowserCommandBroker
 
 
 def _now() -> datetime:
@@ -92,6 +99,8 @@ class _Session:
 
     def scalar(self, statement: object) -> object | None:
         descriptions = getattr(statement, "column_descriptions", [])
+        if not descriptions:
+            return datetime.now(UTC).replace(tzinfo=None)
         entity = descriptions[0].get("entity") if descriptions else None
         if entity is AIExplorationSession:
             return self.exploration
@@ -101,6 +110,8 @@ class _Session:
             return self.ai_task
         if entity is AICall:
             return self.ai_call
+        if entity is None:
+            return datetime.now(UTC).replace(tzinfo=None)
         return None
 
     def add(self, value: object) -> None:
@@ -261,8 +272,235 @@ def test_ai_exploration_route_is_registered_with_exact_contract() -> None:
         for method in route.methods
     }
     assert operations == {
-        ("POST", "/api/v1/ai-exploration-sessions", "create_ai_exploration_session")
+        ("POST", "/api/v1/ai-exploration-sessions", "create_ai_exploration_session"),
+        ("GET", "/api/v1/ai-exploration-sessions/{session_id}", "get_ai_exploration_session"),
+        (
+            "POST",
+            "/api/v1/ai-exploration-sessions/{session_id}/start",
+            "start_ai_exploration_session",
+        ),
+        (
+            "GET",
+            "/api/v1/ai-exploration-sessions/{session_id}/steps",
+            "list_ai_exploration_steps",
+        ),
+        (
+            "POST",
+            "/api/v1/ai-exploration-sessions/{session_id}/cancel",
+            "cancel_ai_exploration_session",
+        ),
     }
+
+
+def test_browser_action_dsl_is_closed_and_type_specific() -> None:
+    assert (
+        AIExplorationBrowserAction.model_validate(
+            {"type": "Fill", "selector": "label=Email", "value": "user@example.test"}
+        ).type
+        == "Fill"
+    )
+    with pytest.raises(ValueError):
+        AIExplorationBrowserAction.model_validate(
+            {"type": "Fill", "selector": "label=Email", "javascript": "alert(1)"}
+        )
+    with pytest.raises(ValueError):
+        AIExplorationBrowserAction.model_validate(
+            {"type": "Click", "selector": "css=#submit", "value": "unexpected"}
+        )
+    with pytest.raises(ValueError):
+        AIExplorationBrowserAction.model_validate({"type": "Shell", "value": "whoami"})
+    with pytest.raises(ValueError):
+        AIExplorationBrowserAction.model_validate(
+            {"type": "goal_completed", "reason": "looks done"}
+        )
+
+
+def test_browser_observation_is_bounded_and_secrets_are_removed() -> None:
+    command = SimpleNamespace(
+        login_material=SimpleNamespace(
+            account_identifier="fixture-account",
+            secret_value="runtime-password",
+            captcha_request_header_value="captcha-secret",
+            local_storage_presets=(SimpleNamespace(value="storage-secret"),),
+        )
+    )
+    sanitized = AIExplorationService._sanitize_document(
+        {
+            "current_url": "https://example.test/dashboard",
+            "password": "must-not-survive",
+            "cookie_value": "must-not-survive",
+            "visible_semantic_elements": [{"name": "Dashboard"}],
+            "relevant_text_and_controls": (
+                "runtime-password captcha-secret storage-secret fixture-account " + "x" * 9000
+            ),
+        },
+        command=command,
+    )
+    assert isinstance(sanitized, dict)
+    assert "password" not in sanitized
+    assert "cookie_value" not in sanitized
+    assert len(str(sanitized["relevant_text_and_controls"])) <= 8000
+    assert "runtime-password" not in repr(sanitized)
+    assert "captcha-secret" not in repr(sanitized)
+    assert "storage-secret" not in repr(sanitized)
+
+
+def test_completion_proposal_must_bind_exact_goal_all_plan_steps_and_observation() -> None:
+    row = SimpleNamespace(
+        objective="Reach the deterministic dashboard",
+        plan={
+            "goal": "Reach the deterministic dashboard",
+            "steps": [
+                {"sequence": 1, "expected_observation": "Dashboard is visible"},
+                {"sequence": 2, "expected_observation": "Completion heading is visible"},
+            ],
+        },
+    )
+    step = SimpleNamespace(
+        sanitized_reason=None,
+        observation_json={
+            "current_url": "https://example.test/dashboard",
+            "relevant_text_and_controls": "Exploration complete",
+        },
+        action_json={
+            "type": "goal_completed",
+            "completed_goal": "Reach the deterministic dashboard",
+            "satisfied_plan_steps": [1, 2],
+            "evidence": ["Exploration complete"],
+        },
+    )
+    assert AIExplorationService._completion_grounded(row, step)
+    step.action_json["completed_goal"] = "A different goal"
+    assert not AIExplorationService._completion_grounded(row, step)
+    step.action_json["completed_goal"] = row.objective
+    step.action_json["satisfied_plan_steps"] = [1]
+    assert not AIExplorationService._completion_grounded(row, step)
+    step.action_json["satisfied_plan_steps"] = [1, 2]
+    step.action_json["evidence"] = ["not in observation"]
+    assert not AIExplorationService._completion_grounded(row, step)
+
+
+def test_direct_runner_broker_addresses_one_bound_runner_and_correlates_response() -> None:
+    broker = RunnerBrowserCommandBroker()
+    response: dict[str, object] = {}
+
+    def dispatch() -> None:
+        response.update(broker.dispatch("R" * 26, "owns", {"identity": "binding"}, 2))
+
+    worker = threading.Thread(target=dispatch)
+    worker.start()
+    claimed = broker.claim("R" * 26, timeout_seconds=2)
+    assert claimed is not None
+    assert claimed["runner_id"] == "R" * 26
+    assert claimed["operation"] == "owns"
+    assert claimed["payload"] == {"identity": "binding"}
+    broker.complete("R" * 26, str(claimed["command_id"]), {"owned": True}, None)
+    worker.join(timeout=2)
+    assert not worker.is_alive()
+    assert response == {"owned": True}
+
+
+def test_direct_runner_broker_has_independent_cancel_lane_and_secret_safe_repr() -> None:
+    broker = RunnerBrowserCommandBroker()
+    responses: dict[str, dict[str, object]] = {"execute": {}, "cancel": {}}
+    secret = "runtime-secret-must-not-enter-exchange-repr"
+
+    def dispatch(operation: str) -> None:
+        responses[operation].update(
+            broker.dispatch("R" * 26, operation, {"credential": secret}, 2)
+        )
+
+    execute_worker = threading.Thread(target=dispatch, args=("execute",))
+    execute_worker.start()
+    execute = broker.claim("R" * 26, timeout_seconds=2)
+    assert execute is not None
+    assert secret not in repr(next(iter(broker._by_id.values())))
+
+    cancel_worker = threading.Thread(target=dispatch, args=("cancel",))
+    cancel_worker.start()
+    cancel = broker.claim_cancel("R" * 26, timeout_seconds=2)
+    assert cancel is not None
+    broker.complete("R" * 26, str(cancel["command_id"]), {"cancelled": True}, None)
+    cancel_worker.join(timeout=2)
+    assert not cancel_worker.is_alive()
+    assert execute_worker.is_alive()
+
+    broker.complete("R" * 26, str(execute["command_id"]), {"executed": True}, None)
+    execute_worker.join(timeout=2)
+    assert not execute_worker.is_alive()
+    assert responses == {
+        "execute": {"executed": True},
+        "cancel": {"cancelled": True},
+    }
+
+
+def test_browser_loop_orm_projects_v17_session_and_step_evidence() -> None:
+    assert {
+        "execution_attempt_id",
+        "execution_binding_snapshot_id",
+        "browser_session_id",
+        "current_observation_id",
+        "current_step_sequence",
+        "max_steps",
+        "total_timeout_seconds",
+        "model_transient_retry_per_step",
+        "row_version",
+        "total_deadline_at",
+        "started_at",
+        "terminal_at",
+        "cancel_requested_at",
+    }.issubset(AIExplorationSession.__table__.columns.keys())
+    assert AIExplorationStep.__tablename__ == "atp_ai_exploration_step"
+    assert {
+        "session_id",
+        "execution_attempt_id",
+        "sequence",
+        "model_call_identity",
+        "observation_identity",
+        "action_identity",
+        "observation_json",
+        "action_json",
+        "action_result_json",
+        "identity_lease_generation",
+        "runner_lease_generation",
+    }.issubset(AIExplorationStep.__table__.columns.keys())
+
+
+def test_model_transient_retry_limit_is_per_step_and_uses_frozen_snapshot() -> None:
+    class TransientModels(_Models):
+        def __init__(self) -> None:
+            super().__init__()
+            self.results = [
+                GatewayInvocationResult("TIMEOUT", None, None, "timeout"),
+                GatewayInvocationResult("RATE_LIMITED", None, None, "rate limited"),
+                GatewayInvocationResult(
+                    "SUCCESS",
+                    '{"type":"goal_completed","reason":"dashboard visible"}',
+                    "request-3",
+                    "completed",
+                ),
+            ]
+
+        def invoke(
+            self,
+            resolved: ResolvedModelConfiguration,
+            messages: list[dict[str, str]],
+        ) -> GatewayInvocationResult:
+            assert resolved is self.resolved
+            assert "closed action schema" in messages[0]["content"]
+            self.invoke_count += 1
+            return self.results.pop(0)
+
+    models = TransientModels()
+    service, _, _ = _service(models)
+    result = service._decide_with_retry(
+        models.resolved,
+        {"goal": "Dashboard"},
+        {"current_url": "https://example.test/dashboard", "title": "Dashboard"},
+        2,
+    )
+    assert result is not None and result.provider_request_id == "request-3"
+    assert models.invoke_count == 3
 
 
 def test_foundation_creates_ready_session_with_model_snapshot_and_structured_plan() -> None:

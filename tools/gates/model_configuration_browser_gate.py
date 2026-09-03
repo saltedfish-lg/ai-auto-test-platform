@@ -24,6 +24,7 @@ _BOOTSTRAP_ROOT = Path(__file__).resolve().parents[2]
 if str(_BOOTSTRAP_ROOT) not in sys.path:
     sys.path.insert(0, str(_BOOTSTRAP_ROOT))
 
+from tools.database.flyway import FlywayBlocked, run_flyway  # noqa: E402
 from tools.environment import (  # noqa: E402
     get_env,
     load_project_environment,
@@ -51,7 +52,6 @@ from tools.gates.auth_mysql_gate import (  # noqa: E402
     _new_database_name,
     _test_database_url,
 )
-from tools.database.flyway import FlywayBlocked, run_flyway  # noqa: E402
 from tools.governance.runtime_gate_result import (  # noqa: E402
     finalize_runtime_result,
     runtime_result_base,
@@ -221,6 +221,29 @@ class _GatewayFixture:
                     if not fixture.concurrency_release.wait(timeout=20):
                         self.send_error(504)
                         return
+                cancel_probe = any(
+                    isinstance(message, dict)
+                    and "CANCEL_PROBE" in str(message.get("content", ""))
+                    for message in messages
+                )
+                browser_context: dict[str, object] = {}
+                for message in messages:
+                    if not isinstance(message, dict):
+                        continue
+                    message_content = str(message.get("content", ""))
+                    prefix = "Use this bounded JSON context: "
+                    if message_content.startswith(prefix):
+                        candidate = json.loads(message_content[len(prefix) :])
+                        if isinstance(candidate, dict):
+                            browser_context = candidate
+                plan = browser_context.get("plan")
+                plan = plan if isinstance(plan, dict) else {}
+                plan_steps = plan.get("steps")
+                completed_sequences = [
+                    int(item["sequence"])
+                    for item in plan_steps
+                    if isinstance(item, dict) and isinstance(item.get("sequence"), int)
+                ] if isinstance(plan_steps, list) else []
                 content = (
                     json.dumps(
                         {
@@ -237,7 +260,51 @@ class _GatewayFixture:
                         separators=(",", ":"),
                     )
                     if planning
-                    else "OK"
+                    else (
+                        json.dumps(
+                            {
+                                "type": "WaitFor",
+                                "selector": "testid=cancel-probe-never-visible",
+                                "reason": (
+                                    "Hold one real Browser command in flight for cancellation."
+                                ),
+                            },
+                            separators=(",", ":"),
+                        )
+                        if cancel_probe
+                        else json.dumps(
+                            {
+                                "type": "goal_completed",
+                                "reason": "The current observation shows Exploration complete.",
+                                "completed_goal": str(plan.get("goal", "")),
+                                "satisfied_plan_steps": completed_sequences,
+                                "evidence": ["Exploration complete"],
+                            },
+                            separators=(",", ":"),
+                        )
+                        if any(
+                            isinstance(message, dict)
+                            and "Exploration complete" in str(message.get("content", ""))
+                            for message in messages
+                        )
+                        else (
+                            json.dumps(
+                                {
+                                    "type": "Click",
+                                    "selector": "testid=advance",
+                                    "reason": "Advance from the observed deterministic start page.",
+                                },
+                                separators=(",", ":"),
+                            )
+                            if any(
+                                isinstance(message, dict)
+                                and "Choose exactly one next browser action"
+                                in str(message.get("content", ""))
+                                for message in messages
+                            )
+                            else "OK"
+                        )
+                    )
                 )
                 body = json.dumps(
                     {
@@ -322,8 +389,10 @@ def _concurrency_fencing_probe(
         {"username": username, "password": password},
     )
     data = login.get("data")
-    if login_status != 200 or not isinstance(data, dict) or not isinstance(
-        data.get("access_token"), str
+    if (
+        login_status != 200
+        or not isinstance(data, dict)
+        or not isinstance(data.get("access_token"), str)
     ):
         raise RuntimeError("concurrency probe could not authenticate")
     headers = {
@@ -359,7 +428,7 @@ def _concurrency_fencing_probe(
         with _connection(database) as connection, connection.cursor() as cursor:
             cursor.execute(
                 "UPDATE atp_ai_exploration_session "
-                "SET planning_deadline_at=DATE_SUB(CURRENT_TIMESTAMP(6), INTERVAL 1 SECOND) "
+                "SET planning_deadline_at=DATE_SUB(UTC_TIMESTAMP(6), INTERVAL 1 SECOND) "
                 "WHERE objective=%s AND lifecycle_status='PLANNING'",
                 (objective,),
             )
@@ -398,9 +467,7 @@ def _concurrency_fencing_probe(
                     "first_status": first_status,
                     "recovered_status": recovered_status,
                     "first_lifecycle": (
-                        first_data.get("lifecycle_status")
-                        if isinstance(first_data, dict)
-                        else None
+                        first_data.get("lifecycle_status") if isinstance(first_data, dict) else None
                     ),
                     "recovered_lifecycle": (
                         recovered_data.get("lifecycle_status")
@@ -549,7 +616,8 @@ def _database_evidence(
             "JOIN atp_ai_task t ON t.ai_task_id=s.ai_task_id "
             "JOIN atp_ai_call c ON c.ai_call_id=s.ai_call_id "
             "JOIN atp_model_config m ON m.model_config_id=s.resolved_model_config_id "
-            "WHERE m.config_code=%s ORDER BY s.created_at DESC LIMIT 1",
+            "WHERE m.config_code=%s AND s.lifecycle_status='READY' "
+            "ORDER BY s.created_at DESC LIMIT 1",
             (ordinary_code,),
         )
         exploration = cursor.fetchone()
@@ -677,8 +745,7 @@ def main() -> int:
             if not mysql_version.startswith("8.4."):
                 raise GateBlocked(f"MySQL 8.4 is required; detected {mysql_version}")
             cursor.execute(
-                f"CREATE DATABASE `{database}` CHARACTER SET utf8mb4 "
-                "COLLATE utf8mb4_0900_ai_ci"
+                f"CREATE DATABASE `{database}` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci"
             )
             created = True
 
@@ -705,6 +772,9 @@ def main() -> int:
             super_username, super_password = _create_user(
                 factory, passwords, lifecycle="ACTIVE", role_code="ROLE-SUPER-ADMIN"
             )
+            owner_username, _owner_password = _create_user(
+                factory, passwords, lifecycle="ACTIVE", role_code="ROLE-PROJECT-OWNER-DUTY"
+            )
         finally:
             engine.dispose()
         exploration_project_id = new_ulid()
@@ -718,6 +788,29 @@ def main() -> int:
                     exploration_project_id,
                     f"browser-exploration-{secrets.token_hex(4)}",
                     "浏览器 AI 探索项目",
+                ),
+            )
+            cursor.execute(
+                "SELECT u.user_id,b.role_id FROM atp_user u "
+                "JOIN atp_user_role_binding b ON b.user_id=u.user_id "
+                "JOIN atp_role r ON r.role_id=b.role_id "
+                "WHERE u.username=%s AND r.role_code='ROLE-PROJECT-OWNER-DUTY'",
+                (owner_username,),
+            )
+            owner_user_id, owner_role_id = cursor.fetchone()
+            cursor.execute(
+                "INSERT INTO atp_project_member "
+                "(project_member_id,project_id,user_id,role_id,lifecycle_status,display_name,"
+                "row_version,created_by,updated_by) "
+                "VALUES (%s,%s,%s,%s,'ACTIVE',%s,1,%s,%s)",
+                (
+                    new_ulid(),
+                    exploration_project_id,
+                    owner_user_id,
+                    owner_role_id,
+                    "AI Exploration Browser Gate Owner",
+                    owner_user_id,
+                    owner_user_id,
                 ),
             )
         _grant_platform_scope(database, manager_username)
@@ -820,8 +913,11 @@ def main() -> int:
             }
         )
         browser_resolution = _validate_playwright_browser(node, browser_environment)
-        playwright = ROOT / "node_modules" / ".bin" / (
-            "playwright.cmd" if sys.platform == "win32" else "playwright"
+        playwright = (
+            ROOT
+            / "node_modules"
+            / ".bin"
+            / ("playwright.cmd" if sys.platform == "win32" else "playwright")
         )
         if not playwright.is_file():
             raise GateBlocked("Playwright is required for the Model Configuration browser Gate")
@@ -847,9 +943,7 @@ def main() -> int:
         )
 
         stage = "database_evidence"
-        database_evidence = _database_evidence(
-            database, ordinary_code, super_code, provider_secret
-        )
+        database_evidence = _database_evidence(database, ordinary_code, super_code, provider_secret)
         status = "PASS"
         exit_code = 0
     except (GateBlocked, FlywayBlocked) as exc:
@@ -906,6 +1000,7 @@ def main() -> int:
         if gateway is not None:
             _cleanup_step("gateway_fixture", gateway.stop, cleanup_errors)
         if created:
+
             def remove_database() -> None:
                 nonlocal removed
                 _drop_isolated_database(database)
@@ -926,8 +1021,7 @@ def main() -> int:
         runtime_removed = not resolved_runtime.exists()
 
     processes_terminated = all(
-        process is None or process.poll() is not None
-        for process in (api_process, web_process)
+        process is None or process.poll() is not None for process in (api_process, web_process)
     )
     gateway_stopped = gateway is None or gateway.stopped
     cleanup_success = (
@@ -972,9 +1066,7 @@ def main() -> int:
             "checks": {
                 "database": "PASS" if database_ready else "NOT_RUN",
                 "browser_workflow": (
-                    "PASS"
-                    if browser_exit == 0
-                    else ("NOT_RUN" if browser_exit is None else "FAIL")
+                    "PASS" if browser_exit == 0 else ("NOT_RUN" if browser_exit is None else "FAIL")
                 ),
                 "database_evidence": "PASS" if database_evidence else "NOT_RUN",
                 "ai_exploration_foundation": (
@@ -996,9 +1088,7 @@ def main() -> int:
                     else "NOT_RUN"
                 ),
                 "super_admin_self_approval_audit": (
-                    "PASS"
-                    if database_evidence.get("super_admin_activation_audit")
-                    else "NOT_RUN"
+                    "PASS" if database_evidence.get("super_admin_activation_audit") else "NOT_RUN"
                 ),
                 "cleanup": "PASS" if cleanup_success else "FAIL",
             },

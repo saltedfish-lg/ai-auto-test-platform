@@ -274,7 +274,7 @@ test("AI exploration planning through browser/API/gateway/MySQL", async ({ page 
   expect(payload.data.ai_task_id).toBeTruthy();
   expect(payload.data.plan.steps).toHaveLength(1);
   await expect(page.getByText("READY", { exact: true })).toBeVisible();
-  await expect(page.getByText("Reach the synthetic dashboard", { exact: true })).toBeVisible();
+  await expect(page.getByText("验证合成用户能够进入合成工作台", { exact: true })).toBeVisible();
   await expect(page.getByText("Open the synthetic login page", { exact: true })).toBeVisible();
   await expect(page.getByText("OPENAI / browser-runtime-model", { exact: true })).toBeVisible();
 });

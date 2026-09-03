@@ -7,7 +7,7 @@ import hashlib
 import json
 from dataclasses import dataclass
 from typing import Any, cast
-from urllib.error import HTTPError, URLError
+from urllib.error import HTTPError
 from urllib.parse import urljoin
 from urllib.request import Request, urlopen
 
@@ -92,14 +92,58 @@ class HttpPlatformTransport:
             {"X-Runner-Agent-Token": agent_token},
         )
 
+    async def claim_browser_command(
+        self, runner_id: str, agent_token: str
+    ) -> dict[str, object] | None:
+        response = await self._request(
+            "POST",
+            f"api/v1/runners/{runner_id}/browser-runtime/commands:claim",
+            {},
+            {"X-Runner-Agent-Token": agent_token},
+            timeout_seconds=15.0,
+        )
+        data = response.get("data")
+        return cast(dict[str, object], data) if isinstance(data, dict) else None
+
+    async def claim_browser_cancellation(
+        self, runner_id: str, agent_token: str
+    ) -> dict[str, object] | None:
+        response = await self._request(
+            "POST",
+            f"api/v1/runners/{runner_id}/browser-runtime/cancellations:claim",
+            {},
+            {"X-Runner-Agent-Token": agent_token},
+            timeout_seconds=15.0,
+        )
+        data = response.get("data")
+        return cast(dict[str, object], data) if isinstance(data, dict) else None
+
+    async def complete_browser_command(
+        self,
+        runner_id: str,
+        agent_token: str,
+        command_id: str,
+        response: dict[str, object] | None,
+        error_code: str | None,
+    ) -> None:
+        await self._request(
+            "POST",
+            f"api/v1/runners/{runner_id}/browser-runtime/commands/{command_id}:complete",
+            {"response": response, "error_code": error_code},
+            {"X-Runner-Agent-Token": agent_token},
+        )
+
     async def _request(
         self,
         method: str,
         path: str,
         body: dict[str, object],
         headers: dict[str, str],
+        timeout_seconds: float | None = None,
     ) -> dict[str, Any]:
-        return await asyncio.to_thread(self._request_sync, method, path, body, headers)
+        return await asyncio.to_thread(
+            self._request_sync, method, path, body, headers, timeout_seconds
+        )
 
     def _request_sync(
         self,
@@ -107,6 +151,7 @@ class HttpPlatformTransport:
         path: str,
         body: dict[str, object],
         headers: dict[str, str],
+        timeout_seconds: float | None = None,
     ) -> dict[str, Any]:
         request = Request(
             urljoin(self._platform_url, path),
@@ -115,7 +160,7 @@ class HttpPlatformTransport:
             headers={"Content-Type": "application/json", **headers},
         )
         try:
-            with urlopen(request, timeout=self._timeout_seconds) as response:
+            with urlopen(request, timeout=timeout_seconds or self._timeout_seconds) as response:
                 return cast(dict[str, Any], json.loads(response.read().decode("utf-8")))
         except HTTPError as error:
             code = "HTTP_ERROR"
@@ -126,7 +171,7 @@ class HttpPlatformTransport:
             except (UnicodeDecodeError, json.JSONDecodeError):
                 pass
             raise PlatformTransportError(error.code, code) from None
-        except URLError:
+        except OSError:
             raise PlatformTransportError(None, "PLATFORM_UNREACHABLE") from None
 
 

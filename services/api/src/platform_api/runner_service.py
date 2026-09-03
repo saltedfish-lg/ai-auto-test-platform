@@ -100,6 +100,18 @@ class RunnerService:
         self._authentication = authentication
         self._idempotency = idempotency
 
+    def require_machine_identity(self, runner_id: str, agent_token: str) -> None:
+        """Authenticate the Runner Agent before it can receive a bound direct command."""
+        with self._factory.begin() as db:
+            runner, _agent = _authenticate_agent(db, runner_id, agent_token)
+            if (
+                runner.lifecycle_status != "ACTIVE"
+                or runner.registration_status != "REGISTERED"
+                or runner.enable_status != "ENABLED"
+                or runner.project_binding_status != "BOUND"
+            ):
+                raise _machine_unauthenticated("Runner Agent is not eligible for execution.")
+
     def create_enrollment(
         self,
         bearer_token: str,

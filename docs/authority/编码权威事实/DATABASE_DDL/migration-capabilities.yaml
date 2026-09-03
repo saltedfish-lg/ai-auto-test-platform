@@ -24,3 +24,5 @@ capabilities:
     migration_name: V15__runner_foundation.sql
   EXECUTION_BINDING_SNAPSHOT_FOUNDATION_SCHEMA:
     migration_name: V16__execution_binding_snapshot_foundation.sql
+  AI_EXPLORATION_BROWSER_LOOP_SCHEMA:
+    migration_name: V17__ai_exploration_browser_loop.sql

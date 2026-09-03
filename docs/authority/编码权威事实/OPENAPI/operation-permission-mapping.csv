@@ -275,6 +275,10 @@ report_runner_result,POST,/api/v1/runners/{id}/result,REPORT_VIEW,CURRENT_LIVING
 convert_natural_language_case,POST,/api/v1/natural-language-cases/{id}/convert,PROJECT_EDIT,CURRENT_LIVING_AUTHORITY
 create_ai_exploration,POST,/api/v1/ai-explorations,AI_TASK_CREATE,CURRENT_LIVING_AUTHORITY
 create_ai_exploration_session,POST,/api/v1/ai-exploration-sessions,AI_TASK_CREATE,CURRENT_LIVING_AUTHORITY
+get_ai_exploration_session,GET,/api/v1/ai-exploration-sessions/{session_id},AI_TASK_CREATE,CURRENT_LIVING_AUTHORITY
+start_ai_exploration_session,POST,/api/v1/ai-exploration-sessions/{session_id}/start,AI_TASK_CREATE,CURRENT_LIVING_AUTHORITY
+list_ai_exploration_steps,GET,/api/v1/ai-exploration-sessions/{session_id}/steps,AI_TASK_CREATE,CURRENT_LIVING_AUTHORITY
+cancel_ai_exploration_session,POST,/api/v1/ai-exploration-sessions/{session_id}/cancel,AI_TASK_CREATE,CURRENT_LIVING_AUTHORITY
 create_manual_recording,POST,/api/v1/manual-recordings,MANUAL_RECORDING_CREATE,CURRENT_LIVING_AUTHORITY
 save_recording_draft_and_stop,POST,/api/v1/manual-recordings/{id}/save-draft-and-stop,PROJECT_EDIT,CURRENT_LIVING_AUTHORITY
 get_report,GET,/api/v1/reports/{id},REPORT_VIEW,CURRENT_LIVING_AUTHORITY

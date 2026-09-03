@@ -3336,21 +3336,85 @@ export type AIExplorationPlan = {
 export type AIExplorationSessionResource = {
   session_id: string;
   ai_task_id: string;
+  execution_attempt_id: string | null;
+  execution_binding_snapshot_id: string | null;
+  browser_session_id: string | null;
   project_id: string;
   source_case_id: string | null;
   objective: string;
   target_url: string;
-  lifecycle_status: "CREATED" | "PLANNING" | "READY" | "FAILED" | "RUNNING" | "SUCCEEDED";
+  lifecycle_status: "CREATED" | "PLANNING" | "READY" | "FAILED" | "RUNNING" | "SUCCEEDED" | "CANCELLED";
+  current_step_sequence: number;
+  current_observation_id: string | null;
+  max_steps: number | null;
+  total_timeout_seconds: number | null;
+  model_transient_retry_per_step: number | null;
+  row_version: number;
   resolved_model_config_id: string;
   resolved_model_display_name: string | null;
   resolved_provider_code: "OPENAI" | "ANTHROPIC" | "DEEPSEEK" | "QWEN" | "DOUBAO";
   resolved_model_name: string;
   plan: AIExplorationPlan | null;
-  failure_code: "AI_EXPLORATION_MODEL_UNAVAILABLE" | "AI_EXPLORATION_MODEL_RESPONSE_INVALID" | "AI_EXPLORATION_PLANNING_FAILED" | "AI_EXPLORATION_PLANNING_INTERRUPTED" | null;
+  failure_code: "AI_EXPLORATION_MODEL_UNAVAILABLE" | "AI_EXPLORATION_MODEL_RESPONSE_INVALID" | "AI_EXPLORATION_PLANNING_FAILED" | "AI_EXPLORATION_PLANNING_INTERRUPTED" | "AI_EXPLORATION_PREFLIGHT_FAILED" | "AI_EXPLORATION_MODEL_CALL_FAILED" | "AI_EXPLORATION_ACTION_FAILED" | "AI_EXPLORATION_LEASE_LOST" | "AI_EXPLORATION_TIMEOUT" | "AI_EXPLORATION_MAX_STEPS" | "AI_EXPLORATION_RUNNER_UNAVAILABLE" | null;
   failure_message: string | null;
+  total_deadline_at: string | null;
+  started_at: string | null;
+  terminal_at: string | null;
+  cancel_requested_at: string | null;
   created_by: string;
   created_at: string;
   updated_at: string;
+};
+
+export type StartAIExplorationSessionRequest = {
+  execution_attempt_id: string;
+  expected_row_version: number;
+};
+
+export type CancelAIExplorationSessionRequest = {
+  expected_row_version: number;
+};
+
+export type AIExplorationBrowserAction = {
+  type: "Navigate" | "Click" | "Fill" | "Select" | "Check" | "Uncheck" | "PressKey" | "WaitFor" | "Inspect" | "Read" | "Scroll" | "goal_completed";
+  selector?: string | null;
+  url?: string | null;
+  value?: string | null;
+  key?: string | null;
+  direction?: "up" | "down" | "left" | "right" | null;
+  amount?: number | null;
+  reason?: string | null;
+};
+
+export type AIExplorationStepResource = {
+  ai_exploration_step_id: string;
+  session_id: string;
+  execution_attempt_id: string;
+  sequence: number;
+  model_call_identity: string;
+  observation_identity: string;
+  action_identity: string;
+  status: "DECIDING" | "EXECUTING" | "SUCCEEDED" | "FAILED" | "COMPLETION_PROPOSED" | "DISCARDED";
+  observation: Record<string, unknown>;
+  action: AIExplorationBrowserAction | null;
+  action_result: Record<string, unknown> | null;
+  sanitized_reason: string | null;
+  failure_code: string | null;
+  state_version: number;
+  identity_lease_generation: number;
+  runner_lease_generation: number;
+  started_at: string;
+  completed_at: string | null;
+};
+
+export type AIExplorationSessionResponse = {
+  data: AIExplorationSessionResource;
+  correlation_id: string;
+};
+
+export type AIExplorationStepListResponse = {
+  items: Array<AIExplorationStepResource>;
+  correlation_id: string;
 };
 
 export type CreateAiExplorationSessionRequest = {
@@ -3527,6 +3591,11 @@ export type RuntimePolicySnapshot = {
   browser_runtime: string;
   artifact_policy: string;
   timeout_seconds: number;
+  max_steps: number;
+  total_exploration_timeout_seconds: number;
+  model_transient_retry_per_step: number;
+  allowed_origins: Array<string>;
+  authentication_redirect_origins: Array<string>;
   retry_mode: string;
   network_requirement: string;
   serial_execution_policy: "SINGLE_PROCESS_UNIFIED_RETRY";
@@ -3578,6 +3647,11 @@ export type RuntimePolicyRevisionResource = {
   browser_runtime: string;
   artifact_policy: string;
   timeout_seconds: number;
+  max_steps: number;
+  total_exploration_timeout_seconds: number;
+  model_transient_retry_per_step: number;
+  allowed_origins: Array<string>;
+  authentication_redirect_origins: Array<string>;
   retry_mode: string;
   network_requirement: string;
   serial_execution_policy: "SINGLE_PROCESS_UNIFIED_RETRY";

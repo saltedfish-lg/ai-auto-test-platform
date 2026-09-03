@@ -158,7 +158,7 @@ def context_read_seen(task_context: dict[str, Any], category: str, *, locator: s
     return any(_entry_key(item) == _entry_key(probe) for item in history[bucket_name])
 
 
-def record_context_read(task_context: dict[str, Any], category: str, *, locator: str, sha256: str, scope: str = '', expanded: bool = False, force: bool = False) -> tuple[dict[str, Any], bool]:
+def record_context_read(task_context: dict[str, Any], category: str, *, locator: str, sha256: str, scope: str = '', expanded: bool = False, force: bool = False, evidence: dict[str, Any] | None = None) -> tuple[dict[str, Any], bool]:
     history = ensure_context_history(task_context)
     bucket_name = {'tool_output':'tool_outputs'}.get(category, category)
     if bucket_name not in history:
@@ -166,6 +166,8 @@ def record_context_read(task_context: dict[str, Any], category: str, *, locator:
     probe={'consumer_id':context_consumer_id(task_context),'locator':locator,'scope':scope,'sha256':sha256}
     prior = next((item for item in history[bucket_name] if _entry_key(item)==_entry_key(probe)), None)
     if prior is not None and not force:
+        if evidence:
+            prior['authority_evidence'] = dict(evidence)
         # A prior projected/partial read must not block a normal adaptive expansion to raw/full context.
         if expanded and not bool(prior.get('expanded')):
             prior['expanded'] = True
@@ -175,8 +177,13 @@ def record_context_read(task_context: dict[str, Any], category: str, *, locator:
         return task_context, True
     if prior is not None and force:
         prior['expanded'] = bool(expanded) or bool(prior.get('expanded'))
+        if evidence:
+            prior['authority_evidence'] = dict(evidence)
     else:
-        history[bucket_name].append({**probe, 'expanded': bool(expanded)})
+        entry = {**probe, 'expanded': bool(expanded)}
+        if evidence:
+            entry['authority_evidence'] = dict(evidence)
+        history[bucket_name].append(entry)
         history[bucket_name] = history[bucket_name][-500:]
     history['metrics']['expanded_context_count' if expanded else 'loaded_context_count'] += 1
     return task_context, False

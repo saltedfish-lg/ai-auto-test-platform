@@ -1,9 +1,14 @@
 import asyncio
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any
+from types import SimpleNamespace
+from typing import Any, cast
+from unittest.mock import patch
 
 from platform_runner import RunnerApplication, RunnerSettings
 from platform_runner.adapters import ArtifactCollector, BrowserAdapter, PlatformTransport
+from platform_runner.browser_runtime import PlaywrightBoundBrowserRuntime
 from platform_runner.credentials import AgentCredentialStore, StoredAgentIdentity
 from platform_runner.transport import (
     HttpPlatformTransport,
@@ -222,6 +227,19 @@ def test_transport_never_uses_human_bearer_for_machine_interfaces() -> None:
     asyncio.run(scenario())
 
 
+def test_transport_maps_long_poll_timeout_to_transient_unreachable() -> None:
+    transport = HttpPlatformTransport("http://127.0.0.1:8000")
+
+    with patch("platform_runner.transport.urlopen", side_effect=TimeoutError("timed out")):
+        try:
+            transport._request_sync("POST", "claim", {}, {}, timeout_seconds=15.0)
+        except PlatformTransportError as error:
+            assert error.status is None
+            assert error.code == "PLATFORM_UNREACHABLE"
+        else:
+            raise AssertionError("long-poll timeout escaped the transient transport boundary")
+
+
 def test_agent_token_is_protected_at_rest(tmp_path: Path) -> None:
     token = "rat_" + "z" * 48
     store = AgentCredentialStore(tmp_path / "agent-identity.json")
@@ -306,3 +324,152 @@ def test_heartbeat_authentication_failure_reaches_cli_supervisor(tmp_path: Path)
             await app.stop()
 
     asyncio.run(scenario())
+
+
+def test_bound_browser_runtime_executes_typed_action_and_denies_foreign_origin() -> None:
+    foreign_requests: list[str] = []
+
+    class ForeignHandler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            foreign_requests.append(self.path)
+            self.send_response(200)
+            self.end_headers()
+
+        def log_message(self, *_args: object) -> None:
+            return None
+
+    foreign_server = ThreadingHTTPServer(("127.0.0.1", 0), ForeignHandler)
+    foreign_thread = threading.Thread(target=foreign_server.serve_forever, daemon=True)
+    foreign_thread.start()
+    foreign_origin = f"http://127.0.0.1:{foreign_server.server_port}"
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            if self.path == "/dashboard":
+                body = (
+                    "<html><title>Dashboard</title><body>Goal reached"
+                    f"<a data-testid='foreign' href='{foreign_origin}/leak'>Foreign</a>"
+                    "</body></html>"
+                ).encode()
+            else:
+                body = (
+                    b"<html><title>Login</title><body>"
+                    b"<p>fixture-password</p>"
+                    b"<a data-testid='continue' href='/dashboard'>Continue</a>"
+                    b"</body></html>"
+                )
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *_args: object) -> None:
+            return None
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    origin = f"http://127.0.0.1:{server.server_port}"
+    command = SimpleNamespace(
+        runner_id="R" * 26,
+        execution_attempt_id="A" * 26,
+        execution_binding_snapshot_id="B" * 26,
+        identity_lease_generation=3,
+        runner_lease_generation=7,
+        target_url=f"{origin}/login",
+        allowed_origins=(origin,),
+        authentication_redirect_origins=(),
+        action_timeout_seconds=5,
+        login_material=SimpleNamespace(
+            account_identifier="fixture-user",
+            secret_value="fixture-password",
+            login_url=None,
+            local_storage_presets=(),
+            refresh_after_local_storage=False,
+            captcha_policy="NONE",
+            captcha_request_header_name=None,
+            captcha_request_header_value=None,
+            captcha_response_header_name=None,
+        ),
+    )
+    runtime = PlaywrightBoundBrowserRuntime()
+    observation = runtime.start(command)
+    try:
+        assert observation.data["title"] == "Login"
+        assert "fixture-password" not in repr(observation.data)
+        assert "[REDACTED]" in repr(observation.data)
+        assert runtime.owns(command, observation.browser_session_id)
+        result = runtime.execute(
+            command,
+            observation.browser_session_id,
+            SimpleNamespace(type="Click", selector="testid=continue"),
+        )
+        assert result.result["status"] == "SUCCEEDED"
+        assert result.observation.data["title"] == "Dashboard"
+        try:
+            runtime.execute(
+                command,
+                observation.browser_session_id,
+                SimpleNamespace(type="Click", selector="testid=foreign"),
+            )
+        except PermissionError:
+            pass
+        else:
+            raise AssertionError("foreign navigation origin was accepted")
+        assert foreign_requests == []
+        runtime.cancel(command, None)
+        assert not runtime.owns(command, observation.browser_session_id)
+    finally:
+        runtime.close(command, observation.browser_session_id)
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+        foreign_server.shutdown()
+        foreign_server.server_close()
+        foreign_thread.join(timeout=5)
+
+
+def test_late_start_completion_is_closed_when_api_rendezvous_expired(tmp_path: Path) -> None:
+    closed: list[tuple[str, str]] = []
+
+    class ClosingRuntime:
+        def close(self, command: object, browser_session_id: str) -> None:
+            closed.append((str(cast(Any, command).runner_id), browser_session_id))
+
+    app = RunnerApplication(_runtime_settings(tmp_path))
+    app._browser_runtime = ClosingRuntime()  # type: ignore[assignment]
+    envelope: dict[str, object] = {
+        "operation": "start",
+        "payload": {
+            "bound_command": {
+                "runner_id": "R" * 26,
+                "execution_attempt_id": "A" * 26,
+                "execution_binding_snapshot_id": "B" * 26,
+                "identity_lease_generation": 3,
+                "runner_lease_generation": 7,
+                "target_url": "https://example.test",
+                "allowed_origins": ["https://example.test"],
+                "authentication_redirect_origins": [],
+                "action_timeout_seconds": 5,
+                "login_material": {
+                    "account_identifier": "fixture-user",
+                    "secret_value": "fixture-password",
+                    "login_url": None,
+                    "local_storage_presets": [],
+                    "refresh_after_local_storage": False,
+                    "captcha_policy": "NONE",
+                    "captcha_request_header_name": None,
+                    "captcha_request_header_value": None,
+                    "captcha_response_header_name": None,
+                },
+            }
+        },
+    }
+    app._close_rejected_start(
+        "R" * 26,
+        envelope,
+        {"browser_session_id": "browser-session-late", "data": {}},
+    )
+    app._browser_executor.shutdown(wait=False, cancel_futures=True)
+    assert closed == [("R" * 26, "browser-session-late")]

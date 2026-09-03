@@ -9810,6 +9810,15 @@ tables:
     nullable: false
     primary_key: false
     default: null
+  - {name: execution_attempt_id, type: VARCHAR(26), nullable: true, primary_key: false, default: null}
+  - {name: execution_binding_snapshot_id, type: VARCHAR(26), nullable: true, primary_key: false, default: null}
+  - {name: browser_session_id, type: VARCHAR(191), nullable: true, primary_key: false, default: null}
+  - {name: current_observation_id, type: VARCHAR(26), nullable: true, primary_key: false, default: null}
+  - {name: current_step_sequence, type: BIGINT UNSIGNED, nullable: false, primary_key: false, default: 0}
+  - {name: max_steps, type: INT UNSIGNED, nullable: true, primary_key: false, default: null}
+  - {name: total_timeout_seconds, type: INT UNSIGNED, nullable: true, primary_key: false, default: null}
+  - {name: model_transient_retry_per_step, type: INT UNSIGNED, nullable: true, primary_key: false, default: null}
+  - {name: row_version, type: BIGINT UNSIGNED, nullable: false, primary_key: false, default: 1}
   - name: idempotency_key
     type: VARCHAR(191)
     nullable: false
@@ -9900,6 +9909,10 @@ tables:
     nullable: false
     primary_key: false
     default: null
+  - {name: total_deadline_at, type: DATETIME(6), nullable: true, primary_key: false, default: null}
+  - {name: started_at, type: DATETIME(6), nullable: true, primary_key: false, default: null}
+  - {name: terminal_at, type: DATETIME(6), nullable: true, primary_key: false, default: null}
+  - {name: cancel_requested_at, type: DATETIME(6), nullable: true, primary_key: false, default: null}
   - name: created_by
     type: VARCHAR(26)
     nullable: false
@@ -9927,13 +9940,21 @@ tables:
   - name: uq_atp_ai_exploration_session_idempotency
     columns:
     - idempotency_key
+  - name: uq_atp_ai_exploration_session_attempt
+    columns: [execution_attempt_id]
+  - name: uq_atp_ai_exploration_session_binding
+    columns: [execution_binding_snapshot_id]
   check_constraints:
   - name: ck_atp_ai_exploration_session_status
-    expression: lifecycle_status IN ('CREATED', 'PLANNING', 'READY', 'FAILED', 'RUNNING', 'SUCCEEDED')
+    expression: lifecycle_status IN ('CREATED', 'PLANNING', 'READY', 'FAILED', 'RUNNING', 'SUCCEEDED', 'CANCELLED')
   - name: ck_atp_ai_exploration_session_ready
     expression: lifecycle_status <> 'READY' OR (plan IS NOT NULL AND failure_code IS NULL AND failure_message IS NULL)
   - name: ck_atp_ai_exploration_session_failed
-    expression: lifecycle_status <> 'FAILED' OR (plan IS NULL AND failure_code IS NOT NULL AND failure_message IS NOT NULL)
+    expression: lifecycle_status <> 'FAILED' OR (failure_code IS NOT NULL AND failure_message IS NOT NULL AND terminal_at IS NOT NULL)
+  - name: ck_atp_ai_exploration_session_runtime_limits
+    expression: (max_steps IS NULL AND total_timeout_seconds IS NULL AND model_transient_retry_per_step IS NULL) OR (max_steps > 0 AND total_timeout_seconds > 0 AND model_transient_retry_per_step BETWEEN 0 AND 10)
+  - name: ck_atp_ai_exploration_session_execution_owner
+    expression: lifecycle_status NOT IN ('RUNNING', 'SUCCEEDED', 'CANCELLED') OR (execution_attempt_id IS NOT NULL AND execution_binding_snapshot_id IS NOT NULL AND max_steps IS NOT NULL AND total_timeout_seconds IS NOT NULL AND model_transient_retry_per_step IS NOT NULL AND started_at IS NOT NULL)
   foreign_keys:
   - name: fk_atp_ai_exploration_session_ai_task_id
     column: ai_task_id
@@ -9947,6 +9968,8 @@ tables:
     referenced_column: ai_call_id
     on_delete: RESTRICT
     on_update: RESTRICT
+  - {name: fk_atp_ai_exploration_session_attempt, column: execution_attempt_id, referenced_table: atp_execution_attempt, referenced_column: execution_attempt_id, on_delete: RESTRICT, on_update: RESTRICT}
+  - {name: fk_atp_ai_exploration_session_binding, column: execution_binding_snapshot_id, referenced_table: atp_execution_binding_snapshot, referenced_column: execution_binding_snapshot_id, on_delete: RESTRICT, on_update: RESTRICT}
   - name: fk_atp_ai_exploration_session_idempotency_key
     column: idempotency_key
     referenced_table: atp_idempotency_record
@@ -9987,6 +10010,10 @@ tables:
     columns:
     - lifecycle_status
     - planning_deadline_at
+  - name: ix_atp_ai_exploration_session_attempt_status
+    columns: [execution_attempt_id, lifecycle_status]
+  - name: ix_atp_ai_exploration_session_runtime_deadline
+    columns: [lifecycle_status, total_deadline_at]
   delete_behavior: RETAIN_WITH_PROJECT_HISTORY_AND_CONTROLLED_PURGE
   data_owner: AIExplorationService
   idempotency_and_audit: CREATE_COMMAND_IDEMPOTENCY_AND_MODEL_SNAPSHOT
@@ -9997,14 +10024,51 @@ tables:
   - plan
   - failure_code
   - failure_message
+  - current_step_sequence
+  - current_observation_id
+  - row_version
   relationship_fields:
   - ai_task_id
   - ai_call_id
+  - execution_attempt_id
+  - execution_binding_snapshot_id
   - idempotency_key
   - project_id
   - source_case_id
   - resolved_model_config_id
   - created_by
+- table_name: atp_ai_exploration_step
+  columns:
+  - {name: ai_exploration_step_id}
+  - {name: session_id}
+  - {name: execution_attempt_id}
+  - {name: ai_call_id}
+  - {name: sequence}
+  - {name: model_call_identity}
+  - {name: observation_identity}
+  - {name: action_identity}
+  - {name: status}
+  - {name: observation_json}
+  - {name: action_json}
+  - {name: action_result_json}
+  - {name: sanitized_reason}
+  - {name: failure_code}
+  - {name: state_version}
+  - {name: identity_lease_generation}
+  - {name: runner_lease_generation}
+  - {name: started_at}
+  - {name: completed_at}
+  - {name: created_at}
+  primary_key: [ai_exploration_step_id]
+  unique_keys:
+  - [session_id, sequence]
+  - [observation_identity]
+  - [action_identity]
+  data_owner: AIExplorationService
+  delete_behavior: RETAIN_WITH_SESSION_HISTORY
+  object_id: AI-EXPLORATION-STEP
+  state_fields: [status, state_version]
+  relationship_fields: [session_id, execution_attempt_id, ai_call_id]
 - table_name: atp_ai_exploration_audit
   columns:
   - name: audit_id
@@ -10117,7 +10181,7 @@ tables:
   unique_keys: []
   check_constraints:
   - name: ck_atp_ai_exploration_audit_action
-    expression: action IN ('SESSION_CREATED', 'PLANNING_STARTED', 'PLANNING_SUCCEEDED', 'PLANNING_FAILED', 'PLANNING_INTERRUPTED')
+    expression: action IN ('SESSION_CREATED', 'PLANNING_STARTED', 'PLANNING_SUCCEEDED', 'PLANNING_FAILED', 'PLANNING_INTERRUPTED', 'BROWSER_STARTED', 'STEP_RECORDED', 'BROWSER_SUCCEEDED', 'BROWSER_FAILED', 'CANCEL_REQUESTED', 'BROWSER_CANCELLED', 'LEASE_LOST', 'RUNTIME_RECOVERED')
   foreign_keys:
   - name: fk_atp_ai_exploration_audit_session_id
     column: session_id
@@ -10171,6 +10235,11 @@ tables:
   - {name: browser_runtime}
   - {name: artifact_policy}
   - {name: timeout_seconds}
+  - {name: max_steps}
+  - {name: total_exploration_timeout_seconds}
+  - {name: model_transient_retry_per_step}
+  - {name: allowed_origins}
+  - {name: authentication_redirect_origins}
   - {name: retry_mode}
   - {name: network_requirement}
   - {name: serial_execution_policy}
@@ -10345,4 +10414,15 @@ execution_binding_snapshot_schema_contract:
   composite_scope_integrity: Project、Environment、Terminal、Account、Runner及其revision必须通过复合FK或事务内锁定校验保持同scope。
   atomic_create: ExecutionBindingSnapshot、Identity Lease、Runner Resource Lease、Audit和Outbox在同一MySQL事务写入。
   secret_boundary: 所有表均禁止明文凭据、Token、验证码、localStorage和Secret JSON。
+  scheduler_tables_forbidden: true
+ai_exploration_browser_loop_schema_contract:
+  decision_id: AI-EXPLORATION-BROWSER-LOOP-SCHEMA-001
+  status: WIRED_AND_REQUIRED
+  migration_capability: AI_EXPLORATION_BROWSER_LOOP_SCHEMA
+  mysql_version: '8.4'
+  tables: [atp_ai_exploration_session, atp_ai_exploration_step, atp_project_runtime_policy_revision]
+  exactly_one_attempt: execution_attempt_id与execution_binding_snapshot_id在Session上分别唯一且运行中不可变。
+  ordered_evidence: 单个Session内sequence唯一且单调递增；Step不成为execution owner。
+  runtime_policy_defaults: {max_steps: 50, total_exploration_timeout_seconds: 1800, model_transient_retry_per_step: 2}
+  secret_boundary: Step与Session禁止保存plaintext credential、captcha、Runner token、Provider Secret、完整DOM或二进制artifact。
   scheduler_tables_forbidden: true

@@ -54,6 +54,21 @@ def test_runner_routes_separate_human_management_and_machine_runtime() -> None:
             "/api/v1/runners/{id}/capabilities",
             "report_runner_capabilities",
         ),
+        (
+            "POST",
+            "/api/v1/runners/{id}/browser-runtime/commands:claim",
+            None,
+        ),
+        (
+            "POST",
+            "/api/v1/runners/{id}/browser-runtime/cancellations:claim",
+            None,
+        ),
+        (
+            "POST",
+            "/api/v1/runners/{id}/browser-runtime/commands/{command_id}:complete",
+            None,
+        ),
     }
 
 

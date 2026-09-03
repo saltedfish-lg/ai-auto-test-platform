@@ -5,16 +5,21 @@ from __future__ import annotations
 
 import argparse
 import base64
+import hashlib
 import json
 import os
 import secrets
 import shutil
 import subprocess
 import sys
+import threading
+import time
 import urllib.error
 import urllib.request
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import BinaryIO
+from urllib.parse import urlsplit
 
 _BOOTSTRAP_ROOT = Path(__file__).resolve().parents[2]
 if str(_BOOTSTRAP_ROOT) not in sys.path:
@@ -22,6 +27,7 @@ if str(_BOOTSTRAP_ROOT) not in sys.path:
 
 from tools.database.flyway import FlywayBlocked, run_flyway  # noqa: E402
 from tools.environment import get_env, load_project_environment, project_environment  # noqa: E402
+from tools.gates import model_configuration_browser_gate as model_gate  # noqa: E402
 from tools.gates.auth_browser_gate import (  # noqa: E402
     _available_loopback_port,
     _create_user,
@@ -53,15 +59,77 @@ RUNTIME_ROOT = ROOT / ".runtime"
 API_SRC = ROOT / "services" / "api" / "src"
 COMMON_SRC = ROOT / "packages" / "platform-common" / "src"
 OBSERVABILITY_SRC = ROOT / "packages" / "observability" / "src"
-for import_root in (API_SRC, COMMON_SRC, OBSERVABILITY_SRC):
+RUNNER_SRC = ROOT / "runner" / "agent" / "src"
+for import_root in (API_SRC, COMMON_SRC, OBSERVABILITY_SRC, RUNNER_SRC):
     if str(import_root) not in sys.path:
         sys.path.insert(0, str(import_root))
 
 from platform_api.database import create_database_engine, create_session_factory  # noqa: E402
 from platform_api.keygen import generate_development_key_ring  # noqa: E402
+from platform_api.secret_store import AesGcmSecretProtector  # noqa: E402
 from platform_api.security import PasswordService, new_ulid  # noqa: E402
+from platform_runner.credentials import AgentCredentialStore, StoredAgentIdentity  # noqa: E402
 
 GATE_ID = "REAL_ACCEPTANCE_GATE"
+AI_EXPLORATION_MODEL_NAME = model_gate.MODEL_NAME
+AI_EXPLORATION_PROVIDER_CODE = model_gate.PROVIDER_CODE
+
+
+class _ExplorationTargetFixture:
+    """Deterministic browser target; no platform component is mocked."""
+
+    def __init__(self) -> None:
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, format: str, *args: object) -> None:
+                del format, args
+
+            def do_GET(self) -> None:
+                if self.path == "/dashboard":
+                    body = (
+                        b"<!doctype html><html><head><title>Exploration Dashboard</title></head>"
+                        b"<body><main><h1>Exploration complete</h1>"
+                        b"<p>The deterministic dashboard is visible.</p></main></body></html>"
+                    )
+                elif self.path == "/":
+                    body = (
+                        b"<!doctype html><html><head><title>Exploration Start</title></head>"
+                        b"<body><main><h1>Exploration start</h1>"
+                        b'<form id="login"><label>Account<input name="username" '
+                        b'autocomplete="username"></label><label>Password<input name="password" '
+                        b'type="password"></label><button type="submit">Sign in</button></form>'
+                        b'<p id="credential-echo"></p><script>document.getElementById("login")'
+                        b'.addEventListener("submit",e=>{e.preventDefault();document.getElementById('
+                        b'"credential-echo").textContent=e.target.password.value;});</script>'
+                        b'<a data-testid="advance" href="/dashboard">Open dashboard</a>'
+                        b"</main></body></html>"
+                    )
+                else:
+                    self.send_error(404)
+                    return
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+        self._server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self._thread = threading.Thread(
+            target=self._server.serve_forever,
+            name="ai-exploration-target",
+            daemon=True,
+        )
+
+    @property
+    def url(self) -> str:
+        return f"http://127.0.0.1:{self._server.server_port}/"
+
+    def start(self) -> None:
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._server.shutdown()
+        self._server.server_close()
+        self._thread.join(timeout=5)
 
 
 def _write_test_account_secret_key_ring(directory: Path) -> Path:
@@ -854,10 +922,11 @@ def _prepare_execution_binding_acceptance(
     """Stage only the execution-owner facts that have no product create command yet."""
 
     runner_id = new_ulid()
+    runner_agent_token = "rat_" + secrets.token_urlsafe(32)
     execution_slot_id = new_ulid()
     policy_id = new_ulid()
     run_task_id = new_ulid()
-    attempt_ids = [new_ulid() for _ in range(4)]
+    attempt_ids = [new_ulid() for _ in range(5)]
     with _connection(database) as connection, connection.cursor() as cursor:
         cursor.execute(
             "SELECT project_id,lifecycle_status FROM atp_project WHERE project_code=%s",
@@ -916,6 +985,25 @@ def _prepare_execution_binding_acceptance(
                 actor_id,
             ),
         )
+        cursor.execute(
+            "INSERT INTO atp_runner_agent "
+            "(runner_agent_id,project_id,runner_id,token_hash,token_status,token_version,"
+            "machine_fingerprint_hash,agent_version,last_authenticated_at,credential_rotated_at,"
+            "revoked_at,lifecycle_status,display_name,row_version,created_at,updated_at,"
+            "created_by,updated_by,extension_json) VALUES (%s,%s,%s,%s,'ACTIVE',1,%s,"
+            "'acceptance-agent',NULL,CURRENT_TIMESTAMP(6),NULL,'ACTIVE',%s,1,"
+            "CURRENT_TIMESTAMP(6),CURRENT_TIMESTAMP(6),%s,%s,NULL)",
+            (
+                new_ulid(),
+                project_id,
+                runner_id,
+                hashlib.sha256(runner_agent_token.encode("utf-8")).digest(),
+                hashlib.sha256(b"acceptance-machine").digest(),
+                "Execution Binding Acceptance Agent",
+                actor_id,
+                actor_id,
+            ),
+        )
         capabilities = {
             "FORMAL_EXECUTION": "FLOW",
             "TERMINAL_ADMIN_WEB": "TERMINAL",
@@ -945,9 +1033,12 @@ def _prepare_execution_binding_acceptance(
         cursor.execute(
             "INSERT INTO atp_project_runtime_policy_revision "
             "(runtime_policy_revision_id,project_id,revision_no,browser_runtime,"
-            "artifact_policy,timeout_seconds,retry_mode,network_requirement,"
+            "artifact_policy,timeout_seconds,max_steps,total_exploration_timeout_seconds,"
+            "model_transient_retry_per_step,allowed_origins,authentication_redirect_origins,"
+            "retry_mode,network_requirement,"
             "serial_execution_policy,lifecycle_status,row_version,created_by,updated_by) "
-            "VALUES (%s,%s,1,'CHROMIUM','SCREENSHOT',300,'UNIFIED','INTRANET',"
+            "VALUES (%s,%s,1,'CHROMIUM','SCREENSHOT',300,50,1800,2,JSON_ARRAY(),"
+            "JSON_ARRAY(),'UNIFIED','INTRANET',"
             "'SINGLE_PROCESS_UNIFIED_RETRY','PUBLISHED',1,%s,%s)",
             (policy_id, project_id, actor_id, actor_id),
         )
@@ -1088,10 +1179,10 @@ def _prepare_execution_binding_acceptance(
             "SELECT COUNT(*) FROM atp_execution_attempt ea "
             "JOIN atp_case_attempt ca ON ca.case_attempt_id=ea.case_attempt_id "
             "AND ca.execution_attempt_id=ea.execution_attempt_id "
-            "WHERE ea.execution_attempt_id IN (%s,%s,%s,%s) AND ea.run_task_id=%s",
+            "WHERE ea.execution_attempt_id IN (%s,%s,%s,%s,%s) AND ea.run_task_id=%s",
             (*attempt_ids, run_task_id),
         )
-        if int(cursor.fetchone()[0]) != 4:
+        if int(cursor.fetchone()[0]) != 5:
             raise RuntimeError("execution binding acceptance owner fixture is inconsistent")
 
     return {
@@ -1103,11 +1194,31 @@ def _prepare_execution_binding_acceptance(
         "account_id": str(account_id),
         "credential_revision_id": str(credential_revision_id),
         "runner_id": runner_id,
+        "runner_agent_token": runner_agent_token,
         "policy_id": policy_id,
         "attempt_ids": attempt_ids,
         "runner_resource_identity": execution_slot_id,
         "owner_execution_identity": run_task_id,
     }
+
+
+def _wait_for_runner_agent(
+    database: str, runner_id: str, process: subprocess.Popen[bytes]
+) -> None:
+    deadline = time.monotonic() + 20
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            raise RuntimeError("bound Runner Agent stopped during startup")
+        with _connection(database) as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT last_authenticated_at FROM atp_runner_agent WHERE runner_id=%s",
+                (runner_id,),
+            )
+            row = cursor.fetchone()
+        if row is not None and row[0] is not None:
+            return
+        time.sleep(0.1)
+    raise RuntimeError("bound Runner Agent did not establish a machine-authenticated session")
 
 
 def _restore_execution_binding_project(database: str, fixture: dict[str, object]) -> None:
@@ -1133,7 +1244,7 @@ def _execution_binding_recovery_evidence(
         raise RuntimeError("execution binding recovery probe login failed")
     token = str(dict(login["data"])["access_token"])
     headers = {"Authorization": f"Bearer {token}"}
-    attempt_ids = tuple(fixture["attempt_ids"])
+    attempt_ids = tuple(fixture["attempt_ids"])[:4]
     with _connection(database) as connection, connection.cursor() as cursor:
         cursor.execute(
             "SELECT b.execution_binding_snapshot_id,b.execution_attempt_id,b.row_version,"
@@ -1198,7 +1309,8 @@ def _execution_binding_recovery_evidence(
         )
         binding_count, bound_attempt_count = cursor.fetchone()
         cursor.execute(
-            "SELECT l.resource_type,GROUP_CONCAT(l.fencing_generation ORDER BY l.fencing_generation) "
+            "SELECT l.resource_type,GROUP_CONCAT("
+            "l.fencing_generation ORDER BY l.fencing_generation) "
             "FROM atp_resource_lease l JOIN atp_execution_binding_snapshot b "
             "ON l.resource_lease_id IN (b.identity_lease_id,b.runner_lease_id) "
             "WHERE b.execution_attempt_id IN (%s,%s,%s,%s) GROUP BY l.resource_type",
@@ -1478,6 +1590,364 @@ def _audit_unavailable_probe(
     }
 
 
+def _prepare_ai_exploration_runtime(
+    database: str,
+    fixture: dict[str, object],
+    username: str,
+    target_url: str,
+    key_ring_file: Path,
+    provider_secret: str,
+) -> str:
+    """Project the isolated target and frozen model through their formal DB owners."""
+
+    parsed = urlsplit(target_url)
+    origin = f"{parsed.scheme}://{parsed.hostname}:{parsed.port}"
+    model_config_id = new_ulid()
+    encrypted = AesGcmSecretProtector.load(key_ring_file).encrypt(model_config_id, provider_secret)
+    with _connection(database) as connection, connection.cursor() as cursor:
+        cursor.execute("SELECT user_id FROM atp_user WHERE username=%s", (username,))
+        actor_id = str(cursor.fetchone()[0])
+        cursor.execute(
+            "UPDATE atp_environment_terminal_access_revision "
+            "SET entry_url=%s,login_url=NULL,row_version=row_version+1,updated_at=UTC_TIMESTAMP(6) "
+            "WHERE environment_terminal_access_revision_id=%s",
+            (target_url, fixture["terminal_revision_id"]),
+        )
+        cursor.execute(
+            "UPDATE atp_project_runtime_policy_revision "
+            "SET allowed_origins=JSON_ARRAY(%s),authentication_redirect_origins=JSON_ARRAY(),"
+            "timeout_seconds=10,row_version=row_version+1,updated_at=UTC_TIMESTAMP(6) "
+            "WHERE runtime_policy_revision_id=%s",
+            (origin, fixture["policy_id"]),
+        )
+        cursor.execute(
+            "INSERT INTO atp_model_config "
+            "(model_config_id,config_code,provider_code,model_name,request_timeout_seconds,"
+            "lifecycle_status,display_name,row_version,created_at,updated_at,"
+            "created_by,updated_by) "
+            "VALUES (%s,%s,%s,%s,30,'ACTIVE',%s,1,UTC_TIMESTAMP(6),UTC_TIMESTAMP(6),%s,%s)",
+            (
+                model_config_id,
+                f"ai-exploration-{model_config_id}",
+                AI_EXPLORATION_PROVIDER_CODE,
+                AI_EXPLORATION_MODEL_NAME,
+                "AI exploration deterministic model",
+                actor_id,
+                actor_id,
+            ),
+        )
+        cursor.execute(
+            "INSERT INTO atp_model_config_secret "
+            "(model_config_id,encrypted_secret,key_id,created_at,updated_at) "
+            "VALUES (%s,%s,%s,UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))",
+            (model_config_id, encrypted.ciphertext, encrypted.key_id),
+        )
+        cursor.execute(
+            "INSERT INTO atp_model_capability_default "
+            "(capability_code,model_config_id,row_version,created_at,updated_at,"
+            "created_by,updated_by) "
+            "VALUES ('AI_EXPLORATION',%s,1,UTC_TIMESTAMP(6),UTC_TIMESTAMP(6),%s,%s)",
+            (model_config_id, actor_id, actor_id),
+        )
+    return model_config_id
+
+
+def _create_ai_execution_binding(
+    database: str,
+    api_port: int,
+    username: str,
+    password: str,
+    fixture: dict[str, object],
+) -> str:
+    status, login = _post_json(
+        f"http://127.0.0.1:{api_port}/api/v1/auth/login",
+        {"username": username, "password": password},
+    )
+    if status != 200:
+        raise RuntimeError("AI exploration binding login failed")
+    token = str(dict(login["data"])["access_token"])
+    attempt_ids = tuple(fixture["attempt_ids"])
+    with _connection(database) as connection, connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT ea.execution_attempt_id FROM atp_execution_attempt ea "
+            "LEFT JOIN atp_execution_binding_snapshot b "
+            "ON b.execution_attempt_id=ea.execution_attempt_id "
+            "WHERE ea.execution_attempt_id IN (%s,%s,%s,%s,%s) "
+            "AND b.execution_binding_snapshot_id IS NULL ORDER BY ea.execution_attempt_id LIMIT 1",
+            attempt_ids,
+        )
+        row = cursor.fetchone()
+    if row is None:
+        raise RuntimeError("AI exploration has no unbound ExecutionAttempt fixture")
+    attempt_id = str(row[0])
+    create_status, payload = _post_json(
+        f"http://127.0.0.1:{api_port}/api/v1/execution-binding-snapshots",
+        {
+            "execution_attempt_id": attempt_id,
+            "project_id": fixture["project_id"],
+            "environment_id": fixture["environment_id"],
+            "business_terminal_id": fixture["terminal_id"],
+            "test_account_id": fixture["account_id"],
+            "runner_id": fixture["runner_id"],
+            "runtime_policy_revision_id": fixture["policy_id"],
+            "runner_resource_type": "FORMAL_EXECUTION_SLOT",
+            "runner_resource_identity": fixture["runner_resource_identity"],
+            "owner_execution_identity": fixture["owner_execution_identity"],
+            "required_capabilities": [],
+        },
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Idempotency-Key": f"ai-exploration-binding-{attempt_id}",
+        },
+    )
+    binding = dict(payload.get("data") or {})
+    if create_status != 201 or binding.get("status") != "READY":
+        raise RuntimeError(
+            "AI exploration binding creation failed: "
+            f"http={create_status}, code={payload.get('code')}"
+        )
+    return attempt_id
+
+
+def _ai_exploration_cancel_probe(
+    database: str,
+    api_port: int,
+    username: str,
+    password: str,
+    fixture: dict[str, object],
+    target_url: str,
+) -> dict[str, object]:
+    attempt_id = _create_ai_execution_binding(
+        database, api_port, username, password, fixture
+    )
+    login_status, login = _post_json(
+        f"http://127.0.0.1:{api_port}/api/v1/auth/login",
+        {"username": username, "password": password},
+    )
+    if login_status != 200:
+        raise RuntimeError("AI exploration cancellation probe login failed")
+    token = str(dict(login["data"])["access_token"])
+    headers = {"Authorization": f"Bearer {token}"}
+    create_status, created = _post_json(
+        f"http://127.0.0.1:{api_port}/api/v1/ai-exploration-sessions",
+        {
+            "project_id": fixture["project_id"],
+            "objective": "CANCEL_PROBE keep the terminal fence authoritative",
+            "target_url": target_url,
+        },
+        headers={**headers, "Idempotency-Key": f"cancel-create-{attempt_id}"},
+    )
+    resource = dict(created.get("data") or {})
+    if create_status != 201 or resource.get("lifecycle_status") != "READY":
+        raise RuntimeError("AI exploration cancellation probe planning failed")
+    session_id = str(resource["session_id"])
+    start_status, started = _post_json(
+        f"http://127.0.0.1:{api_port}/api/v1/ai-exploration-sessions/{session_id}/start",
+        {
+            "execution_attempt_id": attempt_id,
+            "expected_row_version": int(resource["row_version"]),
+        },
+        headers={**headers, "Idempotency-Key": f"cancel-start-{attempt_id}"},
+    )
+    if start_status != 202 or dict(started.get("data") or {}).get("lifecycle_status") != "RUNNING":
+        raise RuntimeError("AI exploration cancellation probe did not start")
+    running: dict[str, object] = {}
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        get_status, current = _get_json(
+            f"http://127.0.0.1:{api_port}/api/v1/ai-exploration-sessions/{session_id}",
+            headers=headers,
+        )
+        running = dict(current.get("data") or {})
+        with _connection(database) as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT status FROM atp_ai_exploration_step WHERE session_id=%s "
+                "ORDER BY sequence DESC LIMIT 1",
+                (session_id,),
+            )
+            step_row = cursor.fetchone()
+        step_status = str(step_row[0]) if step_row else ""
+        if (
+            get_status == 200
+            and running.get("lifecycle_status") == "RUNNING"
+            and running.get("browser_session_id")
+            and int(running.get("current_step_sequence") or 0) >= 1
+            and step_status == "EXECUTING"
+        ):
+            break
+        time.sleep(0.05)
+    else:
+        raise RuntimeError("AI exploration cancellation probe missed the in-flight Browser action")
+    cancel_status, cancelled = _post_json(
+        f"http://127.0.0.1:{api_port}/api/v1/ai-exploration-sessions/{session_id}/cancel",
+        {"expected_row_version": int(running["row_version"])},
+        headers={**headers, "Idempotency-Key": f"cancel-command-{attempt_id}"},
+    )
+    cancelled_resource = dict(cancelled.get("data") or {})
+    if cancel_status != 200 or cancelled_resource.get("lifecycle_status") != "CANCELLED":
+        raise RuntimeError("AI exploration cancellation command failed")
+    time.sleep(3.2)
+    final_status, final = _get_json(
+        f"http://127.0.0.1:{api_port}/api/v1/ai-exploration-sessions/{session_id}",
+        headers=headers,
+    )
+    if final_status != 200 or dict(final.get("data") or {}).get("lifecycle_status") != "CANCELLED":
+        raise RuntimeError("late Provider response overwrote the cancellation terminal fence")
+    with _connection(database) as connection, connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT b.status,ea.execution_status,il.status,rl.status "
+            "FROM atp_ai_exploration_session s "
+            "JOIN atp_execution_binding_snapshot b "
+            "ON b.execution_binding_snapshot_id=s.execution_binding_snapshot_id "
+            "JOIN atp_execution_attempt ea ON ea.execution_attempt_id=s.execution_attempt_id "
+            "JOIN atp_resource_lease il ON il.resource_lease_id=b.identity_lease_id "
+            "JOIN atp_resource_lease rl ON rl.resource_lease_id=b.runner_lease_id "
+            "WHERE s.session_id=%s",
+            (session_id,),
+        )
+        released = tuple(map(str, cursor.fetchone() or ()))
+        cursor.execute(
+            "SELECT action,COUNT(*) FROM atp_ai_exploration_audit "
+            "WHERE session_id=%s GROUP BY action",
+            (session_id,),
+        )
+        audits = {str(action): int(count) for action, count in cursor.fetchall()}
+        cursor.execute(
+            "SELECT COUNT(*) FROM atp_outbox_event WHERE aggregate_id=%s "
+            "AND event_type='ai_exploration.cancelled'",
+            (session_id,),
+        )
+        cancelled_events = int(cursor.fetchone()[0])
+        cursor.execute(
+            "SELECT COUNT(*) FROM atp_ai_exploration_step WHERE session_id=%s "
+            "AND status='DISCARDED' AND failure_code='CANCELLED'",
+            (session_id,),
+        )
+        discarded_steps = int(cursor.fetchone()[0])
+    if (
+        released != ("RELEASED", "CANCELLED", "RELEASED", "RELEASED")
+        or audits.get("CANCEL_REQUESTED") != 1
+        or audits.get("BROWSER_CANCELLED") != 1
+        or cancelled_events != 1
+        or discarded_steps < 1
+    ):
+        raise RuntimeError("AI exploration cancellation evidence is inconsistent")
+    return {
+        "session_status": "CANCELLED",
+        "in_flight_browser_action_interrupted": True,
+        "late_browser_response_discarded": True,
+        "binding_and_leases_released": True,
+        "discarded_step_count": discarded_steps,
+        "audit_actions": audits,
+        "cancelled_outbox_count": cancelled_events,
+    }
+
+
+def _ai_exploration_database_evidence(
+    database: str,
+    project_id: str,
+    model_config_id: str,
+    provider_secret: str,
+    runtime_secret: str,
+) -> dict[str, object]:
+    with _connection(database) as connection, connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT session_id,lifecycle_status,current_step_sequence,execution_attempt_id,"
+            "execution_binding_snapshot_id,resolved_model_config_id "
+            "FROM atp_ai_exploration_session WHERE project_id=%s "
+            "AND lifecycle_status='SUCCEEDED' AND resolved_model_config_id=%s "
+            "ORDER BY created_at DESC LIMIT 1",
+            (project_id, model_config_id),
+        )
+        session = cursor.fetchone()
+        if session is None:
+            raise RuntimeError("AI exploration Session evidence is missing")
+        session_id, status, sequence, attempt_id, binding_id, resolved_model_id = session
+        cursor.execute(
+            "SELECT COUNT(*),COUNT(DISTINCT ai_call_id),"
+            "SUM(status='SUCCEEDED'),SUM(status='COMPLETION_PROPOSED') "
+            "FROM atp_ai_exploration_step WHERE session_id=%s",
+            (session_id,),
+        )
+        step_count, step_call_count, succeeded_steps, completion_steps = cursor.fetchone()
+        cursor.execute(
+            "SELECT action,COUNT(*) FROM atp_ai_exploration_audit "
+            "WHERE session_id=%s GROUP BY action",
+            (session_id,),
+        )
+        audits = {str(action): int(count) for action, count in cursor.fetchall()}
+        cursor.execute(
+            "SELECT event_type,COUNT(*) FROM atp_outbox_event "
+            "WHERE aggregate_id=%s GROUP BY event_type",
+            (session_id,),
+        )
+        events = {str(event): int(count) for event, count in cursor.fetchall()}
+        cursor.execute(
+            "SELECT b.status,ea.execution_status,ea.lifecycle_status,il.status,rl.status "
+            "FROM atp_execution_binding_snapshot b "
+            "JOIN atp_execution_attempt ea ON ea.execution_attempt_id=b.execution_attempt_id "
+            "JOIN atp_resource_lease il ON il.resource_lease_id=b.identity_lease_id "
+            "JOIN atp_resource_lease rl ON rl.resource_lease_id=b.runner_lease_id "
+            "WHERE b.execution_binding_snapshot_id=%s",
+            (binding_id,),
+        )
+        released = cursor.fetchone()
+        cursor.execute(
+            "SELECT ra.last_authenticated_at FROM atp_runner_agent ra "
+            "JOIN atp_execution_binding_snapshot b ON b.runner_id=ra.runner_id "
+            "WHERE b.execution_binding_snapshot_id=%s AND ra.token_status='ACTIVE'",
+            (binding_id,),
+        )
+        runner_authentication = cursor.fetchone()
+        cursor.execute(
+            "SELECT COUNT(*) FROM atp_ai_exploration_step "
+            "WHERE session_id=%s AND (CAST(observation_json AS CHAR) LIKE %s "
+            "OR CAST(action_json AS CHAR) LIKE %s OR CAST(action_result_json AS CHAR) LIKE %s "
+            "OR CAST(observation_json AS CHAR) LIKE %s OR CAST(action_json AS CHAR) LIKE %s "
+            "OR CAST(action_result_json AS CHAR) LIKE %s)",
+            (
+                session_id,
+                f"%{provider_secret}%",
+                f"%{provider_secret}%",
+                f"%{provider_secret}%",
+                f"%{runtime_secret}%",
+                f"%{runtime_secret}%",
+                f"%{runtime_secret}%",
+            ),
+        )
+        secret_rows = int(cursor.fetchone()[0])
+    if not (
+        str(status) == "SUCCEEDED"
+        and int(sequence) >= 2
+        and str(resolved_model_id) == model_config_id
+        and int(step_count) >= 2
+        and int(step_call_count) == int(step_count)
+        and int(succeeded_steps or 0) >= 1
+        and int(completion_steps or 0) == 1
+        and audits.get("BROWSER_STARTED") == 1
+        and audits.get("BROWSER_SUCCEEDED") == 1
+        and events.get("ai_exploration.browser_started") == 1
+        and events.get("ai_exploration.succeeded") == 1
+        and tuple(map(str, released or ()))
+        == ("RELEASED", "SUCCEEDED", "PASSED", "RELEASED", "RELEASED")
+        and runner_authentication is not None
+        and runner_authentication[0] is not None
+        and secret_rows == 0
+    ):
+        raise RuntimeError("AI exploration Browser Loop database evidence is inconsistent")
+    return {
+        "session_status": str(status),
+        "execution_attempt_id": str(attempt_id),
+        "ordered_step_count": int(step_count),
+        "step_ai_call_count": int(step_call_count),
+        "binding_and_leases_released": True,
+        "audit_actions": audits,
+        "outbox_events": events,
+        "secret_boundary": "PASS",
+        "bound_runner_machine_auth": "PASS",
+    }
+
+
 def main() -> int:
     load_project_environment(root=ROOT)
     parser = argparse.ArgumentParser(description=__doc__)
@@ -1500,6 +1970,8 @@ def main() -> int:
             "TEST_ACCOUNT_SECRET_ENCRYPTION",
             "EXECUTION_BINDING_FENCING",
             "RESOURCE_LEASE_CONTENTION",
+            "AI_EXPLORATION_BROWSER_LOOP",
+            "LITELLM_COMPATIBLE_MODEL_GATEWAY",
             "ISOLATED_RUNTIME_CLEANUP",
         ],
     )
@@ -1528,6 +2000,7 @@ def main() -> int:
     runtime_directory = RUNTIME_ROOT / f"project-browser-{secrets.token_hex(6)}"
     runtime_directory.mkdir(parents=True, exist_ok=False)
     api_process: subprocess.Popen[bytes] | None = None
+    runner_process: subprocess.Popen[bytes] | None = None
     web_process: subprocess.Popen[bytes] | None = None
     log_handles: list[BinaryIO] = []
     created = False
@@ -1543,6 +2016,10 @@ def main() -> int:
     dynamic_owner_evidence: dict[str, object] = {}
     execution_binding_fixture: dict[str, object] = {}
     execution_binding_evidence: dict[str, object] = {}
+    ai_exploration_evidence: dict[str, object] = {}
+    ai_exploration_cancellation_evidence: dict[str, object] = {}
+    gateway: model_gate._GatewayFixture | None = None
+    target: _ExplorationTargetFixture | None = None
     stage = "mysql_connect"
     error_type: str | None = None
     error_code: str | None = None
@@ -1568,6 +2045,11 @@ def main() -> int:
         )
         hmac_key_ring = _write_hmac_key_ring(runtime_directory)
         test_account_secret_key_ring = _write_test_account_secret_key_ring(runtime_directory)
+        provider_secret = secrets.token_urlsafe(24)
+        gateway = model_gate._GatewayFixture(provider_secret)
+        gateway.start()
+        target = _ExplorationTargetFixture()
+        target.start()
         engine = create_database_engine(database_url)
         factory = create_session_factory(engine)
         passwords = PasswordService()
@@ -1677,7 +2159,13 @@ def main() -> int:
         api_port = _available_loopback_port()
         api_environment = project_environment(root=ROOT)
         api_environment.pop(ADMIN_URL_ENV, None)
-        python_paths = [str(API_SRC), str(COMMON_SRC), str(OBSERVABILITY_SRC)]
+        python_paths = [
+            str(ROOT),
+            str(API_SRC),
+            str(COMMON_SRC),
+            str(OBSERVABILITY_SRC),
+            str(RUNNER_SRC),
+        ]
         if api_environment.get("PYTHONPATH"):
             python_paths.append(api_environment["PYTHONPATH"])
         api_environment["PYTHONPATH"] = os.pathsep.join(python_paths)
@@ -1690,11 +2178,14 @@ def main() -> int:
                 "ATP_JWT_KEY_RING_FILE": str(key_ring.manifest_file),
                 "ATP_AUTH_HMAC_MASTER_KEY_FILE": str(hmac_key_ring),
                 "ATP_MODEL_SECRET_KEY_RING_FILE": str(test_account_secret_key_ring),
+                "ATP_LITELLM_PROXY_URL": gateway.url,
+                "ATP_LITELLM_DYNAMIC_CREDENTIALS_ENABLED": "true",
             }
         )
+        api_environment.pop("ATP_LITELLM_PROXY_API_KEY_FILE", None)
         stage = "api_startup"
         api_process, api_log = _start_process(
-            [sys.executable, "-m", "platform_api.cli"],
+            [sys.executable, "-m", "tools.gates.ai_exploration_runtime_api"],
             api_environment,
             runtime_directory / "api.log",
         )
@@ -1762,9 +2253,142 @@ def main() -> int:
             }
         )
         browser_resolution = _validate_playwright_browser(node, browser_environment)
-        stage = "required_gates" if args.task_id else "chromium_test"
+        playwright = (
+            ROOT
+            / "node_modules"
+            / ".bin"
+            / ("playwright.cmd" if sys.platform == "win32" else "playwright")
+        )
+        if not playwright.is_file():
+            raise GateBlocked("Playwright is required for REAL_ACCEPTANCE_GATE")
+        playwright_command = [
+            str(playwright),
+            "test",
+            "--config",
+            "apps/web/playwright.config.ts",
+        ]
+        stage = "chromium_test"
+        completed = subprocess.run(
+            playwright_command,
+            cwd=ROOT,
+            env=browser_environment,
+            check=False,
+        )
+        browser_exit = completed.returncode
+        if browser_exit != 0:
+            raise RuntimeError("project browser acceptance command failed")
+        stage = "dynamic_owner_revocation_probe"
+        dynamic_owner_evidence = _dynamic_owner_revocation_probe(
+            database,
+            api_port,
+            owner_username,
+            owner_password,
+            project_code,
+        )
+        stage = "audit_unavailable_probe"
+        audit_unavailable_evidence = _audit_unavailable_probe(
+            database,
+            api_port,
+            authorized_username,
+            authorized_password,
+            project_code,
+        )
+        stage = "execution_binding_fixtures"
+        execution_binding_fixture = _prepare_execution_binding_acceptance(
+            database, project_code, authorized_username
+        )
+        runner_work_dir = runtime_directory / "runner-agent"
+        AgentCredentialStore(runner_work_dir / "agent-identity.json").save(
+            StoredAgentIdentity(
+                runner_id=str(execution_binding_fixture["runner_id"]),
+                agent_token=str(execution_binding_fixture.pop("runner_agent_token")),
+                token_version=1,
+            )
+        )
+        runner_environment = api_environment.copy()
+        runner_environment.update(
+            {
+                "RUNNER_PLATFORM_URL": f"http://127.0.0.1:{api_port}",
+                "RUNNER_WORK_DIR": str(runner_work_dir),
+                "RUNNER_HEARTBEAT_INTERVAL_SECONDS": "2",
+                "RUNNER_DECLARED_CAPABILITIES": json.dumps(
+                    [
+                        "BROWSER_CHROMIUM",
+                        "CAPTURE_SCREENSHOT",
+                        "FORMAL_EXECUTION",
+                        "INTRANET_ACCESS",
+                        "TERMINAL_ADMIN_WEB",
+                    ]
+                ),
+            }
+        )
+        stage = "runner_agent_startup"
+        runner_process, runner_log = _start_process(
+            [sys.executable, "-m", "platform_runner.cli"],
+            runner_environment,
+            runtime_directory / "runner.log",
+        )
+        log_handles.append(runner_log)
+        _wait_for_runner_agent(
+            database, str(execution_binding_fixture["runner_id"]), runner_process
+        )
+        with _connection(database) as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "UPDATE atp_runner_capability SET validation_status='VALID',"
+                "updated_at=UTC_TIMESTAMP(6),row_version=row_version+1 "
+                "WHERE runner_id=%s AND availability_status='CONFIGURED' "
+                "AND lifecycle_status='ACTIVE'",
+                (execution_binding_fixture["runner_id"],),
+            )
+        browser_environment.update(
+            {
+                "PLAYWRIGHT_TEST_FILE": "execution-binding.spec.ts",
+                "ATP_BINDING_E2E_USERNAME": authorized_username,
+                "ATP_BINDING_E2E_PASSWORD": authorized_password,
+                "ATP_BINDING_E2E_PROJECT_ID": str(execution_binding_fixture["project_id"]),
+                "ATP_BINDING_E2E_ENVIRONMENT_ID": str(execution_binding_fixture["environment_id"]),
+                "ATP_BINDING_E2E_TERMINAL_ID": str(execution_binding_fixture["terminal_id"]),
+                "ATP_BINDING_E2E_TERMINAL_REVISION_ID": str(
+                    execution_binding_fixture["terminal_revision_id"]
+                ),
+                "ATP_BINDING_E2E_ACCOUNT_ID": str(execution_binding_fixture["account_id"]),
+                "ATP_BINDING_E2E_CREDENTIAL_REVISION_ID": str(
+                    execution_binding_fixture["credential_revision_id"]
+                ),
+                "ATP_BINDING_E2E_RUNNER_ID": str(execution_binding_fixture["runner_id"]),
+                "ATP_BINDING_E2E_POLICY_ID": str(execution_binding_fixture["policy_id"]),
+                "ATP_BINDING_E2E_ATTEMPT_IDS": ",".join(
+                    str(value) for value in execution_binding_fixture["attempt_ids"][:4]
+                ),
+                "ATP_BINDING_E2E_RESOURCE_IDENTITY": str(
+                    execution_binding_fixture["runner_resource_identity"]
+                ),
+                "ATP_BINDING_E2E_OWNER_IDENTITY": str(
+                    execution_binding_fixture["owner_execution_identity"]
+                ),
+            }
+        )
+        stage = "execution_binding_chromium_test"
+        binding_completed = subprocess.run(
+            playwright_command,
+            cwd=ROOT,
+            env=browser_environment,
+            check=False,
+        )
+        if binding_completed.returncode != 0:
+            browser_exit = binding_completed.returncode
+            raise RuntimeError("execution binding browser acceptance command failed")
+        stage = "execution_binding_recovery_evidence"
+        execution_binding_evidence = _execution_binding_recovery_evidence(
+            database,
+            api_port,
+            authorized_username,
+            authorized_password,
+            execution_binding_fixture,
+        )
         if args.task_id:
-            command = [
+            stage = "required_gates"
+            required_gates_command = [
                 sys.executable,
                 "tools/governance/task_governance.py",
                 "gate",
@@ -1772,111 +2396,76 @@ def main() -> int:
                 ".",
                 "--task-id",
                 args.task_id,
+                "--timeout",
+                "1200",
             ]
-        else:
-            playwright = (
-                ROOT
-                / "node_modules"
-                / ".bin"
-                / ("playwright.cmd" if sys.platform == "win32" else "playwright")
-            )
-            if not playwright.is_file():
-                raise GateBlocked("Playwright is required for REAL_ACCEPTANCE_GATE")
-            command = [
-                str(playwright),
-                "test",
-                "--config",
-                "apps/web/playwright.config.ts",
-            ]
-        command_environment = dict(browser_environment)
-        if args.task_id:
-            # The governance summary embeds Playwright's Unicode separators.
-            # Pin the nested Python CLI to UTF-8 on Windows instead of inheriting GBK.
-            command_environment["PYTHONIOENCODING"] = "utf-8"
-        completed = subprocess.run(
-            command,
-            cwd=ROOT,
-            env=command_environment,
-            check=False,
-        )
-        browser_exit = completed.returncode
-        if browser_exit != 0:
-            raise RuntimeError("project browser acceptance command failed")
-        if not args.task_id:
-            # The canonical REAL_ACCEPTANCE_GATE executed these probes in its own
-            # isolated runtime. The task wrapper only hosts the Required Gates;
-            # its fixture database has not run the project-management E2E flow.
-            stage = "dynamic_owner_revocation_probe"
-            dynamic_owner_evidence = _dynamic_owner_revocation_probe(
-                database,
-                api_port,
-                owner_username,
-                owner_password,
-                project_code,
-            )
-            stage = "audit_unavailable_probe"
-            audit_unavailable_evidence = _audit_unavailable_probe(
-                database,
-                api_port,
-                authorized_username,
-                authorized_password,
-                project_code,
-            )
-            stage = "execution_binding_fixtures"
-            execution_binding_fixture = _prepare_execution_binding_acceptance(
-                database, project_code, authorized_username
-            )
-            browser_environment.update(
-                {
-                    "PLAYWRIGHT_TEST_FILE": "execution-binding.spec.ts",
-                    "ATP_BINDING_E2E_USERNAME": authorized_username,
-                    "ATP_BINDING_E2E_PASSWORD": authorized_password,
-                    "ATP_BINDING_E2E_PROJECT_ID": str(execution_binding_fixture["project_id"]),
-                    "ATP_BINDING_E2E_ENVIRONMENT_ID": str(
-                        execution_binding_fixture["environment_id"]
-                    ),
-                    "ATP_BINDING_E2E_TERMINAL_ID": str(execution_binding_fixture["terminal_id"]),
-                    "ATP_BINDING_E2E_TERMINAL_REVISION_ID": str(
-                        execution_binding_fixture["terminal_revision_id"]
-                    ),
-                    "ATP_BINDING_E2E_ACCOUNT_ID": str(execution_binding_fixture["account_id"]),
-                    "ATP_BINDING_E2E_CREDENTIAL_REVISION_ID": str(
-                        execution_binding_fixture["credential_revision_id"]
-                    ),
-                    "ATP_BINDING_E2E_RUNNER_ID": str(execution_binding_fixture["runner_id"]),
-                    "ATP_BINDING_E2E_POLICY_ID": str(execution_binding_fixture["policy_id"]),
-                    "ATP_BINDING_E2E_ATTEMPT_IDS": ",".join(
-                        str(value) for value in execution_binding_fixture["attempt_ids"]
-                    ),
-                    "ATP_BINDING_E2E_RESOURCE_IDENTITY": str(
-                        execution_binding_fixture["runner_resource_identity"]
-                    ),
-                    "ATP_BINDING_E2E_OWNER_IDENTITY": str(
-                        execution_binding_fixture["owner_execution_identity"]
-                    ),
-                }
-            )
-            stage = "execution_binding_chromium_test"
-            binding_completed = subprocess.run(
-                command,
+            browser_environment["PYTHONIOENCODING"] = "utf-8"
+            required_gates_completed = subprocess.run(
+                required_gates_command,
                 cwd=ROOT,
                 env=browser_environment,
                 check=False,
             )
-            if binding_completed.returncode != 0:
-                browser_exit = binding_completed.returncode
-                raise RuntimeError("execution binding browser acceptance command failed")
-            stage = "execution_binding_recovery_evidence"
-            execution_binding_evidence = _execution_binding_recovery_evidence(
-                database,
-                api_port,
-                authorized_username,
-                authorized_password,
-                execution_binding_fixture,
-            )
-            _restore_execution_binding_project(database, execution_binding_fixture)
-            stage = "database_evidence"
-            database_evidence = _database_evidence(database, project_code, runner_project_id)
+            if required_gates_completed.returncode != 0:
+                browser_exit = required_gates_completed.returncode
+                raise RuntimeError("required gates failed")
+        if target is None:
+            raise RuntimeError("AI exploration target fixture is unavailable")
+        stage = "ai_exploration_fixtures"
+        model_config_id = _prepare_ai_exploration_runtime(
+            database,
+            execution_binding_fixture,
+            authorized_username,
+            target.url,
+            test_account_secret_key_ring,
+            provider_secret,
+        )
+        ai_attempt_id = _create_ai_execution_binding(
+            database,
+            api_port,
+            authorized_username,
+            authorized_password,
+            execution_binding_fixture,
+        )
+        browser_environment.update(
+            {
+                "PLAYWRIGHT_TEST_FILE": "ai-exploration-browser-loop.spec.ts",
+                "ATP_AI_EXPLORATION_E2E_USERNAME": authorized_username,
+                "ATP_AI_EXPLORATION_E2E_PASSWORD": authorized_password,
+                "ATP_AI_EXPLORATION_E2E_PROJECT_ID": str(execution_binding_fixture["project_id"]),
+                "ATP_AI_EXPLORATION_E2E_ATTEMPT_ID": ai_attempt_id,
+                "ATP_AI_EXPLORATION_E2E_TARGET_URL": target.url,
+            }
+        )
+        stage = "ai_exploration_chromium_test"
+        ai_completed = subprocess.run(
+            playwright_command,
+            cwd=ROOT,
+            env=browser_environment,
+            check=False,
+        )
+        browser_exit = ai_completed.returncode
+        if browser_exit != 0:
+            raise RuntimeError("AI exploration Browser Loop acceptance command failed")
+        stage = "ai_exploration_cancellation_probe"
+        ai_exploration_cancellation_evidence = _ai_exploration_cancel_probe(
+            database,
+            api_port,
+            authorized_username,
+            authorized_password,
+            execution_binding_fixture,
+            target.url,
+        )
+        stage = "database_evidence"
+        _restore_execution_binding_project(database, execution_binding_fixture)
+        database_evidence = _database_evidence(database, project_code, runner_project_id)
+        ai_exploration_evidence = _ai_exploration_database_evidence(
+            database,
+            str(execution_binding_fixture["project_id"]),
+            model_config_id,
+            provider_secret,
+            f"rotated-test-account-{project_code}",
+        )
         status = "PASS"
         exit_code = 0
     except (GateBlocked, FlywayBlocked) as exc:
@@ -1896,13 +2485,46 @@ def main() -> int:
             "database_evidence",
             "execution_binding_fixtures",
             "execution_binding_recovery_evidence",
+            "ai_exploration_cancellation_probe",
         } and isinstance(exc, RuntimeError):
             error_code = "DATABASE_EVIDENCE_INVARIANT_FAILED"
             error_diagnostic = str(exc)
+        elif stage in {"ai_exploration_chromium_test", "required_gates"}:
+            for handle in log_handles:
+                handle.flush()
+            error_code = "AI_EXPLORATION_BROWSER_ACCEPTANCE_FAILED"
+            error_diagnostic = _safe_startup_diagnostic(
+                runtime_directory / "api.log"
+            ) or model_gate._safe_exception_diagnostic(runtime_directory / "api.log")
+            if execution_binding_fixture:
+                with _connection(database) as connection, connection.cursor() as cursor:
+                    cursor.execute(
+                        "SELECT lifecycle_status,failure_code,current_step_sequence "
+                        "FROM atp_ai_exploration_session WHERE project_id=%s "
+                        "ORDER BY created_at DESC LIMIT 1",
+                        (execution_binding_fixture["project_id"],),
+                    )
+                    diagnostic_row = cursor.fetchone()
+                if diagnostic_row is not None:
+                    error_diagnostic = json.dumps(
+                        {
+                            "session_status": str(diagnostic_row[0]),
+                            "failure_code": (
+                                None if diagnostic_row[1] is None else str(diagnostic_row[1])
+                            ),
+                            "current_step_sequence": int(diagnostic_row[2]),
+                        },
+                        separators=(",", ":"),
+                    )
         exit_code = 1
     finally:
         _stop_process(web_process)
+        _stop_process(runner_process)
         _stop_process(api_process)
+        if target is not None:
+            target.stop()
+        if gateway is not None:
+            gateway.stop()
         for handle in log_handles:
             handle.close()
         if created:
@@ -1928,7 +2550,8 @@ def main() -> int:
         runtime_removed = not resolved_runtime.exists()
 
     processes_terminated = all(
-        process is None or process.poll() is not None for process in (api_process, web_process)
+        process is None or process.poll() is not None
+        for process in (api_process, runner_process, web_process)
     )
     cleanup_success = (removed if created else True) and runtime_removed and processes_terminated
     if not cleanup_success:
@@ -1947,6 +2570,11 @@ def main() -> int:
             "test_cases": [
                 "apps/web/e2e/project-management.spec.ts::project and Test Account browser closure",
                 "apps/web/e2e/execution-binding.spec.ts::binding and fenced lease browser closure",
+                "apps/web/e2e/ai-exploration-browser-loop.spec.ts::bound Browser Loop closure",
+                (
+                    "tools/gates/project_acceptance_runtime.py::cancel fencing "
+                    "and late response closure"
+                ),
             ],
             "browser_exit_code": browser_exit,
             "checks": {
@@ -1958,12 +2586,18 @@ def main() -> int:
                 ),
                 "dynamic_owner_revocation": ("PASS" if dynamic_owner_evidence else "NOT_RUN"),
                 "execution_binding_fencing": ("PASS" if execution_binding_evidence else "NOT_RUN"),
+                "ai_exploration_browser_loop": ("PASS" if ai_exploration_evidence else "NOT_RUN"),
+                "ai_exploration_cancellation": (
+                    "PASS" if ai_exploration_cancellation_evidence else "NOT_RUN"
+                ),
                 "cleanup": "PASS" if cleanup_success else "FAIL",
             },
             "database_evidence": database_evidence,
             "audit_unavailable_evidence": audit_unavailable_evidence,
             "dynamic_owner_evidence": dynamic_owner_evidence,
             "execution_binding_evidence": execution_binding_evidence,
+            "ai_exploration_evidence": ai_exploration_evidence,
+            "ai_exploration_cancellation_evidence": ai_exploration_cancellation_evidence,
             "cleanup_status": {
                 "temporary_database_removed": removed if created else True,
                 "runtime_directory_removed": runtime_removed,

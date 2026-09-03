@@ -32,6 +32,7 @@ from tools.context.context_loading import (
     project_context,
 )
 from tools.context.context_projection import enrich_task_context
+from tools.context.context_refresh import refresh_task_context
 from tools.context.repo_intelligence import CodeContextHint, repo_intelligence_projection
 from tools.governance.impact_scan import infer_domains
 from tools.governance.task_context import cleanup_task, load_context, save_context
@@ -805,3 +806,256 @@ def test_routed_authority_role_strategy_is_explicitly_conservative(tmp_path: Pat
     assert coverage['authority_role_strategy']=='ALL_ROUTED_CONSERVATIVE'
     assert coverage['routed_supporting_authority_count']==0
     assert ctx['authority_slice']['authority_role_strategy']=='ALL_ROUTED_CONSERVATIVE'
+
+
+def _write_context_coverage_fixture(root: Path, count: int = 8) -> tuple[list[str], list[dict]]:
+    paths=[f'docs/authority/coverage-{index}.yaml' for index in range(count)]
+    authorities={f'coverage_{index}':{'domains':['GOVERNANCE'],'paths':[path]} for index,path in enumerate(paths)}
+    _write_profile(root,authorities=authorities,initial_records=3)
+    refs=[]
+    for index,path in enumerate(paths):
+        target=root/path; target.parent.mkdir(parents=True,exist_ok=True)
+        target.write_text(yaml.safe_dump({'records':[{'record_id':f'COVERAGE-{index}','name':f'coverage requirement {index}','state':'current'}]},sort_keys=False),encoding='utf-8')
+    build_authority_index(root)
+    for index in range(count):
+        refs.append(refs_by_id(root,f'COVERAGE-{index}')[0])
+    return paths,refs
+
+
+def _candidate_limit_projection(paths: list[str], refs: list[dict], precise_count: int = 3) -> dict:
+    precise=[dict(ref) for ref in refs[:precise_count]]
+    for ref in precise:
+        ref['relevance_score']=100; ref['relevance_reasons']=['CORE_AUTHORITY_MINIMUM']
+    fallback=[{
+        'record_id':None,'canonical_record_id':None,'canonical_id_key':None,'structural_id':None,
+        'identity_kind':'ROUTED_FILE_REF','fallback_locator':path,'section':None,'selector':None,
+        'path':path,'display_path':path,'title':'','domains':[],'references':[],'reference_ids':[],
+        'authority_group':f'coverage_{index}','authority_domains':['GOVERNANCE'],'ref_only':True,
+        'relevance_score':0,'relevance_reasons':['ROUTED_AUTHORITY_FILE_MINIMUM_RECALL'],
+    } for index,path in enumerate(paths[precise_count:],start=precise_count)]
+    return {
+        'status':'TRUNCATED','refs':precise+fallback,'diagnostics':{
+            'unrepresented_authority_files':[],'unrepresented_authority_groups':[],'direct_read_required':[],
+            'relationship_closure':{'anchor_ids':[],'anchor_mode':'NO_SPECIFIC_ANCHOR','weak_candidate_ids':[],
+                'complete':True,'complete_semantics':'RELATIONSHIP_PATH_RESOLVED','candidate_refs':[],'missing_relationships':[],'edges':[]},
+            'candidate_count':20000,'selected_count':len(paths),'max_records':3,
+        },
+    }
+
+
+def _loaded_coverage_context(root: Path, task_id: str = 'TASK-CONTEXT-COVERAGE') -> tuple[dict,list[str],list[dict]]:
+    paths,refs=_write_context_coverage_fixture(root)
+    ctx={'task_id':task_id,'task_status':'ACTIVE','request':'validate governance context coverage','domains':['GOVERNANCE'],'authorities':paths,'affected_files':[]}
+    save_context(root,task_id,ctx)
+    _expand_required_authority_refs_via_cli(root,task_id,refs)
+    return load_context(root,task_id),paths,refs
+
+
+def test_task_loaded_precise_evidence_closes_candidate_limit_coverage(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    ctx,paths,refs=_loaded_coverage_context(tmp_path)
+    monkeypatch.setattr('tools.context.context_projection.query_authority_result',lambda *args,**kwargs:_candidate_limit_projection(paths,refs))
+    refreshed=enrich_task_context(tmp_path,ctx)
+    coverage=refreshed['required_fact_coverage']
+    assert coverage['current_required_authority_count']==8
+    assert coverage['current_covered_authority_count']==8
+    assert refreshed['context_efficiency']['status']==CONTEXT_SUFFICIENT
+    assert len([item for item in coverage['coverage_evidence'] if item['evidence_source']=='TASK_LOADED_PRECISE_EVIDENCE'])==5
+
+
+def test_repeated_refresh_keeps_coverage_stable_without_duplicate_evidence(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    ctx,paths,refs=_loaded_coverage_context(tmp_path)
+    monkeypatch.setattr('tools.context.context_projection.query_authority_result',lambda *args,**kwargs:_candidate_limit_projection(paths,refs))
+    first=enrich_task_context(tmp_path,ctx); first_reads=len(first['context_history']['authority'])
+    second=enrich_task_context(tmp_path,first)
+    assert second['context_efficiency']['status']==CONTEXT_SUFFICIENT
+    assert len(second['context_history']['authority'])==first_reads==8
+    assert second['coverage_evidence']==first['coverage_evidence']
+
+
+def test_routed_file_refs_without_precise_task_evidence_remain_uncovered(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    paths,refs=_write_context_coverage_fixture(tmp_path)
+    projection=_candidate_limit_projection(paths,refs,precise_count=0)
+    monkeypatch.setattr('tools.context.context_projection.query_authority_result',lambda *args,**kwargs:projection)
+    ctx=enrich_task_context(tmp_path,{'task_id':'TASK-FILE-REF-ONLY','task_status':'ACTIVE','request':'coverage','domains':['GOVERNANCE'],'authorities':paths,'affected_files':[]})
+    assert ctx['required_fact_coverage']['current_covered_authority_count']==0
+    assert len(ctx['uncovered_authority_requirements'])==8
+    assert ctx['context_efficiency']['status']==CONTEXT_EXPANSION_REQUIRED
+
+
+def test_selector_evidence_does_not_cover_different_projected_selector(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    path='docs/authority/selectors.yaml'; _write_profile(tmp_path,authorities={'selectors':{'domains':['GOVERNANCE'],'paths':[path]}})
+    target=tmp_path/path; target.parent.mkdir(parents=True,exist_ok=True)
+    target.write_text(yaml.safe_dump({'records':[{'record_id':'SELECTOR-A'},{'record_id':'SELECTOR-B'}]},sort_keys=False),encoding='utf-8')
+    build_authority_index(tmp_path); ref_a=refs_by_id(tmp_path,'SELECTOR-A')[0]; ref_b=refs_by_id(tmp_path,'SELECTOR-B')[0]
+    task_id='TASK-SELECTOR-PRECISION'; save_context(tmp_path,task_id,{'task_id':task_id,'task_status':'ACTIVE','request':'selector B','domains':['GOVERNANCE'],'authorities':[path],'affected_files':[]})
+    _expand_required_authority_refs_via_cli(tmp_path,task_id,[ref_a])
+    projected=dict(ref_b); projected['relevance_reasons']=['CORE_AUTHORITY_MINIMUM']; projected['relevance_score']=100
+    monkeypatch.setattr('tools.context.context_projection.query_authority_result',lambda *args,**kwargs:{'status':'READY','refs':[projected],'diagnostics':{'relationship_closure':{'anchor_ids':[],'complete':True,'candidate_refs':[],'missing_relationships':[]}}})
+    refreshed=enrich_task_context(tmp_path,load_context(tmp_path,task_id))
+    assert refreshed['required_authority_refs'][0]['selector']==ref_b['selector']
+    assert refreshed['missing_required_authority_refs']
+    assert refreshed['context_efficiency']['status']==CONTEXT_EXPANSION_REQUIRED
+
+
+def test_authority_record_change_invalidates_only_matching_evidence(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    ctx,paths,refs=_loaded_coverage_context(tmp_path)
+    monkeypatch.setattr('tools.context.context_projection.query_authority_result',lambda *args,**kwargs:_candidate_limit_projection(paths,refs))
+    assert enrich_task_context(tmp_path,ctx)['context_efficiency']['status']==CONTEXT_SUFFICIENT
+    target=tmp_path/paths[-1]; payload=yaml.safe_load(target.read_text(encoding='utf-8')); payload['records'][0]['state']='changed'
+    target.write_text(yaml.safe_dump(payload,sort_keys=False),encoding='utf-8'); build_authority_index(tmp_path,force=True)
+    refreshed=enrich_task_context(tmp_path,ctx)
+    assert refreshed['required_fact_coverage']['current_covered_authority_count']==7
+    assert any(item['path']==paths[-1] and item['reason']=='AUTHORITY_RECORD_CHANGED' for item in refreshed['stale_authority_evidence'])
+    assert refreshed['context_efficiency']['status']==CONTEXT_EXPANSION_REQUIRED
+    current=refs_by_id(tmp_path,'COVERAGE-7')[0]
+    _expand_required_authority_refs_via_cli(tmp_path,'TASK-CONTEXT-COVERAGE',[current])
+    restored=enrich_task_context(tmp_path,load_context(tmp_path,'TASK-CONTEXT-COVERAGE'))
+    assert restored['required_fact_coverage']['current_covered_authority_count']==8
+    assert restored['context_efficiency']['status']==CONTEXT_SUFFICIENT
+
+
+def test_task_evidence_cannot_cross_task_boundary(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    ctx,paths,refs=_loaded_coverage_context(tmp_path,task_id='TASK-A')
+    monkeypatch.setattr('tools.context.context_projection.query_authority_result',lambda *args,**kwargs:_candidate_limit_projection(paths,refs,precise_count=0))
+    copied={**ctx,'task_id':'TASK-B'}
+    refreshed=enrich_task_context(tmp_path,copied)
+    assert refreshed['required_fact_coverage']['current_covered_authority_count']==0
+    assert any(item['reason']=='TASK_OWNERSHIP_NOT_VERIFIED' for item in refreshed['stale_authority_evidence'])
+
+
+def test_terminal_task_history_does_not_supply_coverage(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    ctx,paths,refs=_loaded_coverage_context(tmp_path)
+    monkeypatch.setattr('tools.context.context_projection.query_authority_result',lambda *args,**kwargs:_candidate_limit_projection(paths,refs,precise_count=0))
+    refreshed=enrich_task_context(tmp_path,{**ctx,'task_status':'ABORTED'})
+    assert refreshed['required_fact_coverage']['current_covered_authority_count']==0
+    assert all(item['reason']=='TASK_NOT_ACTIVE' for item in refreshed['stale_authority_evidence'])
+
+
+def test_incremental_authority_requirement_needs_its_own_precise_evidence(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    paths,refs=_write_context_coverage_fixture(tmp_path,count=2); task_id='TASK-INCREMENTAL-COVERAGE'
+    ctx={'task_id':task_id,'task_status':'ACTIVE','request':'coverage','domains':['GOVERNANCE'],'authorities':[paths[0]],'affected_files':[]}
+    save_context(tmp_path,task_id,ctx); _expand_required_authority_refs_via_cli(tmp_path,task_id,[refs[0]])
+    projection=_candidate_limit_projection(paths,refs,precise_count=0)
+    monkeypatch.setattr('tools.context.context_projection.query_authority_result',lambda *args,**kwargs:projection)
+    expanded={**load_context(tmp_path,task_id),'authorities':paths}
+    refreshed=enrich_task_context(tmp_path,expanded)
+    assert refreshed['required_fact_coverage']['current_covered_authority_count']==1
+    assert refreshed['uncovered_authority_requirements']==[{'path':paths[1],'reason':'PRECISE_AUTHORITY_EVIDENCE_REQUIRED'}]
+
+
+def test_index_rebuild_preserves_unchanged_canonical_evidence(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    ctx,paths,refs=_loaded_coverage_context(tmp_path)
+    monkeypatch.setattr('tools.context.context_projection.query_authority_result',lambda *args,**kwargs:_candidate_limit_projection(paths,refs))
+    before=enrich_task_context(tmp_path,ctx); build_authority_index(tmp_path,force=True)
+    after=enrich_task_context(tmp_path,before)
+    assert before['context_efficiency']['status']==after['context_efficiency']['status']==CONTEXT_SUFFICIENT
+    assert after['required_fact_coverage']['current_covered_authority_count']==8
+
+
+def test_unstructured_legacy_history_is_not_promoted_to_precise_coverage(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    paths,refs=_write_context_coverage_fixture(tmp_path,count=1)
+    monkeypatch.setattr('tools.context.context_projection.query_authority_result',lambda *args,**kwargs:_candidate_limit_projection(paths,refs,precise_count=0))
+    ctx={'task_id':'TASK-LEGACY-EVIDENCE','task_status':'ACTIVE','request':'coverage','domains':['GOVERNANCE'],'authorities':paths,'affected_files':[],
+         'context_history':{'authority':[{'consumer_id':'SINGLE_CONTINUOUS_CONTEXT_CONSUMER','locator':paths[0],'scope':refs[0]['selector'],'sha256':'legacy-file-hash','expanded':True}]}}
+    refreshed=enrich_task_context(tmp_path,ctx)
+    assert refreshed['context_efficiency']['status']==CONTEXT_EXPANSION_REQUIRED
+    assert refreshed['stale_authority_evidence'][0]['reason']=='TASK_OWNERSHIP_NOT_VERIFIED'
+
+
+def test_normal_expand_upgrades_legacy_history_after_successful_full_reload(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    paths,refs=_write_context_coverage_fixture(tmp_path,count=1); task_id='TASK-LEGACY-RECOVERY'
+    file_hash=__import__('hashlib').sha256((tmp_path/paths[0]).read_bytes()).hexdigest()
+    ctx={'task_id':task_id,'task_status':'ACTIVE','request':'coverage','domains':['GOVERNANCE'],'authorities':paths,'affected_files':[],
+         'context_history':{'authority':[{'consumer_id':'SINGLE_CONTINUOUS_CONTEXT_CONSUMER','locator':paths[0],'scope':refs[0]['selector'],'sha256':file_hash,'expanded':True}]}}
+    save_context(tmp_path,task_id,ctx)
+    _expand_required_authority_refs_via_cli(tmp_path,task_id,refs)
+    upgraded=load_context(tmp_path,task_id)
+    monkeypatch.setattr('tools.context.context_projection.query_authority_result',lambda *args,**kwargs:_candidate_limit_projection(paths,refs,precise_count=0))
+    refreshed=enrich_task_context(tmp_path,upgraded)
+    evidence=upgraded['context_history']['authority'][0]['authority_evidence']
+    assert evidence['status']=='FULL_RECORD_LOADED'
+    assert evidence['task_id']==task_id
+    assert refreshed['required_fact_coverage']['current_covered_authority_count']==1
+    assert refreshed['context_efficiency']['status']==CONTEXT_SUFFICIENT
+
+
+def test_precise_locator_evidence_closes_candidate_limit_coverage(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    path='docs/authority/locator-only.yaml'; task_id='TASK-LOCATOR-COVERAGE'
+    _write_profile(tmp_path,authorities={'locator':{'domains':['GOVERNANCE'],'paths':[path]}},initial_records=1)
+    target=tmp_path/path; target.parent.mkdir(parents=True,exist_ok=True)
+    target.write_text(yaml.safe_dump({'runtime_policy':{'max_steps':50,'timeout':'30m'}},sort_keys=False),encoding='utf-8')
+    build_authority_index(tmp_path)
+    ref=refs_by_id(tmp_path,f'{path}#/runtime_policy',authority_paths=[path],selector='/runtime_policy')[0]
+    assert ref['identity_kind']=='LOCATOR'
+    save_context(tmp_path,task_id,{'task_id':task_id,'task_status':'ACTIVE','request':'runtime policy','domains':['GOVERNANCE'],'authorities':[path],'affected_files':[]})
+    _expand_required_authority_refs_via_cli(tmp_path,task_id,[ref])
+    monkeypatch.setattr('tools.context.context_projection.query_authority_result',lambda *args,**kwargs:_candidate_limit_projection([path],[ref],precise_count=0))
+    refreshed=enrich_task_context(tmp_path,load_context(tmp_path,task_id))
+    assert refreshed['required_fact_coverage']['current_covered_authority_count']==1
+    assert refreshed['context_efficiency']['status']==CONTEXT_SUFFICIENT
+
+
+def test_record_fingerprint_supports_mixed_yaml_mapping_keys(tmp_path: Path) -> None:
+    path='docs/authority/mixed-keys.yaml'
+    _write_profile(tmp_path,authorities={'mixed':{'domains':['GOVERNANCE'],'paths':[path]}})
+    target=tmp_path/path; target.parent.mkdir(parents=True,exist_ok=True)
+    target.write_text('records:\n  - record_id: MIXED-KEYS\n    values:\n      text: alpha\n      1: numeric\n',encoding='utf-8')
+    result=build_authority_index(tmp_path)
+    refs=refs_by_id(tmp_path,'MIXED-KEYS')
+    assert result['status']=='READY'
+    assert len(refs)==1
+    assert len(refs[0]['record_sha256'])==64
+
+
+def test_record_fingerprint_distinguishes_typed_mapping_from_lookalike_payload(tmp_path: Path) -> None:
+    path='docs/authority/fingerprint-collision.yaml'
+    mixed_root=tmp_path/'mixed'; lookalike_root=tmp_path/'lookalike'
+    for root in (mixed_root,lookalike_root):
+        _write_profile(root,authorities={'fingerprints':{'domains':['GOVERNANCE'],'paths':[path]}})
+    mixed_target=mixed_root/path; mixed_target.parent.mkdir(parents=True,exist_ok=True)
+    mixed_target.write_text("records:\n  - record_id: SAME\n    value: {1: x, a: y}\n",encoding='utf-8')
+    lookalike_target=lookalike_root/path; lookalike_target.parent.mkdir(parents=True,exist_ok=True)
+    lookalike_target.write_text("records:\n  - record_id: SAME\n    value:\n      __typed_mapping__:\n        - [[int, 1], x]\n        - [[str, a], y]\n",encoding='utf-8')
+    build_authority_index(mixed_root); build_authority_index(lookalike_root)
+    mixed=refs_by_id(mixed_root,'SAME')[0]
+    lookalike=refs_by_id(lookalike_root,'SAME')[0]
+    assert mixed['record_sha256']!=lookalike['record_sha256']
+
+
+def test_record_fingerprint_distinguishes_yaml_date_from_string(tmp_path: Path) -> None:
+    path='docs/authority/fingerprint-types.yaml'
+    date_root=tmp_path/'date'; string_root=tmp_path/'string'
+    for root in (date_root,string_root):
+        _write_profile(root,authorities={'fingerprints':{'domains':['GOVERNANCE'],'paths':[path]}})
+    date_target=date_root/path; date_target.parent.mkdir(parents=True,exist_ok=True)
+    date_target.write_text("records:\n  - record_id: SAME\n    value: 2026-01-01\n",encoding='utf-8')
+    string_target=string_root/path; string_target.parent.mkdir(parents=True,exist_ok=True)
+    string_target.write_text("records:\n  - record_id: SAME\n    value: '2026-01-01'\n",encoding='utf-8')
+    build_authority_index(date_root); build_authority_index(string_root)
+    date_ref=refs_by_id(date_root,'SAME')[0]
+    string_ref=refs_by_id(string_root,'SAME')[0]
+    assert date_ref['record_sha256']!=string_ref['record_sha256']
+
+
+def test_unrelated_record_change_preserves_precise_record_evidence(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    paths,refs=_write_context_coverage_fixture(tmp_path,count=1); task_id='TASK-RECORD-FRESHNESS'
+    ctx={'task_id':task_id,'task_status':'ACTIVE','request':'coverage','domains':['GOVERNANCE'],'authorities':paths,'affected_files':[]}
+    save_context(tmp_path,task_id,ctx); _expand_required_authority_refs_via_cli(tmp_path,task_id,refs)
+    target=tmp_path/paths[0]; payload=yaml.safe_load(target.read_text(encoding='utf-8')); payload['records'].append({'record_id':'UNRELATED','state':'new'})
+    target.write_text(yaml.safe_dump(payload,sort_keys=False),encoding='utf-8'); build_authority_index(tmp_path,force=True)
+    current_ref=refs_by_id(tmp_path,'COVERAGE-0')[0]
+    monkeypatch.setattr('tools.context.context_projection.query_authority_result',lambda *args,**kwargs:_candidate_limit_projection(paths,[current_ref],precise_count=0))
+    refreshed=enrich_task_context(tmp_path,load_context(tmp_path,task_id))
+    assert refreshed['context_efficiency']['status']==CONTEXT_SUFFICIENT
+    assert refreshed['stale_authority_evidence']==[]
+
+
+def test_context_refresh_persists_coverage_diagnostics(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    ctx,paths,refs=_loaded_coverage_context(tmp_path)
+    monkeypatch.setattr('tools.context.context_projection.query_authority_result',lambda *args,**kwargs:_candidate_limit_projection(paths,refs))
+    save_context(tmp_path,'TASK-CONTEXT-COVERAGE',ctx)
+    refreshed=refresh_task_context(tmp_path,'TASK-CONTEXT-COVERAGE')
+    persisted=load_context(tmp_path,'TASK-CONTEXT-COVERAGE')
+    assert refreshed['required_fact_coverage']['current_covered_authority_count']==8
+    assert persisted['coverage_evidence']==refreshed['coverage_evidence']
+    assert len(persisted['fallback_authority_file_refs'])==5

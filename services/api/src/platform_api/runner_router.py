@@ -4,9 +4,11 @@ from collections.abc import Callable
 from typing import Annotated
 
 from fastapi import APIRouter, Header, Path, Query, Request
+from pydantic import BaseModel, ConfigDict, Field
 
 from platform_api.auth_router import _audit_context, _bearer, _correlation_id
 from platform_api.errors import PlatformError
+from platform_api.runner_browser_channel import RunnerBrowserCommandBroker
 from platform_api.runner_schemas import (
     CreateRunnerEnrollmentRequest,
     HeartbeatRunnerRequest,
@@ -25,6 +27,13 @@ from platform_api.runner_service import RunnerService
 router = APIRouter(tags=["Runner"])
 
 
+class _CompleteBrowserCommandRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    response: dict[str, object] | None = None
+    error_code: str | None = Field(default=None, max_length=64)
+
+
 def _service(request: Request) -> RunnerService:
     value = getattr(request.app.state, "runner_service", None)
     if not isinstance(value, RunnerService):
@@ -33,6 +42,18 @@ def _service(request: Request) -> RunnerService:
             detail="The Runner service has not been configured.",
             status=500,
             code="INTERNAL_ERROR",
+        )
+    return value
+
+
+def _browser_broker(request: Request) -> RunnerBrowserCommandBroker:
+    value = getattr(request.app.state, "runner_browser_command_broker", None)
+    if not isinstance(value, RunnerBrowserCommandBroker):
+        raise PlatformError(
+            title="Runner browser channel unavailable",
+            detail="The bound direct Runner command channel has not been configured.",
+            status=503,
+            code="AI_EXPLORATION_RUNNER_UNAVAILABLE",
         )
     return value
 
@@ -225,3 +246,48 @@ def report_runner_capabilities(
 ) -> RunnerResponse:
     data = _service(request).report_capabilities(id, agent_token, body, _audit_context(request))
     return RunnerResponse(data=data, correlation_id=_correlation_id(request))
+
+
+@router.post(
+    "/api/v1/runners/{id}/browser-runtime/commands:claim",
+    include_in_schema=False,
+)
+def claim_bound_browser_command(
+    id: Annotated[str, Path(min_length=26, max_length=26)],
+    request: Request,
+    agent_token: str = Header(min_length=32, max_length=512, alias="X-Runner-Agent-Token"),
+) -> dict[str, object]:
+    _service(request).require_machine_identity(id, agent_token)
+    return {"data": _browser_broker(request).claim(id), "correlation_id": _correlation_id(request)}
+
+
+@router.post(
+    "/api/v1/runners/{id}/browser-runtime/cancellations:claim",
+    include_in_schema=False,
+)
+def claim_bound_browser_cancellation(
+    id: Annotated[str, Path(min_length=26, max_length=26)],
+    request: Request,
+    agent_token: str = Header(min_length=32, max_length=512, alias="X-Runner-Agent-Token"),
+) -> dict[str, object]:
+    _service(request).require_machine_identity(id, agent_token)
+    return {
+        "data": _browser_broker(request).claim_cancel(id),
+        "correlation_id": _correlation_id(request),
+    }
+
+
+@router.post(
+    "/api/v1/runners/{id}/browser-runtime/commands/{command_id}:complete",
+    include_in_schema=False,
+)
+def complete_bound_browser_command(
+    id: Annotated[str, Path(min_length=26, max_length=26)],
+    command_id: Annotated[str, Path(min_length=26, max_length=26)],
+    body: _CompleteBrowserCommandRequest,
+    request: Request,
+    agent_token: str = Header(min_length=32, max_length=512, alias="X-Runner-Agent-Token"),
+) -> dict[str, object]:
+    _service(request).require_machine_identity(id, agent_token)
+    _browser_broker(request).complete(id, command_id, body.response, body.error_code)
+    return {"data": {"accepted": True}, "correlation_id": _correlation_id(request)}

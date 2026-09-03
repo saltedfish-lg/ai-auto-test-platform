@@ -6,7 +6,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { apiClient } from "../api/client";
 import { ApiRequestError } from "../api/errors";
-import type { AIExplorationSessionResource, ProjectResource } from "../generated/types";
+import type {
+  AIExplorationSessionResource,
+  AIExplorationStepResource,
+  ProjectResource,
+} from "../generated/types";
 import { useAIExplorationsStore } from "../stores/aiExplorations";
 import { useProjectsStore } from "../stores/projects";
 import AIExplorationView from "../views/AIExplorationView.vue";
@@ -25,11 +29,20 @@ const project: ProjectResource = {
 const readySession: AIExplorationSessionResource = {
   session_id: "01JSESSION00000000000000001",
   ai_task_id: "01JTASK000000000000000000001",
+  execution_attempt_id: null,
+  execution_binding_snapshot_id: null,
+  browser_session_id: null,
   project_id: project.project_id,
   source_case_id: null,
   objective: "验证有效用户能够登录并进入工作台",
   target_url: "https://example.test/login",
   lifecycle_status: "READY",
+  current_step_sequence: 0,
+  current_observation_id: null,
+  max_steps: 50,
+  total_timeout_seconds: 1800,
+  model_transient_retry_per_step: 2,
+  row_version: 1,
   resolved_model_config_id: "01JMODEL000000000000000001",
   resolved_model_display_name: "AI探索默认模型",
   resolved_provider_code: "OPENAI",
@@ -47,9 +60,48 @@ const readySession: AIExplorationSessionResource = {
   },
   failure_code: null,
   failure_message: null,
+  total_deadline_at: null,
+  started_at: null,
+  terminal_at: null,
+  cancel_requested_at: null,
   created_by: "01JUSER0000000000000000001",
   created_at: "2026-08-25T00:00:00Z",
   updated_at: "2026-08-25T00:00:01Z",
+};
+
+const runningSession: AIExplorationSessionResource = {
+  ...readySession,
+  execution_attempt_id: "01JATTEMPT0000000000000001",
+  execution_binding_snapshot_id: "01JBINDING0000000000000001",
+  browser_session_id: null,
+  lifecycle_status: "RUNNING",
+  max_steps: 50,
+  total_timeout_seconds: 1800,
+  model_transient_retry_per_step: 2,
+  row_version: 2,
+  started_at: "2026-08-25T00:00:02Z",
+  total_deadline_at: "2026-08-25T00:30:02Z",
+};
+
+const completedStep: AIExplorationStepResource = {
+  ai_exploration_step_id: "01JSTEP000000000000000001",
+  session_id: readySession.session_id,
+  execution_attempt_id: runningSession.execution_attempt_id!,
+  sequence: 1,
+  model_call_identity: "01JCALL000000000000000001",
+  observation_identity: "01JOBSERVATION000000000001",
+  action_identity: "01JACTION0000000000000001",
+  status: "COMPLETION_PROPOSED",
+  observation: { current_url: "https://example.test/dashboard", title: "Dashboard" },
+  action: { type: "goal_completed", reason: "Dashboard is visible" },
+  action_result: { status: "COMPLETION_ACCEPTED" },
+  sanitized_reason: "Dashboard is visible",
+  failure_code: null,
+  state_version: 3,
+  identity_lease_generation: 1,
+  runner_lease_generation: 1,
+  started_at: "2026-08-25T00:00:03Z",
+  completed_at: "2026-08-25T00:00:04Z",
 };
 
 async function renderView() {
@@ -174,6 +226,69 @@ describe("AI 探索规划页面（组件测试，API 为 mock）", () => {
 
     expect(create.mock.calls[0]?.[1].headers["Idempotency-Key"]).not.toBe(
       create.mock.calls[1]?.[1].headers["Idempotency-Key"],
+    );
+  });
+
+  it("starts the bound Attempt, refreshes ordered evidence, and renders terminal state", async () => {
+    const start = vi.spyOn(apiClient, "start_ai_exploration_session").mockResolvedValue({
+      data: runningSession,
+      correlation_id: "start-correlation",
+    });
+    vi.spyOn(apiClient, "get_ai_exploration_session").mockResolvedValue({
+      data: {
+        ...runningSession,
+        lifecycle_status: "SUCCEEDED",
+        current_step_sequence: 1,
+        current_observation_id: completedStep.observation_identity,
+        row_version: 5,
+        terminal_at: completedStep.completed_at,
+      },
+      correlation_id: "status-correlation",
+    });
+    vi.spyOn(apiClient, "list_ai_exploration_steps").mockResolvedValue({
+      items: [completedStep],
+      correlation_id: "steps-correlation",
+    });
+    const { pinia } = await renderView();
+    const explorations = useAIExplorationsStore(pinia);
+    explorations.current = readySession;
+
+    await fireEvent.update(
+      await screen.findByLabelText("ExecutionAttempt ID"),
+      runningSession.execution_attempt_id!,
+    );
+    await fireEvent.click(screen.getByRole("button", { name: "启动已绑定 Runner" }));
+
+    await waitFor(() => expect(start).toHaveBeenCalledTimes(1));
+    expect(start.mock.calls[0]?.[1]).toEqual({
+      execution_attempt_id: runningSession.execution_attempt_id,
+      expected_row_version: readySession.row_version,
+    });
+    expect(await screen.findByText("SUCCEEDED")).toBeTruthy();
+    expect(await screen.findByText("goal_completed")).toBeTruthy();
+    expect(screen.getByText("Dashboard · https://example.test/dashboard")).toBeTruthy();
+  });
+
+  it("reuses Start Idempotency-Key after an uncertain response", async () => {
+    const start = vi
+      .spyOn(apiClient, "start_ai_exploration_session")
+      .mockRejectedValueOnce(new TypeError("network unavailable"))
+      .mockResolvedValueOnce({ data: runningSession, correlation_id: "start-correlation" });
+    const { pinia } = await renderView();
+    const explorations = useAIExplorationsStore(pinia);
+    explorations.current = readySession;
+    const body = {
+      execution_attempt_id: runningSession.execution_attempt_id!,
+      expected_row_version: readySession.row_version,
+    };
+
+    await expect(explorations.start(readySession.session_id, body)).rejects.toThrow(
+      "network unavailable",
+    );
+    await explorations.start(readySession.session_id, body);
+
+    expect(start.mock.calls[0]?.[2].headers["Idempotency-Key"]).toBe(
+      start.mock.calls[1]?.[2].headers["Idempotency-Key"],
     );
   });
 });

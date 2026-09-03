@@ -13,7 +13,7 @@ from fastapi.responses import JSONResponse
 from platform_observability import configure_logging
 
 from platform_api.ai_exploration_router import router as ai_exploration_router
-from platform_api.ai_exploration_service import AIExplorationService
+from platform_api.ai_exploration_service import AIExplorationService, BoundRunnerBrowserRuntime
 from platform_api.audit import AuthenticationAuditService
 from platform_api.auth_hmac import AuthHmacKeyRing
 from platform_api.auth_router import router as auth_router
@@ -38,6 +38,10 @@ from platform_api.model_gateway import LiteLLMModelGateway
 from platform_api.project_router import router as project_router
 from platform_api.project_service import ProjectService
 from platform_api.rate_limit import AuthenticationRateLimitService
+from platform_api.runner_browser_channel import (
+    DirectRunnerBrowserRuntime,
+    RunnerBrowserCommandBroker,
+)
 from platform_api.runner_router import router as runner_router
 from platform_api.runner_service import RunnerService
 from platform_api.schema_preflight import SchemaPreflightFailure, run_schema_preflight
@@ -58,7 +62,11 @@ def _request_correlation_id(request: Request) -> str:
     return correlation_id if isinstance(correlation_id, str) and correlation_id else str(uuid4())
 
 
-def create_app(settings: ApiSettings) -> FastAPI:
+def create_app(
+    settings: ApiSettings,
+    *,
+    ai_exploration_browser_runtime: BoundRunnerBrowserRuntime | None = None,
+) -> FastAPI:
     configure_logging(settings.log_level)
     jwt_service = JwtService(JwtKeyRing.load(settings.jwt_key_ring_file))
     auth_hmac = AuthHmacKeyRing.load(settings.auth_hmac_master_key_file)
@@ -188,11 +196,17 @@ def create_app(settings: ApiSettings) -> FastAPI:
         app.state.auth_service,
         idempotency,
     )
+    app.state.runner_browser_command_broker = RunnerBrowserCommandBroker()
+    browser_runtime = ai_exploration_browser_runtime or DirectRunnerBrowserRuntime(
+        app.state.runner_browser_command_broker
+    )
     app.state.ai_exploration_service = AIExplorationService(
         app.state.session_factory,
         app.state.auth_service,
         idempotency,
         app.state.model_configuration_service,
+        browser_runtime=browser_runtime,
+        secret_protector=secret_protector,
     )
     app.add_middleware(CorrelationIdMiddleware)
     app.include_router(auth_router)

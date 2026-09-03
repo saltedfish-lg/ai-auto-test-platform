@@ -84,6 +84,11 @@ class RuntimePolicySnapshot(BaseModel):
     browser_runtime: str
     artifact_policy: str
     timeout_seconds: int = Field(gt=0)
+    max_steps: int = Field(gt=0)
+    total_exploration_timeout_seconds: int = Field(gt=0)
+    model_transient_retry_per_step: int = Field(ge=0, le=10)
+    allowed_origins: list[str]
+    authentication_redirect_origins: list[str]
     retry_mode: str
     network_requirement: str
     serial_execution_policy: Literal["SINGLE_PROCESS_UNIFIED_RETRY"]
@@ -158,7 +163,12 @@ class RuntimePolicyRevisionResource(BaseModel):
     revision_no: int
     browser_runtime: str
     artifact_policy: str
-    timeout_seconds: int
+    timeout_seconds: int = Field(gt=0)
+    max_steps: int = Field(gt=0)
+    total_exploration_timeout_seconds: int = Field(gt=0)
+    model_transient_retry_per_step: int = Field(ge=0, le=10)
+    allowed_origins: list[str]
+    authentication_redirect_origins: list[str]
     retry_mode: str
     network_requirement: str
     serial_execution_policy: str

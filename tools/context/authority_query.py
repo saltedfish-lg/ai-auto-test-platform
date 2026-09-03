@@ -10,7 +10,7 @@ import argparse
 import json
 from pathlib import Path
 
-from .context_loading import context_read_seen, file_sha256, record_context_read, ensure_context_history, history_summary
+from .context_loading import context_consumer_id, context_read_seen, file_sha256, record_context_read, ensure_context_history, history_summary
 from tools.governance.task_context import load_context, save_context
 from .authority_index import (
     build_authority_index,
@@ -18,6 +18,36 @@ from .authority_index import (
     query_authority_result,
     refs_by_id,
 )
+
+
+def _precise_authority_evidence(ref: dict, task_id: str) -> dict:
+    return {
+        'status': 'FULL_RECORD_LOADED',
+        'task_id': task_id,
+        'canonical_record_id': ref.get('canonical_record_id'),
+        'canonical_id_key': ref.get('canonical_id_key'),
+        'structural_id': ref.get('structural_id'),
+        'identity_kind': ref.get('identity_kind'),
+        'record_sha256': ref.get('record_sha256'),
+    }
+
+
+def _has_current_precise_authority_evidence(task_ctx: dict, ref: dict, task_id: str, file_sha: str) -> bool:
+    expected = _precise_authority_evidence(ref, task_id)
+    for entry in ensure_context_history(task_ctx)['authority']:
+        if (
+            str(entry.get('consumer_id') or 'SINGLE_CONTINUOUS_CONTEXT_CONSUMER') != context_consumer_id(task_ctx)
+            or str(entry.get('locator') or '') != str(ref.get('path') or '')
+            or str(entry.get('scope') or '') != str(ref.get('selector') or '')
+            or str(entry.get('sha256') or '') != file_sha
+            or not bool(entry.get('expanded'))
+        ):
+            continue
+        evidence = entry.get('authority_evidence')
+        if not isinstance(evidence, dict):
+            return False
+        return all(evidence.get(key) == value for key, value in expected.items())
+    return False
 
 
 def main() -> int:
@@ -90,16 +120,19 @@ def main() -> int:
         refs_to_expand = refs
         reused_refs = []
         fresh_identity: dict[tuple[str, str], str] = {}
+        fresh_refs: dict[tuple[str, str], dict] = {}
         if task_ctx is not None:
             ensure_context_history(task_ctx); fresh=[]
             for ref in refs:
                 path=str(ref.get('path') or ''); selector=str(ref.get('selector') or ''); source=root/path
                 sha=file_sha256(source) if source.is_file() else 'MISSING'
-                if not args.force_expand and context_read_seen(task_ctx,'authority',locator=path,scope=selector,sha256=sha):
+                seen = context_read_seen(task_ctx,'authority',locator=path,scope=selector,sha256=sha)
+                has_precise_evidence = _has_current_precise_authority_evidence(task_ctx, ref, args.task_id, sha)
+                if not args.force_expand and seen and has_precise_evidence:
                     task_ctx,_=record_context_read(task_ctx,'authority',locator=path,scope=selector,sha256=sha,expanded=True,force=False)
                     reused_refs.append({'path':path,'selector':selector,'sha256':sha})
                 else:
-                    fresh.append(ref); fresh_identity[(path,selector)] = sha
+                    fresh.append(ref); fresh_identity[(path,selector)] = sha; fresh_refs[(path,selector)] = ref
             refs_to_expand=fresh
         expansion = expand_authority_refs(root, refs_to_expand, max_chars=args.max_chars)
         if task_ctx is not None:
@@ -109,7 +142,12 @@ def main() -> int:
                 # Only a complete record satisfies the exact selector read. A partial batch
                 # remains expandable on the next call without requiring a quota override.
                 if sha and bool(item.get('full_record')):
-                    task_ctx,_=record_context_read(task_ctx,'authority',locator=path,scope=selector,sha256=sha,expanded=True,force=args.force_expand)
+                    evidence_ref = fresh_refs.get((path, selector), item)
+                    task_ctx,_=record_context_read(
+                        task_ctx,'authority',locator=path,scope=selector,sha256=sha,expanded=True,
+                        force=args.force_expand or not has_precise_evidence,
+                        evidence=_precise_authority_evidence(evidence_ref, args.task_id),
+                    )
         if reused_refs and not refs_to_expand:
             expansion={'status':'REUSED_CONTEXT','strategy':'ADAPTIVE_AUTHORITY_EXPANSION','record_count':0,'ref_only_count':0,'records':[],'errors':[],'reused_refs':reused_refs,'can_continue_expanding':True}
         elif reused_refs: expansion['reused_refs']=reused_refs

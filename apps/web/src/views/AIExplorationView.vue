@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive } from "vue";
+import { computed, onMounted, onUnmounted, reactive } from "vue";
 import { useRoute } from "vue-router";
 
 import { useAIExplorationsStore } from "../stores/aiExplorations";
@@ -12,7 +12,10 @@ const form = reactive({
   project_id: typeof route.query.project_id === "string" ? route.query.project_id : "",
   objective: "",
   target_url: "",
+  execution_attempt_id:
+    typeof route.query.execution_attempt_id === "string" ? route.query.execution_attempt_id : "",
 });
+let pollTimer: ReturnType<typeof setTimeout> | undefined;
 
 const activeProjects = computed(() =>
   projects.items.filter((project) => project.lifecycle_status === "ACTIVE"),
@@ -23,10 +26,19 @@ const failureMessages: Record<string, string> = {
   AI_EXPLORATION_MODEL_RESPONSE_INVALID: "模型未返回有效的结构化探索计划。",
   AI_EXPLORATION_PLANNING_FAILED: "初始探索计划生成失败，请稍后重试。",
   AI_EXPLORATION_PLANNING_INTERRUPTED: "上次探索规划已中断，请重新发起规划。",
+  AI_EXPLORATION_PREFLIGHT_FAILED: "ExecutionAttempt 或冻结执行绑定未通过启动检查。",
+  AI_EXPLORATION_MODEL_CALL_FAILED: "冻结模型未能生成下一步浏览器动作。",
+  AI_EXPLORATION_ACTION_FAILED: "Runner 执行浏览器动作失败。",
+  AI_EXPLORATION_LEASE_LOST: "执行 Lease 或 fencing generation 已失效。",
+  AI_EXPLORATION_TIMEOUT: "探索达到冻结的总超时时间。",
+  AI_EXPLORATION_MAX_STEPS: "探索达到冻结的最大步骤数。",
+  AI_EXPLORATION_RUNNER_UNAVAILABLE: "已绑定 Runner 当前不可用。",
 };
 const statusType = computed(() =>
-  session.value?.lifecycle_status === "READY"
+  ["READY", "SUCCEEDED"].includes(session.value?.lifecycle_status ?? "")
     ? "success"
+    : session.value?.lifecycle_status === "RUNNING"
+      ? "warning"
     : session.value?.lifecycle_status === "FAILED"
       ? "danger"
       : "info",
@@ -34,6 +46,10 @@ const statusType = computed(() =>
 const failureTitle = computed(() => {
   const code = session.value?.failure_code;
   return failureMessages[code ?? ""] ?? session.value?.failure_message ?? "AI 探索规划失败。";
+});
+
+onUnmounted(() => {
+  if (pollTimer) clearTimeout(pollTimer);
 });
 
 onMounted(async () => {
@@ -61,6 +77,56 @@ async function startPlanning(): Promise<void> {
     // The store exposes the sanitized API failure and correlation id.
   }
 }
+
+async function refreshExecution(): Promise<void> {
+  const sessionId = session.value?.session_id;
+  if (!sessionId) return;
+  try {
+    const current = await explorations.load(sessionId);
+    await explorations.loadSteps(sessionId);
+    if (current.lifecycle_status === "RUNNING") {
+      pollTimer = setTimeout(refreshExecution, 1000);
+    }
+  } catch {
+    pollTimer = setTimeout(refreshExecution, 2000);
+  }
+}
+
+async function startBrowserLoop(): Promise<void> {
+  if (
+    session.value?.lifecycle_status !== "READY" ||
+    form.execution_attempt_id.trim().length !== 26
+  )
+    return;
+  try {
+    await explorations.start(session.value.session_id, {
+      execution_attempt_id: form.execution_attempt_id.trim(),
+      expected_row_version: session.value.row_version,
+    });
+    await refreshExecution();
+  } catch {
+    // Sanitized store error is rendered below.
+  }
+}
+
+async function cancelBrowserLoop(): Promise<void> {
+  if (session.value?.lifecycle_status !== "RUNNING") return;
+  try {
+    await explorations.cancel(session.value.session_id, {
+      expected_row_version: session.value.row_version,
+    });
+    if (pollTimer) clearTimeout(pollTimer);
+    await explorations.loadSteps(session.value.session_id);
+  } catch {
+    // Sanitized store error is rendered below.
+  }
+}
+
+function observationSummary(observation: Record<string, unknown>): string {
+  const title = typeof observation.title === "string" ? observation.title : "";
+  const url = typeof observation.current_url === "string" ? observation.current_url : "";
+  return [title, url].filter(Boolean).join(" · ") || "已记录结构化观察";
+}
 </script>
 
 <template>
@@ -68,8 +134,8 @@ async function startPlanning(): Promise<void> {
     <header class="page-heading">
       <div>
         <p class="eyebrow">AI EXPLORATION</p>
-        <h2>AI 探索规划</h2>
-        <p>根据测试目标生成结构化初始计划；本阶段不会打开或操作目标页面。</p>
+        <h2>AI 浏览器探索</h2>
+        <p>先生成结构化计划，再使用已绑定 ExecutionAttempt 和 Runner 执行可审计的浏览器循环。</p>
       </div>
     </header>
 
@@ -146,14 +212,52 @@ async function startPlanning(): Promise<void> {
       </el-alert>
     </el-card>
 
+    <el-card v-if="session?.lifecycle_status === 'READY'" class="execution-card" shadow="never">
+      <template #header>
+        <div class="card-heading">
+          <strong>启动 Browser Loop</strong>
+          <span>只使用 ExecutionBindingSnapshot 已冻结的 Runner、RuntimePolicy 与两类 Lease</span>
+        </div>
+      </template>
+      <el-form label-position="top" @submit.prevent="startBrowserLoop">
+        <el-form-item label="ExecutionAttempt ID" required>
+          <el-input
+            v-model="form.execution_attempt_id"
+            aria-label="ExecutionAttempt ID"
+            maxlength="26"
+            placeholder="输入已完成 ExecutionBindingSnapshot 的 Attempt ID"
+          />
+        </el-form-item>
+        <el-button
+          native-type="submit"
+          type="primary"
+          :loading="explorations.status === 'starting'"
+          :disabled="form.execution_attempt_id.trim().length !== 26"
+        >
+          启动已绑定 Runner
+        </el-button>
+      </el-form>
+    </el-card>
+
     <el-card v-if="session" class="result-card" shadow="never">
       <template #header>
         <div class="result-heading">
           <div>
             <p class="eyebrow">SESSION {{ session.session_id }}</p>
-            <strong>初始探索计划</strong>
+            <strong>探索会话</strong>
           </div>
-          <el-tag :type="statusType">{{ session.lifecycle_status }}</el-tag>
+          <div class="status-actions">
+            <el-tag :type="statusType">{{ session.lifecycle_status }}</el-tag>
+            <el-button
+              v-if="session.lifecycle_status === 'RUNNING'"
+              type="danger"
+              plain
+              :loading="explorations.status === 'cancelling'"
+              @click="cancelBrowserLoop"
+            >
+              取消探索
+            </el-button>
+          </div>
         </div>
       </template>
 
@@ -161,6 +265,12 @@ async function startPlanning(): Promise<void> {
         <span>本次实际模型</span>
         <strong>{{ session.resolved_model_display_name || "未命名模型" }}</strong>
         <code>{{ session.resolved_provider_code }} / {{ session.resolved_model_name }}</code>
+      </div>
+
+      <div v-if="session.execution_attempt_id" class="binding-snapshot">
+        <span>Attempt：<code>{{ session.execution_attempt_id }}</code></span>
+        <span>Binding：<code>{{ session.execution_binding_snapshot_id }}</code></span>
+        <span>步骤：{{ session.current_step_sequence }} / {{ session.max_steps }}</span>
       </div>
 
       <el-alert
@@ -195,6 +305,24 @@ async function startPlanning(): Promise<void> {
           </li>
         </ol>
       </div>
+
+      <div v-if="explorations.steps.length" class="step-evidence">
+        <h3>Browser Loop 证据</h3>
+        <ol aria-label="Browser Loop 步骤证据">
+          <li v-for="step in explorations.steps" :key="step.ai_exploration_step_id">
+            <div class="step-sequence">{{ step.sequence }}</div>
+            <div>
+              <div class="step-title">
+                <strong>{{ step.action?.type || "DECIDING" }}</strong>
+                <el-tag size="small">{{ step.status }}</el-tag>
+              </div>
+              <p>{{ observationSummary(step.observation) }}</p>
+              <p v-if="step.sanitized_reason">{{ step.sanitized_reason }}</p>
+              <code v-if="step.failure_code">{{ step.failure_code }}</code>
+            </div>
+          </li>
+        </ol>
+      </div>
     </el-card>
   </section>
 </template>
@@ -217,6 +345,7 @@ async function startPlanning(): Promise<void> {
 }
 
 .planning-card,
+.execution-card,
 .result-card {
   max-width: 960px;
 }
@@ -228,6 +357,20 @@ async function startPlanning(): Promise<void> {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+}
+
+.binding-snapshot,
+.status-actions,
+.step-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.binding-snapshot {
+  margin-bottom: 16px;
+  color: var(--el-text-color-secondary);
 }
 
 .card-heading span {
@@ -279,6 +422,31 @@ async function startPlanning(): Promise<void> {
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+.step-evidence {
+  margin-top: 24px;
+}
+
+.step-evidence ol {
+  display: grid;
+  gap: 10px;
+  padding: 0;
+  list-style: none;
+}
+
+.step-evidence li {
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  gap: 12px;
+  padding: 12px;
+  border-left: 3px solid var(--el-color-primary);
+  background: var(--el-fill-color-light);
+}
+
+.step-evidence p {
+  margin: 6px 0 0;
+  color: var(--el-text-color-secondary);
 }
 
 .plan-steps li {

@@ -110,7 +110,14 @@ test("execution binding and fenced lease browser closure", async ({ page, reques
     runner_id: runnerId,
     status: "READY",
   });
-  expect(first.runtime_policy.runtime_policy_revision_id).toBe(policyId);
+  expect(first.runtime_policy).toMatchObject({
+    runtime_policy_revision_id: policyId,
+    max_steps: 50,
+    total_exploration_timeout_seconds: 1800,
+    model_transient_retry_per_step: 2,
+    allowed_origins: [],
+    authentication_redirect_origins: [],
+  });
   expect(first.identity_lease).toMatchObject({ status: "ACTIVE", fencing_generation: 1 });
   expect(first.runner_lease).toMatchObject({ status: "ACTIVE", fencing_generation: 1 });
   await expect(page.getByText(`generation ${first.identity_lease.fencing_generation}`)).toHaveCount(

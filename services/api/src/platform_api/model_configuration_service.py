@@ -874,6 +874,49 @@ class ModelConfigurationService:
         with self._factory() as db:
             return self.resolve_default_in_transaction(db, capability_code)
 
+    def resolve_snapshot(
+        self,
+        model_config_id: str,
+        provider_code: str,
+        model_name: str,
+    ) -> ResolvedModelConfiguration:
+        """Reload one frozen model identity without consulting the mutable capability default."""
+        with self._factory() as db:
+            return self.resolve_snapshot_in_transaction(
+                db, model_config_id, provider_code, model_name
+            )
+
+    def resolve_snapshot_in_transaction(
+        self,
+        db: Session,
+        model_config_id: str,
+        provider_code: str,
+        model_name: str,
+        request_timeout_seconds: int | None = None,
+        display_name: str | None = None,
+    ) -> ResolvedModelConfiguration:
+        """Validate and reconstruct a frozen model identity in the caller transaction."""
+        model = db.get(ModelConfiguration, model_config_id)
+        if model is None or model.provider_code != provider_code or model.model_name != model_name:
+            raise PlatformError(
+                title="Resolved model snapshot mismatch",
+                detail="The frozen model configuration is no longer available.",
+                status=503,
+                code="MODEL_RUNTIME_CONFIGURATION_UNAVAILABLE",
+            )
+        return ResolvedModelConfiguration(
+            model_config_id=model.model_config_id,
+            provider_code=model.provider_code,
+            model_name=model.model_name,
+            request_timeout_seconds=(
+                request_timeout_seconds
+                if request_timeout_seconds is not None
+                else model.request_timeout_seconds
+            ),
+            secret_reference=f"model-config-secret:{model.model_config_id}",
+            display_name=display_name if display_name is not None else model.display_name,
+        )
+
     def resolve_default_in_transaction(
         self,
         db: Session,

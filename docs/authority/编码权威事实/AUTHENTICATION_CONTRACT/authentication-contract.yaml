@@ -507,3 +507,22 @@ acceptance_contract:
   - Login 60/5m与Refresh 300/5m来源级限流、可信代理边界、429与Retry-After、多实例并发和过期清理
   - Change Password返回204、不签发Token、相同幂等请求重放204、不同指纹409和并发仅一次逻辑变更
   - 初始化秘密不进入仓库、密码不明文落库、Token不进入日志
+ai_exploration_browser_login_boundary:
+  decision_id: AUTH-AI-EXPLORATION-BROWSER-001
+  capability_code: AI_EXPLORATION_BROWSER_LOOP
+  authentication: BEARER_ACCESS_TOKEN_FOR_HUMAN_COMMANDS
+  machine_execution: BOUND_RUNNER_MACHINE_AUTH
+  resolution_source:
+  - TerminalAccessRevision
+  - LoginStrategy
+  - TestAccount
+  - CredentialRevision
+  model_visible_fact: credential_slot_available
+  runtime_only_secrets:
+  - plaintext_password
+  - credential_revision_secret
+  - runner_agent_token
+  - cookie_or_session_secret
+  - captcha_realtime_value
+  - provider_secret
+  rule: Credential解密、captcha解析与Browser注入只允许在受信Runtime或Runner边界发生；不得进入模型上下文、Step evidence、Audit、Outbox或日志。

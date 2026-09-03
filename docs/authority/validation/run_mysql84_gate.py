@@ -222,7 +222,7 @@ def run_local_mysql(root: Path, mysql: Path, connection: dict[str, object], repo
     environment["MYSQL_PWD"] = str(connection["password"])
     base = [
         str(mysql), "--protocol=TCP", "--host", str(connection["host"]), "--port", str(connection["port"]),
-        "--user", str(connection["user"]), "--batch", "--skip-column-names",
+        "--user", str(connection["user"]), "--default-character-set=utf8mb4", "--batch", "--skip-column-names",
     ]
     suffix = f"{int(time.time())}_{os.getpid()}"
     databases = [f"atp_authority_empty_{suffix}", f"atp_authority_upgrade_{suffix}"]
