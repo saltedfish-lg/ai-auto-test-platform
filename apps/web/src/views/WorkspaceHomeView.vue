@@ -59,7 +59,9 @@ async function reloadIdentity(): Promise<void> {
         <dt>显示名称</dt>
         <dd>{{ session.currentUser?.display_name || "未设置" }}</dd>
         <dt>账号状态</dt>
-        <dd><el-tag type="success">{{ session.currentUser?.lifecycle_status }}</el-tag></dd>
+        <dd>
+          <el-tag type="success">{{ session.currentUser?.lifecycle_status }}</el-tag>
+        </dd>
         <dt>用户标识</dt>
         <dd class="monospace">{{ session.currentUser?.user_id }}</dd>
       </dl>

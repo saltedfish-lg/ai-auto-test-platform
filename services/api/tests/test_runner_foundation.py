@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime
 from pathlib import Path
+from threading import Barrier, Event, Lock
 from types import SimpleNamespace
 
 import pytest
+from platform_api import runner_router
+from platform_api.audit import AuditContext
 from platform_api.errors import PlatformError
-from platform_api.models import RunnerAgent
+from platform_api.models import OutboxEvent, Runner, RunnerAgent, RunnerAudit, RunnerCapability
 from platform_api.runner_router import router
 from platform_api.runner_schemas import (
     CreateRunnerEnrollmentRequest,
@@ -13,10 +18,13 @@ from platform_api.runner_schemas import (
     RegisterRunnerRequest,
     RunnerCapabilityReportItem,
     UpdateRunnerRequest,
+    ValidateRunnerCapabilityRequest,
 )
 from platform_api.runner_service import (
+    RunnerService,
     _authenticate_agent,
     _registration_agent_token,
+    _runner_execution_eligible,
     _secret_hash,
     _validate_metadata,
 )
@@ -47,6 +55,11 @@ def test_runner_routes_separate_human_management_and_machine_runtime() -> None:
             "POST",
             "/api/v1/runner/{id}/agent-token/revoke",
             "revoke_runner_agent_token",
+        ),
+        (
+            "POST",
+            "/api/v1/runner/{id}/capabilities/{capability_code}/validate",
+            "validate_runner_capability",
         ),
         ("POST", "/api/v1/runners/{id}/heartbeat", "heartbeat_runner"),
         (
@@ -124,6 +137,30 @@ def test_capability_snapshot_is_controlled_and_duplicate_codes_are_rejected() ->
             agent_version="1.0.0",
             capabilities=[capability, capability],
         )
+
+
+def test_capability_validation_requires_existing_report_versions_and_evidence() -> None:
+    request = ValidateRunnerCapabilityRequest(
+        expected_capability_version=2,
+        evidence_summary="Chromium launched and reached the approved origin.",
+        reason="validate current machine report",
+    )
+    assert request.expected_capability_version == 2
+    assert "expected_runner_version" not in ValidateRunnerCapabilityRequest.model_fields
+    assert not {
+        "project_id",
+        "availability_status",
+        "validation_status",
+        "observed_metadata",
+    }.intersection(ValidateRunnerCapabilityRequest.model_fields)
+    with pytest.raises(ValidationError):
+        ValidateRunnerCapabilityRequest.model_validate(
+            {
+                "expected_capability_version": 2,
+                "evidence_summary": "",
+                "reason": "validate",
+            }
+        )
     with pytest.raises(ValidationError):
         RunnerCapabilityReportItem.model_validate(
             {"capability_code": "SCHEDULER", "availability_status": "CONFIGURED"}
@@ -183,6 +220,370 @@ def test_machine_auth_uses_only_opaque_agent_token_hash() -> None:
         )
     assert caught.value.status == 401
     assert caught.value.code == "RUNNER_AGENT_UNAUTHENTICATED"
+
+
+def test_machine_identity_and_execution_eligibility_are_distinct() -> None:
+    registered = SimpleNamespace(
+        lifecycle_status="REGISTERED",
+        registration_status="REGISTERED",
+        enable_status="DISABLED",
+        project_binding_status="BOUND",
+        connection_status="ONLINE",
+        health_status="HEALTHY",
+    )
+    active = SimpleNamespace(
+        lifecycle_status="ACTIVE",
+        registration_status="REGISTERED",
+        enable_status="ENABLED",
+        project_binding_status="BOUND",
+        connection_status="ONLINE",
+        health_status="HEALTHY",
+    )
+
+    assert _runner_execution_eligible(registered) is False  # type: ignore[arg-type]
+    assert _runner_execution_eligible(active) is True  # type: ignore[arg-type]
+    active.connection_status = "OFFLINE"
+    assert _runner_execution_eligible(active) is False  # type: ignore[arg-type]
+
+
+def test_ineligible_machine_claim_returns_empty_without_touching_broker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = SimpleNamespace(machine_execution_eligible=lambda *_args: False)
+    broker = SimpleNamespace(claim=lambda *_args: pytest.fail("broker must not be called"))
+    request = SimpleNamespace(state=SimpleNamespace(correlation_id="correlation-1"))
+    monkeypatch.setattr(runner_router, "_service", lambda _request: service)
+    monkeypatch.setattr(runner_router, "_browser_broker", lambda _request: broker)
+
+    response = runner_router.claim_bound_browser_command(  # type: ignore[arg-type]
+        "R" * 26, request, "rat_" + "b" * 48
+    )
+
+    assert response == {"data": None, "correlation_id": "correlation-1"}
+
+
+class _RunnerValidationTransaction:
+    def __init__(self, session: _RunnerValidationSession, lock: Lock) -> None:
+        self._session = session
+        self._lock = lock
+
+    def __enter__(self) -> _RunnerValidationSession:
+        self._lock.acquire()
+        return self._session
+
+    def __exit__(self, *_args: object) -> None:
+        self._lock.release()
+
+
+class _RunnerValidationFactory:
+    def __init__(self, session: _RunnerValidationSession) -> None:
+        self.session = session
+        self.lock = Lock()
+
+    def begin(self) -> _RunnerValidationTransaction:
+        return _RunnerValidationTransaction(self.session, self.lock)
+
+
+class _RunnerValidationSession:
+    def __init__(self) -> None:
+        now = datetime.now(UTC).replace(tzinfo=None)
+        self.runner = Runner(
+            runner_id="R" * 26,
+            project_id="P" * 26,
+            runner_code="RUNNER-01",
+            health_status="HEALTHY",
+            scheduling_status="IDLE",
+            resource_status="AVAILABLE",
+            version_compatibility="COMPATIBLE",
+            last_heartbeat_at=now,
+            registered_at=now,
+            runtime_metadata_json={"os": "Windows"},
+            registration_status="REGISTERED",
+            connection_status="ONLINE",
+            enable_status="ENABLED",
+            project_binding_status="BOUND",
+            lifecycle_status="ACTIVE",
+            display_name="Windows Runner",
+            row_version=7,
+            created_at=now,
+            updated_at=now,
+            created_by="U" * 26,
+            updated_by="U" * 26,
+            extension_json=None,
+        )
+        self.agent_token = "rat_" + "b" * 48
+        self.agent = RunnerAgent(
+            runner_agent_id="A" * 26,
+            project_id=self.runner.project_id,
+            runner_id=self.runner.runner_id,
+            token_hash=_secret_hash(self.agent_token),
+            token_status="ACTIVE",
+            token_version=1,
+            machine_fingerprint_hash=_secret_hash("machine-01"),
+            agent_version="1.0.0",
+            last_authenticated_at=now,
+            credential_rotated_at=None,
+            revoked_at=None,
+            lifecycle_status="ACTIVE",
+            display_name=None,
+            row_version=1,
+            created_at=now,
+            updated_at=now,
+            created_by=None,
+            updated_by=None,
+            extension_json=None,
+        )
+        self.capability = RunnerCapability(
+            runner_capability_id="C" * 26,
+            project_id=self.runner.project_id,
+            runner_id=self.runner.runner_id,
+            capability_code="AGENT_VERSION",
+            capability_type="VERSION",
+            availability_status="CONFIGURED",
+            validation_status="PENDING",
+            observed_version="1.0.0",
+            observed_metadata_json=None,
+            reported_at=now,
+            lifecycle_status="ACTIVE",
+            display_name=None,
+            row_version=1,
+            created_at=now,
+            updated_at=now,
+            created_by=self.agent.runner_agent_id,
+            updated_by=self.agent.runner_agent_id,
+            extension_json=None,
+        )
+        self.project = SimpleNamespace(project_id=self.runner.project_id, lifecycle_status="ACTIVE")
+        self.added: list[object] = []
+
+    def scalar(self, statement: object) -> object | None:
+        sql = str(statement)
+        if "max(atp_outbox_event.sequence)" in sql:
+            sequences = [item.sequence for item in self.added if isinstance(item, OutboxEvent)]
+            return max(sequences, default=0)
+        if "FROM atp_runner_agent" in sql:
+            return self.agent
+        if "FROM atp_runner_capability" in sql:
+            return self.capability
+        if "FROM atp_runner" in sql:
+            return self.runner
+        if "FROM atp_project" in sql:
+            return self.project
+        raise AssertionError(f"unexpected scalar query: {sql}")
+
+    def scalars(self, statement: object) -> list[RunnerCapability]:
+        assert "FROM atp_runner_capability" in str(statement)
+        return [self.capability]
+
+    def add(self, value: object) -> None:
+        self.added.append(value)
+
+    def flush(self) -> None:
+        return None
+
+
+class _RunnerValidationAuthentication:
+    @staticmethod
+    def authenticate_access_in_transaction(*_args: object) -> object:
+        return SimpleNamespace(user=SimpleNamespace(user_id="U" * 26))
+
+    @staticmethod
+    def require_project_permissions_in_transaction(*_args: object) -> None:
+        return None
+
+
+class _RunnerValidationIdempotency:
+    def __init__(self) -> None:
+        self.records: dict[tuple[str, str, str], SimpleNamespace] = {}
+
+    def claim(
+        self,
+        _db: object,
+        principal_id: str,
+        operation: str,
+        key: str,
+        _payload: bytes,
+    ) -> tuple[SimpleNamespace, bool]:
+        identity = (principal_id, operation, key)
+        existing = self.records.get(identity)
+        if existing is not None:
+            return existing, True
+        record = SimpleNamespace(response_status=None, response_json=None)
+        self.records[identity] = record
+        return record, False
+
+    @staticmethod
+    def complete(record: SimpleNamespace, status: int, response_json: dict[str, object]) -> None:
+        record.response_status = status
+        record.response_json = response_json
+
+
+def _runner_validation_service() -> tuple[RunnerService, _RunnerValidationSession]:
+    session = _RunnerValidationSession()
+    service = RunnerService(  # type: ignore[arg-type]
+        _RunnerValidationFactory(session),
+        _RunnerValidationAuthentication(),
+        _RunnerValidationIdempotency(),
+    )
+    return service, session
+
+
+def _validation_request(expected_capability_version: int = 1) -> ValidateRunnerCapabilityRequest:
+    return ValidateRunnerCapabilityRequest(
+        expected_capability_version=expected_capability_version,
+        evidence_summary="Runner reported AGENT_VERSION and remained healthy.",
+        reason="validate current machine report",
+    )
+
+
+def _audit_and_outbox_counts(session: _RunnerValidationSession) -> tuple[int, int]:
+    return (
+        sum(isinstance(item, RunnerAudit) for item in session.added),
+        sum(isinstance(item, OutboxEvent) for item in session.added),
+    )
+
+
+def test_heartbeat_before_and_after_capability_validation_is_not_a_concurrency_owner() -> None:
+    service, session = _runner_validation_service()
+    initial_runner_version = session.runner.row_version
+    heartbeat = HeartbeatRunnerRequest(
+        health_status="HEALTHY", agent_version="1.0.1", runtime_metadata={"os": "Windows"}
+    )
+    context = AuditContext(correlation_id="heartbeat-validation", source_context="test")
+    heartbeat_before_validation = Event()
+    validation_finished = Event()
+
+    def heartbeat_worker() -> None:
+        for _ in range(3):
+            service.heartbeat(session.runner.runner_id, session.agent_token, heartbeat, context)
+        heartbeat_before_validation.set()
+        assert validation_finished.wait(timeout=5)
+        for _ in range(3):
+            service.heartbeat(session.runner.runner_id, session.agent_token, heartbeat, context)
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        worker = executor.submit(heartbeat_worker)
+        assert heartbeat_before_validation.wait(timeout=5)
+        try:
+            resource = service.validate_capability(
+                "bearer",
+                session.runner.runner_id,
+                "AGENT_VERSION",
+                _validation_request(),
+                "validate-1",
+                context,
+            )
+        finally:
+            validation_finished.set()
+        worker.result(timeout=5)
+
+    assert resource.capabilities[0].validation_status == "VALID"
+    assert session.runner.row_version == initial_runner_version
+    assert session.capability.row_version == 2
+    assert _audit_and_outbox_counts(session) == (1, 1)
+
+
+def test_concurrent_capability_validation_transitions_once_and_does_not_duplicate_evidence() -> (
+    None
+):
+    service, session = _runner_validation_service()
+    barrier = Barrier(2)
+    context = AuditContext(correlation_id="concurrent-validation", source_context="test")
+
+    def validate(key: str) -> str:
+        barrier.wait()
+        try:
+            service.validate_capability(
+                "bearer",
+                session.runner.runner_id,
+                "AGENT_VERSION",
+                _validation_request(),
+                key,
+                context,
+            )
+        except PlatformError as error:
+            return error.code
+        return "PASS"
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(validate, ("validate-a", "validate-b")))
+
+    assert sorted(results) == ["PASS", "RUNNER_STATE_CONFLICT"]
+    assert session.capability.validation_status == "VALID"
+    assert session.capability.row_version == 2
+    assert _audit_and_outbox_counts(session) == (1, 1)
+
+
+def test_stale_capability_version_fails_closed_without_audit_or_outbox() -> None:
+    service, session = _runner_validation_service()
+    session.capability.row_version = 2
+
+    with pytest.raises(PlatformError, match="reported capability changed") as caught:
+        service.validate_capability(
+            "bearer",
+            session.runner.runner_id,
+            "AGENT_VERSION",
+            _validation_request(expected_capability_version=1),
+            "stale-capability",
+            AuditContext(correlation_id="stale", source_context="test"),
+        )
+
+    assert caught.value.status == 409
+    assert _audit_and_outbox_counts(session) == (0, 0)
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "detail"),
+    [
+        ("lifecycle_status", "DISABLED", "lifecycle must be ACTIVE"),
+        ("enable_status", "DISABLED", "must be enabled"),
+        ("connection_status", "OFFLINE", "must be ONLINE"),
+        ("health_status", "UNHEALTHY", "must be HEALTHY"),
+    ],
+)
+def test_capability_validation_rejects_actual_runner_state_with_specific_business_conflict(
+    field: str, value: str, detail: str
+) -> None:
+    service, session = _runner_validation_service()
+    setattr(session.runner, field, value)
+
+    with pytest.raises(PlatformError, match=detail) as caught:
+        service.validate_capability(
+            "bearer",
+            session.runner.runner_id,
+            "AGENT_VERSION",
+            _validation_request(),
+            f"invalid-{field}",
+            AuditContext(correlation_id="invalid-state", source_context="test"),
+        )
+
+    assert caught.value.code == "RUNNER_STATE_CONFLICT"
+    assert _audit_and_outbox_counts(session) == (0, 0)
+
+
+def test_capability_validation_idempotency_replays_without_duplicate_audit_or_outbox() -> None:
+    service, session = _runner_validation_service()
+    context = AuditContext(correlation_id="idempotent-validation", source_context="test")
+
+    first = service.validate_capability(
+        "bearer",
+        session.runner.runner_id,
+        "AGENT_VERSION",
+        _validation_request(),
+        "same-key",
+        context,
+    )
+    second = service.validate_capability(
+        "bearer",
+        session.runner.runner_id,
+        "AGENT_VERSION",
+        _validation_request(),
+        "same-key",
+        context,
+    )
+
+    assert first == second
+    assert _audit_and_outbox_counts(session) == (1, 1)
 
 
 def test_registration_delivery_token_is_recoverable_only_from_same_input() -> None:

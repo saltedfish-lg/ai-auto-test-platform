@@ -26,6 +26,10 @@ const createVisible = ref(false);
 const editVisible = ref(false);
 const detailVisible = ref(false);
 const revisionVisible = ref(false);
+const revisionReadOnlyVisible = ref(false);
+const editingRevision = ref<EnvironmentTerminalAccessRevisionResource | null>(null);
+const viewedRevision = ref<EnvironmentTerminalAccessRevisionResource | null>(null);
+const loginStrategyVisible = ref(false);
 const createForm = reactive({
   environment_id: "",
   terminal_code: "",
@@ -39,6 +43,16 @@ const revisionForm = reactive({
   login_url: "",
   login_strategy_id: "",
   display_name: "",
+  login_prerequisites: "",
+  network_requirements: "",
+  reason: "",
+});
+const loginStrategyForm = reactive({
+  display_name: "",
+  captcha_policy: "NONE" as "NONE" | "RESPONSE_HEADER",
+  captcha_request_header_name: "",
+  captcha_request_header_value: "",
+  captcha_response_header_name: "",
   reason: "",
 });
 
@@ -110,6 +124,55 @@ async function submitCreate(): Promise<void> {
   }
 }
 
+function openLoginStrategy(): void {
+  Object.assign(loginStrategyForm, {
+    display_name: "",
+    captcha_policy: "NONE",
+    captcha_request_header_name: "",
+    captcha_request_header_value: "",
+    captcha_response_header_name: "",
+    reason: "",
+  });
+  loginStrategyVisible.value = true;
+}
+
+async function submitLoginStrategy(): Promise<void> {
+  if (!loginStrategyForm.display_name.trim() || !loginStrategyForm.reason.trim()) return;
+  if (
+    loginStrategyForm.captcha_policy === "RESPONSE_HEADER" &&
+    (!loginStrategyForm.captcha_request_header_name.trim() ||
+      !loginStrategyForm.captcha_request_header_value.trim() ||
+      !loginStrategyForm.captcha_response_header_name.trim())
+  ) {
+    ElMessage.warning("RESPONSE_HEADER 策略必须填写完整的请求头与响应头配置。");
+    return;
+  }
+  try {
+    const strategy = await terminals.createAndActivateLoginStrategy({
+      project_id: projectId.value,
+      display_name: loginStrategyForm.display_name.trim(),
+      captcha_policy: loginStrategyForm.captcha_policy,
+      captcha_request_header_name:
+        loginStrategyForm.captcha_policy === "RESPONSE_HEADER"
+          ? loginStrategyForm.captcha_request_header_name.trim()
+          : null,
+      captcha_request_header_value:
+        loginStrategyForm.captcha_policy === "RESPONSE_HEADER"
+          ? loginStrategyForm.captcha_request_header_value.trim()
+          : null,
+      captcha_response_header_name:
+        loginStrategyForm.captcha_policy === "RESPONSE_HEADER"
+          ? loginStrategyForm.captcha_response_header_name.trim()
+          : null,
+      reason: loginStrategyForm.reason.trim(),
+    });
+    loginStrategyVisible.value = false;
+    ElMessage.success(`登录策略 ${strategy.display_name || strategy.login_strategy_id} 已启用。`);
+  } catch {
+    /* store exposes formal error */
+  }
+}
+
 async function openDetail(terminal: BusinessTerminalResource): Promise<void> {
   selected.value = terminal;
   detailVisible.value = true;
@@ -163,32 +226,82 @@ async function lifecycle(
   }
 }
 
-function openRevision(): void {
+function openRevision(source?: EnvironmentTerminalAccessRevisionResource): void {
+  editingRevision.value = source?.lifecycle_status === "DRAFT" ? source : null;
   Object.assign(revisionForm, {
-    entry_url: "",
-    login_url: "",
-    login_strategy_id: "",
-    display_name: "",
+    entry_url: source?.entry_url ?? "",
+    login_url: source?.login_url ?? "",
+    login_strategy_id: source?.login_strategy_id ?? "",
+    display_name: source?.display_name ?? "",
+    login_prerequisites: source?.login_prerequisites
+      ? JSON.stringify(source.login_prerequisites, null, 2)
+      : "",
+    network_requirements: source?.network_requirements
+      ? JSON.stringify(source.network_requirements, null, 2)
+      : "",
     reason: "",
   });
   revisionVisible.value = true;
 }
 
+function parseOptionalJson(value: string, label: string): Record<string, unknown> | null {
+  if (!value.trim()) return null;
+  const parsed = JSON.parse(value) as unknown;
+  if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") {
+    throw new Error(`${label}必须是 JSON 对象。`);
+  }
+  return parsed as Record<string, unknown>;
+}
+
 async function submitRevision(): Promise<void> {
   if (!selected.value || !revisionForm.entry_url.trim()) return;
   try {
-    await terminals.createRevision({
-      business_terminal_id: selected.value.business_terminal_id,
+    const values = {
       entry_url: revisionForm.entry_url.trim(),
       login_url: revisionForm.login_url.trim() || null,
       login_strategy_id: revisionForm.login_strategy_id || null,
       display_name: revisionForm.display_name.trim() || null,
-      reason: revisionForm.reason.trim() || null,
-    });
+      login_prerequisites: parseOptionalJson(revisionForm.login_prerequisites, "登录前置条件"),
+      network_requirements: parseOptionalJson(revisionForm.network_requirements, "网络要求"),
+      reason: revisionForm.reason.trim() || "保存终端访问修订",
+    };
+    if (editingRevision.value) {
+      await terminals.updateRevision(editingRevision.value, values);
+    } else {
+      await terminals.createRevision({
+        business_terminal_id: selected.value.business_terminal_id,
+        ...values,
+      });
+    }
     revisionVisible.value = false;
-    ElMessage.success("DRAFT 访问修订已单独创建。 ");
-  } catch {
-    /* store exposes formal error */
+    ElMessage.success(editingRevision.value ? "DRAFT 访问修订已更新。" : "DRAFT 访问修订已创建。");
+  } catch (error) {
+    if (
+      error instanceof SyntaxError ||
+      (error instanceof Error && error.message.includes("JSON"))
+    ) {
+      ElMessage.warning(error instanceof Error ? error.message : "JSON 格式错误。");
+    }
+  }
+}
+
+function viewRevision(revision: EnvironmentTerminalAccessRevisionResource): void {
+  viewedRevision.value = revision;
+  revisionReadOnlyVisible.value = true;
+}
+
+async function abandonRevision(revision: EnvironmentTerminalAccessRevisionResource): Promise<void> {
+  try {
+    const { value } = await ElMessageBox.prompt("请输入放弃原因", "放弃 DRAFT 访问修订", {
+      inputPattern: /\S+/,
+      inputErrorMessage: "原因不能为空。",
+    });
+    await terminals.abandonRevision(revision, value.trim());
+    ElMessage.success("DRAFT 访问修订已安全放弃。");
+  } catch (error) {
+    if (error !== "cancel" && error !== "close") {
+      /* store exposes formal error */
+    }
   }
 }
 
@@ -199,6 +312,23 @@ async function validateRevision(
     await terminals.validateRevision(revision, "校验终端访问修订");
   } catch {
     /* store exposes formal error */
+  }
+}
+
+async function returnRevisionToDraft(
+  revision: EnvironmentTerminalAccessRevisionResource,
+): Promise<void> {
+  try {
+    const { value } = await ElMessageBox.prompt("请输入返回草稿原因", "返回 DRAFT 访问修订", {
+      inputPattern: /\S+/,
+      inputErrorMessage: "原因不能为空。",
+    });
+    await terminals.returnRevisionToDraft(revision, value.trim());
+    ElMessage.success("访问修订已返回 DRAFT，可继续编辑修正。");
+  } catch (error) {
+    if (error !== "cancel" && error !== "close") {
+      /* store exposes formal error */
+    }
   }
 }
 
@@ -228,9 +358,14 @@ async function publishRevision(revision: EnvironmentTerminalAccessRevisionResour
           管理端、客户端与 PDA 均为 Web 终端；访问配置由终端自己的不可变 Revision 发布。
         </p>
       </div>
-      <PermissionGate permission="BUSINESS_TERMINAL_CREATE"
-        ><el-button type="primary" @click="openCreate">创建业务终端</el-button></PermissionGate
-      >
+      <div>
+        <PermissionGate permission="PROJECT_EDIT"
+          ><el-button @click="openLoginStrategy">新建登录策略</el-button></PermissionGate
+        >
+        <PermissionGate permission="BUSINESS_TERMINAL_CREATE"
+          ><el-button type="primary" @click="openCreate">创建业务终端</el-button></PermissionGate
+        >
+      </div>
     </div>
     <el-alert
       v-if="terminals.errorMessage"
@@ -415,6 +550,51 @@ async function publishRevision(revision: EnvironmentTerminalAccessRevisionResour
       ></el-dialog
     >
 
+    <el-dialog v-model="loginStrategyVisible" title="新建并启用登录策略" width="min(620px, 92vw)">
+      <el-form label-position="top">
+        <el-form-item label="策略名称" required>
+          <el-input v-model="loginStrategyForm.display_name" maxlength="255" />
+        </el-form-item>
+        <el-form-item label="验证码策略" required>
+          <el-select v-model="loginStrategyForm.captcha_policy">
+            <el-option label="NONE" value="NONE" />
+            <el-option label="RESPONSE_HEADER" value="RESPONSE_HEADER" />
+          </el-select>
+        </el-form-item>
+        <template v-if="loginStrategyForm.captcha_policy === 'RESPONSE_HEADER'">
+          <el-form-item label="验证码请求头名称" required>
+            <el-input v-model="loginStrategyForm.captcha_request_header_name" />
+          </el-form-item>
+          <el-form-item label="验证码请求头值" required>
+            <el-input
+              v-model="loginStrategyForm.captcha_request_header_value"
+              type="password"
+              show-password
+            />
+          </el-form-item>
+          <el-form-item label="验证码响应头名称" required>
+            <el-input v-model="loginStrategyForm.captcha_response_header_name" />
+          </el-form-item>
+        </template>
+        <el-form-item label="原因" required>
+          <el-input v-model="loginStrategyForm.reason" type="textarea" />
+        </el-form-item>
+        <p class="security-form-note">
+          此操作复用正式 AutomationAsset → LoginStrategy → Configure DRAFT → Activate
+          路径；失败重试会复用已创建对象。
+        </p>
+      </el-form>
+      <template #footer>
+        <el-button @click="loginStrategyVisible = false">取消</el-button>
+        <el-button
+          type="primary"
+          :loading="terminals.status === 'saving'"
+          @click="submitLoginStrategy"
+          >创建并启用</el-button
+        >
+      </template>
+    </el-dialog>
+
     <el-dialog v-model="detailVisible" title="业务终端详情" width="min(900px, 94vw)">
       <dl v-if="selected" class="identity-list">
         <dt>Terminal ID</dt>
@@ -429,40 +609,84 @@ async function publishRevision(revision: EnvironmentTerminalAccessRevisionResour
       <div class="page-heading">
         <h3>Terminal Access Revisions</h3>
         <PermissionGate permission="BUSINESS_TERMINAL_EDIT"
-          ><el-button type="primary" @click="openRevision">新建访问修订</el-button></PermissionGate
+          ><el-button type="primary" @click="openRevision()"
+            >新建访问修订</el-button
+          ></PermissionGate
         >
       </div>
-      <el-table :data="terminals.revisions" empty-text="尚无访问修订"
-        ><el-table-column prop="revision_no" label="Revision" width="90" /><el-table-column
-          prop="entry_url"
-          label="入口 URL"
-          min-width="230"
-        /><el-table-column prop="login_url" label="登录 URL" min-width="220" /><el-table-column
-          prop="lifecycle_status"
-          label="状态"
-          width="120"
-        /><el-table-column label="操作" width="150"
-          ><template #default="{ row }"
-            ><PermissionGate permission="BUSINESS_TERMINAL_EDIT"
-              ><el-button
+      <el-table :data="terminals.revisions" empty-text="尚无访问修订">
+        <el-table-column prop="revision_no" label="Revision No" width="110" />
+        <el-table-column label="当前" width="75">
+          <template #default="{ row }">{{
+            row.environment_terminal_access_revision_id === selected?.current_published_revision_id
+              ? "是"
+              : "否"
+          }}</template>
+        </el-table-column>
+        <el-table-column prop="entry_url" label="入口 URL" min-width="230" />
+        <el-table-column prop="login_url" label="登录 URL" min-width="220" />
+        <el-table-column prop="login_strategy_id" label="Login Strategy" min-width="220" />
+        <el-table-column prop="created_at" label="创建时间" min-width="180" />
+        <el-table-column prop="published_at" label="发布时间" min-width="180" />
+        <el-table-column prop="lifecycle_status" label="状态" width="120" />
+        <el-table-column label="操作" min-width="320" fixed="right">
+          <template #default="{ row }">
+            <el-button link type="primary" @click="viewRevision(row)">查看</el-button>
+            <PermissionGate permission="BUSINESS_TERMINAL_EDIT">
+              <el-button
                 v-if="row.lifecycle_status === 'DRAFT'"
                 link
-                @click="validateRevision(row)"
+                type="primary"
+                @click="openRevision(row)"
+                >编辑</el-button
+              >
+              <el-button v-if="row.lifecycle_status === 'DRAFT'" link @click="validateRevision(row)"
                 >校验</el-button
-              ><el-button
+              >
+              <el-button v-if="row.lifecycle_status === 'DRAFT'" link disabled title="请先完成校验"
+                >发布</el-button
+              >
+              <el-button
+                v-if="row.lifecycle_status === 'DRAFT'"
+                link
+                type="danger"
+                @click="abandonRevision(row)"
+                >放弃</el-button
+              >
+              <el-button
+                v-if="row.lifecycle_status === 'VALIDATING'"
+                link
+                type="primary"
+                @click="returnRevisionToDraft(row)"
+                >返回草稿</el-button
+              >
+              <el-button
                 v-if="row.lifecycle_status === 'VALIDATING'"
                 link
                 type="success"
                 @click="publishRevision(row)"
                 >发布</el-button
-              ></PermissionGate
-            ></template
-          ></el-table-column
-        ></el-table
-      >
+              >
+              <el-button
+                v-if="
+                  row.lifecycle_status === 'PUBLISHED' &&
+                  row.environment_terminal_access_revision_id ===
+                    selected?.current_published_revision_id
+                "
+                link
+                @click="openRevision(row)"
+                >基于此创建新修订</el-button
+              >
+            </PermissionGate>
+          </template>
+        </el-table-column>
+      </el-table>
     </el-dialog>
 
-    <el-dialog v-model="revisionVisible" title="新建 DRAFT 访问修订" width="min(600px,92vw)"
+    <el-dialog
+      v-model="revisionVisible"
+      :title="editingRevision ? '编辑 DRAFT 访问修订' : '新建 DRAFT 访问修订'"
+      width="min(600px,92vw)"
       ><el-form label-position="top"
         ><el-form-item label="入口 URL" required
           ><el-input
@@ -479,12 +703,42 @@ async function publishRevision(revision: EnvironmentTerminalAccessRevisionResour
               :label="item.display_name || item.login_strategy_id"
               :value="item.login_strategy_id" /></el-select></el-form-item
         ><el-form-item label="名称"><el-input v-model="revisionForm.display_name" /></el-form-item
+        ><el-form-item label="登录前置条件（JSON 对象）"
+          ><el-input
+            v-model="revisionForm.login_prerequisites"
+            type="textarea"
+            :rows="3" /></el-form-item
+        ><el-form-item label="网络要求（JSON 对象）"
+          ><el-input
+            v-model="revisionForm.network_requirements"
+            type="textarea"
+            :rows="3" /></el-form-item
         ><el-form-item label="原因"
           ><el-input v-model="revisionForm.reason" /></el-form-item></el-form
       ><template #footer
         ><el-button @click="revisionVisible = false">取消</el-button
-        ><el-button type="primary" @click="submitRevision">创建 DRAFT</el-button></template
+        ><el-button type="primary" @click="submitRevision">{{
+          editingRevision ? "保存 DRAFT" : "创建 DRAFT"
+        }}</el-button></template
       ></el-dialog
     >
+    <el-dialog v-model="revisionReadOnlyVisible" title="查看访问修订" width="min(680px,92vw)">
+      <dl v-if="viewedRevision" class="identity-list">
+        <dt>Revision No</dt>
+        <dd>{{ viewedRevision.revision_no }}</dd>
+        <dt>状态</dt>
+        <dd>{{ viewedRevision.lifecycle_status }}</dd>
+        <dt>入口 URL</dt>
+        <dd>{{ viewedRevision.entry_url }}</dd>
+        <dt>登录 URL</dt>
+        <dd>{{ viewedRevision.login_url || "—" }}</dd>
+        <dt>Login Strategy</dt>
+        <dd class="monospace">{{ viewedRevision.login_strategy_id || "—" }}</dd>
+        <dt>创建时间</dt>
+        <dd>{{ viewedRevision.created_at }}</dd>
+        <dt>发布时间</dt>
+        <dd>{{ viewedRevision.published_at || "未发布" }}</dd>
+      </dl>
+    </el-dialog>
   </section>
 </template>

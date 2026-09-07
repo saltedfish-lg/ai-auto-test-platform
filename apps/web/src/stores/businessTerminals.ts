@@ -5,15 +5,58 @@ import { apiClient } from "../api/client";
 import { getApiErrorMessage, getCorrelationId } from "../api/errors";
 import type {
   BusinessTerminalResource,
+  CreateLoginStrategyRequest,
   CreateBusinessTerminalRequest,
   CreateEnvironmentTerminalAccessRevisionRequest,
   EnvironmentTerminalAccessRevisionResource,
   LoginStrategyResource,
   PageMeta,
+  UpdateEnvironmentTerminalAccessRevisionRequest,
 } from "../generated/types";
 
-function mutationOptions() {
-  return { headers: { "Idempotency-Key": globalThis.crypto.randomUUID() } };
+function mutationOptions(key: string = globalThis.crypto.randomUUID()) {
+  return { headers: { "Idempotency-Key": key } };
+}
+
+type LoginStrategyWorkflow = {
+  fingerprint: string;
+  assetKey: string;
+  strategyKey: string;
+  configureKey: string;
+  activateKey: string;
+  automationAssetId?: string;
+  loginStrategyId?: string;
+};
+
+function loginStrategyWorkflowKey(projectId: string, displayName: string): string {
+  return `business-terminal:login-strategy:${projectId}:${displayName.trim()}`;
+}
+
+function readWorkflow(key: string, fingerprint: string): LoginStrategyWorkflow | undefined {
+  try {
+    const raw = globalThis.sessionStorage?.getItem(key);
+    if (!raw) return undefined;
+    const parsed = JSON.parse(raw) as LoginStrategyWorkflow;
+    return parsed.fingerprint === fingerprint ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function writeWorkflow(key: string, value: LoginStrategyWorkflow): void {
+  try {
+    globalThis.sessionStorage?.setItem(key, JSON.stringify(value));
+  } catch {
+    /* Session storage is only recovery assistance; server idempotency remains authoritative. */
+  }
+}
+
+function clearWorkflow(key: string): void {
+  try {
+    globalThis.sessionStorage?.removeItem(key);
+  } catch {
+    /* A completed server workflow must not be reported as failed because storage is unavailable. */
+  }
 }
 
 export const useBusinessTerminalsStore = defineStore("business-terminals", () => {
@@ -154,6 +197,99 @@ export const useBusinessTerminalsStore = defineStore("business-terminals", () =>
     }
   }
 
+  async function createAndActivateLoginStrategy(
+    body: Omit<CreateLoginStrategyRequest, "automation_asset_id">,
+  ): Promise<LoginStrategyResource> {
+    status.value = "saving";
+    clearError();
+    try {
+      const fingerprint = JSON.stringify(body);
+      const workflowKey = loginStrategyWorkflowKey(body.project_id, body.display_name ?? "");
+      const existing = strategies.value.find(
+        (item) =>
+          ["CREATED", "DRAFT"].includes(item.lifecycle_status) &&
+          item.project_id === body.project_id &&
+          item.display_name === body.display_name &&
+          item.captcha_policy === body.captcha_policy &&
+          item.captcha_request_header_name === (body.captcha_request_header_name ?? null) &&
+          item.captcha_request_header_value === (body.captcha_request_header_value ?? null) &&
+          item.captcha_response_header_name === (body.captcha_response_header_name ?? null),
+      );
+      const workflow = readWorkflow(workflowKey, fingerprint) ?? {
+        fingerprint,
+        assetKey: globalThis.crypto.randomUUID(),
+        strategyKey: globalThis.crypto.randomUUID(),
+        configureKey: globalThis.crypto.randomUUID(),
+        activateKey: globalThis.crypto.randomUUID(),
+        loginStrategyId: existing?.login_strategy_id,
+        automationAssetId: existing?.automation_asset_id,
+      };
+      writeWorkflow(workflowKey, workflow);
+      if (!workflow.automationAssetId) {
+        const asset = await apiClient.create_automation_asset(
+          {
+            project_id: body.project_id,
+            display_name: body.display_name,
+            reason: body.reason,
+          },
+          mutationOptions(workflow.assetKey),
+        );
+        workflow.automationAssetId = asset.data.automation_asset_id;
+        writeWorkflow(workflowKey, workflow);
+      }
+      let strategy = existing;
+      if (!workflow.loginStrategyId) {
+        const created = await apiClient.create_login_strategy(
+          { ...body, automation_asset_id: workflow.automationAssetId! },
+          mutationOptions(workflow.strategyKey),
+        );
+        strategy = created.data;
+        workflow.loginStrategyId = created.data.login_strategy_id;
+        writeWorkflow(workflowKey, workflow);
+      } else if (!strategy) {
+        strategy = (await apiClient.get_login_strategy(workflow.loginStrategyId)).data;
+      }
+      if (strategy.lifecycle_status === "CREATED") {
+        strategy = (
+          await apiClient.update_login_strategy(
+            strategy.login_strategy_id,
+            {
+              expected_version: strategy.row_version,
+              display_name: body.display_name,
+              local_storage_presets: body.local_storage_presets ?? [],
+              refresh_after_local_storage: body.refresh_after_local_storage ?? false,
+              captcha_policy: body.captcha_policy ?? "NONE",
+              captcha_request_header_name: body.captcha_request_header_name ?? null,
+              captcha_request_header_value: body.captcha_request_header_value ?? null,
+              captcha_response_header_name: body.captcha_response_header_name ?? null,
+              session_policy: body.session_policy ?? null,
+              reason: body.reason,
+            },
+            mutationOptions(workflow.configureKey),
+          )
+        ).data;
+      }
+      const activated = await apiClient.activate_login_strategy(
+        strategy.login_strategy_id,
+        {
+          expected_version: strategy.row_version,
+          reason: body.reason?.trim() || "Activate login strategy",
+        },
+        mutationOptions(workflow.activateKey),
+      );
+      clearWorkflow(workflowKey);
+      strategies.value = strategies.value.filter(
+        (item) => item.login_strategy_id !== activated.data.login_strategy_id,
+      );
+      strategies.value.unshift(activated.data);
+      return activated.data;
+    } catch (error) {
+      return capture(error, "登录策略创建或启用失败；已完成的前置资源会保留，请刷新后核对。");
+    } finally {
+      status.value = "idle";
+    }
+  }
+
   async function loadRevisions(terminalId: string): Promise<void> {
     clearError();
     try {
@@ -205,6 +341,73 @@ export const useBusinessTerminalsStore = defineStore("business-terminals", () =>
     }
   }
 
+  async function returnRevisionToDraft(
+    revision: EnvironmentTerminalAccessRevisionResource,
+    reason: string,
+  ) {
+    status.value = "saving";
+    clearError();
+    try {
+      const response = await apiClient.return_to_draft_environment_terminal_access_revision(
+        revision.environment_terminal_access_revision_id,
+        { expected_version: revision.row_version, reason },
+        mutationOptions(),
+      );
+      replaceRevision(response.data);
+      return response.data;
+    } catch (error) {
+      return capture(error, "访问修订返回草稿失败，请刷新后重试。");
+    } finally {
+      status.value = "idle";
+    }
+  }
+
+  async function updateRevision(
+    revision: EnvironmentTerminalAccessRevisionResource,
+    changes: Omit<UpdateEnvironmentTerminalAccessRevisionRequest, "expected_version">,
+  ) {
+    status.value = "saving";
+    clearError();
+    try {
+      const response = await apiClient.update_environment_terminal_access_revision(
+        revision.environment_terminal_access_revision_id,
+        { ...changes, expected_version: revision.row_version },
+        mutationOptions(),
+      );
+      replaceRevision(response.data);
+      return response.data;
+    } catch (error) {
+      return capture(error, "访问修订编辑失败，请刷新后重试。");
+    } finally {
+      status.value = "idle";
+    }
+  }
+
+  async function abandonRevision(
+    revision: EnvironmentTerminalAccessRevisionResource,
+    reason: string,
+  ) {
+    status.value = "saving";
+    clearError();
+    try {
+      const response = await apiClient.abandon_environment_terminal_access_revision(
+        revision.environment_terminal_access_revision_id,
+        { expected_version: revision.row_version, reason },
+        mutationOptions(),
+      );
+      revisions.value = revisions.value.filter(
+        (item) =>
+          item.environment_terminal_access_revision_id !==
+          revision.environment_terminal_access_revision_id,
+      );
+      return response.data;
+    } catch (error) {
+      return capture(error, "访问修订放弃失败，请刷新后重试。");
+    } finally {
+      status.value = "idle";
+    }
+  }
+
   async function publishRevision(
     revision: EnvironmentTerminalAccessRevisionResource,
     terminal: BusinessTerminalResource,
@@ -226,10 +429,18 @@ export const useBusinessTerminalsStore = defineStore("business-terminals", () =>
       try {
         const refreshed = await apiClient.get_business_terminal(terminal.business_terminal_id);
         replace(refreshed.data);
+        const revisionList = await apiClient.list_environment_terminal_access_revision({
+          query: {
+            page: 1,
+            page_size: 200,
+            filter: `business_terminal_id=${terminal.business_terminal_id}`,
+          },
+        });
+        revisions.value = revisionList.items;
       } catch (refreshError) {
         errorMessage.value = getApiErrorMessage(
           refreshError,
-          "访问修订已发布，但终端详情刷新失败；请刷新页面确认当前指针。",
+          "访问修订已发布，但终端或修订列表刷新失败；请刷新页面确认当前指针。",
         );
         correlationId.value = getCorrelationId(refreshError);
       }
@@ -273,9 +484,13 @@ export const useBusinessTerminalsStore = defineStore("business-terminals", () =>
     updateName,
     lifecycle,
     loadStrategies,
+    createAndActivateLoginStrategy,
     loadRevisions,
     createRevision,
+    updateRevision,
     validateRevision,
+    returnRevisionToDraft,
+    abandonRevision,
     publishRevision,
   };
 });

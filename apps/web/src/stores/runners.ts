@@ -8,6 +8,7 @@ import type {
   PageMeta,
   RotateRunnerAgentTokenData,
   RunnerEnrollmentIssuedResource,
+  RunnerCapabilityResource,
   RunnerResource,
 } from "../generated/types";
 
@@ -157,6 +158,27 @@ export const useRunnersStore = defineStore("runners", () => {
     });
   }
 
+  async function validateCapability(
+    runner: RunnerResource,
+    capability: RunnerCapabilityResource,
+    evidenceSummary: string,
+    reason: string,
+  ): Promise<RunnerResource> {
+    return mutate("Runner Capability 验证失败。", async () => {
+      const response = await apiClient.validate_runner_capability(
+        runner.runner_id,
+        capability.capability_code,
+        {
+          expected_capability_version: capability.row_version,
+          evidence_summary: evidenceSummary,
+          reason,
+        },
+        mutationOptions(),
+      );
+      return response.data;
+    });
+  }
+
   async function mutate(
     fallback: string,
     operation: () => Promise<RunnerResource>,
@@ -200,6 +222,7 @@ export const useRunnersStore = defineStore("runners", () => {
     lifecycle,
     rotateToken,
     revokeToken,
+    validateCapability,
     clearIssuedSecrets,
   };
 });

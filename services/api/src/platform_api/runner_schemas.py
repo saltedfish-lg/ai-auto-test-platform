@@ -59,6 +59,7 @@ class RunnerCapabilityResource(BaseModel):
     observed_metadata: dict[str, object] | None = None
     lifecycle_status: Literal["ACTIVE", "DISABLED"]
     reported_at: datetime
+    row_version: int = Field(ge=1)
 
 
 class RunnerResource(BaseModel):
@@ -147,6 +148,13 @@ class UpdateRunnerRequest(BaseModel):
 class RunnerLifecycleRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     expected_version: int = Field(ge=0)
+    reason: str = Field(min_length=1, max_length=1000)
+
+
+class ValidateRunnerCapabilityRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_capability_version: int = Field(ge=1)
+    evidence_summary: str = Field(min_length=1, max_length=1000)
     reason: str = Field(min_length=1, max_length=1000)
 
 

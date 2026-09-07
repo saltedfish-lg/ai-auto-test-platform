@@ -1,11 +1,11 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/vue";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/vue";
 import ElementPlus from "element-plus";
 import { createPinia, setActivePinia } from "pinia";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { apiClient } from "../api/client";
-import type { RunnerResource } from "../generated/types";
+import type { RunnerCapabilityResource, RunnerResource } from "../generated/types";
 import { useSessionStore } from "../stores/session";
 import RunnersView from "../views/RunnersView.vue";
 import { authenticationResponse, currentUser } from "./auth-fixtures";
@@ -34,10 +34,23 @@ const runner: RunnerResource = {
   updated_at: "2026-08-29T00:00:00Z",
 };
 
+const pendingCapability: RunnerCapabilityResource = {
+  runner_capability_id: "C".repeat(26),
+  capability_code: "BROWSER_CHROMIUM",
+  capability_type: "BROWSER",
+  availability_status: "CONFIGURED",
+  validation_status: "PENDING",
+  observed_version: "1.62.1",
+  observed_metadata: { browser: "chromium" },
+  lifecycle_status: "ACTIVE",
+  reported_at: "2026-09-03T00:00:00Z",
+  row_version: 3,
+};
+
 describe("Runner management view", () => {
   beforeEach(() => vi.restoreAllMocks());
 
-  async function setup() {
+  async function setup(runnerValue: RunnerResource = runner) {
     const pinia = createPinia();
     setActivePinia(pinia);
     vi.spyOn(apiClient, "login_platform_user").mockResolvedValue(
@@ -47,7 +60,7 @@ describe("Runner management view", () => {
     );
     await useSessionStore().login({ username: "admin", password: "input-only" });
     vi.spyOn(apiClient, "list_runner").mockResolvedValue({
-      items: [runner],
+      items: [runnerValue],
       page: { page: 1, page_size: 50, total: 1 },
     });
     const router = createRouter({
@@ -105,5 +118,48 @@ describe("Runner management view", () => {
     });
     expect(await screen.findByDisplayValue("enr_" + "e".repeat(48))).toBeTruthy();
     expect(screen.getByText(/平台无法恢复明文/)).toBeTruthy();
+  });
+
+  it("validates only a machine-reported pending capability with evidence", async () => {
+    const readyRunner: RunnerResource = {
+      ...runner,
+      lifecycle_status: "ACTIVE",
+      connection_status: "ONLINE",
+      health_status: "HEALTHY",
+      enable_status: "ENABLED",
+      scheduling_status: "IDLE",
+      last_heartbeat_at: "2026-09-03T00:00:00Z",
+      capabilities: [pendingCapability],
+      row_version: 7,
+    };
+    await setup(readyRunner);
+    const validate = vi.spyOn(apiClient, "validate_runner_capability").mockResolvedValue({
+      data: {
+        ...readyRunner,
+        row_version: 8,
+        capabilities: [{ ...pendingCapability, validation_status: "VALID", row_version: 4 }],
+      },
+      correlation_id: "corr-capability",
+    });
+
+    await fireEvent.click(await screen.findByRole("button", { name: "验证能力" }));
+    const dialog = screen.getByRole("dialog", { name: "验证 Runner Capability" });
+    await fireEvent.update(
+      within(dialog).getByLabelText("运行证据摘要"),
+      "Chromium launched and reached the approved UAT origin",
+    );
+    await fireEvent.update(within(dialog).getByLabelText("验证原因"), "Runner 真机验证");
+    await fireEvent.click(within(dialog).getByRole("button", { name: "确认验证" }));
+
+    await waitFor(() => expect(validate).toHaveBeenCalledTimes(1));
+    expect(validate.mock.calls[0]?.slice(0, 3)).toEqual([
+      runner.runner_id,
+      "BROWSER_CHROMIUM",
+      {
+        expected_capability_version: 3,
+        evidence_summary: "Chromium launched and reached the approved UAT origin",
+        reason: "Runner 真机验证",
+      },
+    ]);
   });
 });

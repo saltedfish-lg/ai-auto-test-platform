@@ -39,9 +39,9 @@ const statusType = computed(() =>
     ? "success"
     : session.value?.lifecycle_status === "RUNNING"
       ? "warning"
-    : session.value?.lifecycle_status === "FAILED"
-      ? "danger"
-      : "info",
+      : session.value?.lifecycle_status === "FAILED"
+        ? "danger"
+        : "info",
 );
 const failureTitle = computed(() => {
   const code = session.value?.failure_code;
@@ -93,10 +93,7 @@ async function refreshExecution(): Promise<void> {
 }
 
 async function startBrowserLoop(): Promise<void> {
-  if (
-    session.value?.lifecycle_status !== "READY" ||
-    form.execution_attempt_id.trim().length !== 26
-  )
+  if (session.value?.lifecycle_status !== "READY" || form.execution_attempt_id.trim().length !== 26)
     return;
   try {
     await explorations.start(session.value.session_id, {
@@ -268,8 +265,12 @@ function observationSummary(observation: Record<string, unknown>): string {
       </div>
 
       <div v-if="session.execution_attempt_id" class="binding-snapshot">
-        <span>Attempt：<code>{{ session.execution_attempt_id }}</code></span>
-        <span>Binding：<code>{{ session.execution_binding_snapshot_id }}</code></span>
+        <span
+          >Attempt：<code>{{ session.execution_attempt_id }}</code></span
+        >
+        <span
+          >Binding：<code>{{ session.execution_binding_snapshot_id }}</code></span
+        >
         <span>步骤：{{ session.current_step_sequence }} / {{ session.max_steps }}</span>
       </div>
 

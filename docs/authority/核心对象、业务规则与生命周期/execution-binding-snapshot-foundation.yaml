@@ -109,6 +109,26 @@ runtime_policy:
   resolution_rule: 正式执行必须解析并冻结明确的Project RuntimePolicy Revision；平台默认模板只能用于生成或解析Project revision。
   required_domains: [browser_runtime, artifact_policy, timeout, retry_mode, network_requirement, serial_execution_policy]
   arbitrary_json_bag_forbidden: true
+  management:
+    command: create_project_runtime_policy_revision
+    semantics: CREATE_AND_PUBLISH_ATOMIC
+    lifecycle: [PUBLISHED, RETIRED]
+    revision_no: 服务端在Project行锁内分配并校验下一个revision_no。
+    immutable_revision: 已发布Revision禁止普通PATCH；新配置必须创建新Revision，既有ExecutionBindingSnapshot冻结的Revision不得被替换。
+    permission: PROJECT_EDIT
+    transaction: RuntimePolicy Revision、append-only Audit与Outbox必须在同一本地数据库事务提交。
+    idempotency: Idempotency-Key在同一用户与operation范围内复用既有成功结果。
+    event_type: project_runtime_policy_revision.published
+  management:
+    command: create_project_runtime_policy_revision
+    semantics: CREATE_AND_PUBLISH_ATOMIC
+    lifecycle: [PUBLISHED, RETIRED]
+    revision_no: 服务端在Project行锁内分配并校验下一个revision_no。
+    immutable_revision: 已发布Revision禁止普通PATCH；新配置必须创建新Revision，既有ExecutionBindingSnapshot冻结的Revision不得被替换。
+    permission: PROJECT_EDIT
+    transaction: RuntimePolicy Revision、append-only Audit与Outbox必须在同一本地数据库事务提交。
+    idempotency: Idempotency-Key在同一用户与operation范围内复用既有成功结果。
+    event_type: project_runtime_policy_revision.published
 
 transaction_boundary:
   database: MySQL 8.4
@@ -141,6 +161,10 @@ api_contract:
   - renew_execution_binding_snapshot_leases
   - release_execution_binding_snapshot
   - recover_execution_binding_snapshot
+  - create_project_runtime_policy_revision
+  - list_project_runtime_policy_revisions
+  - create_project_runtime_policy_revision
+  - list_project_runtime_policy_revisions
 
 event_contract:
   event_version: 1.0.0

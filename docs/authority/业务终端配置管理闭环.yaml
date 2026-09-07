@@ -1,0 +1,83 @@
+authority_model: SINGLE_LIVING_AUTHORITY
+decision_id: BUSINESS-TERMINAL-CONFIGURATION-MANAGEMENT
+status: USER_APPROVED_LIVING_AUTHORITY
+scope:
+  - LoginStrategy
+  - EnvironmentTerminalAccessRevision
+login_strategy_management:
+  lifecycle:
+    - CREATED
+    - DRAFT
+    - ACTIVE
+  create_and_activate_orchestration:
+    steps:
+      - create_automation_asset
+      - create_login_strategy
+      - update_login_strategy_to_draft
+      - activate_login_strategy
+    invariant: CREATED不得直接进入ACTIVE；正式启用只接受DRAFT或RECOVERED。
+    recovery: 每一步使用稳定幂等键；前序步骤成功而后序步骤失败时，重试必须复用原AutomationAsset与LoginStrategy，不得重复创建。
+  evidence: Configure与Activate分别保留append-only Audit和Outbox；原因进入正式命令证据。
+terminal_access_revision_management:
+  immutable_history: PUBLISHED、SUPERSEDED、RETIRED和ARCHIVED均为只读历史事实，不允许编辑或物理删除。
+  draft_edit:
+    allowed_state: DRAFT
+    editable_fields:
+      - entry_url
+      - login_url
+      - login_strategy_id
+      - login_prerequisites
+      - network_requirements
+      - display_name
+    forbidden_fields:
+      - environment_terminal_access_revision_id
+      - project_id
+      - environment_id
+      - business_terminal_id
+      - revision_no
+      - lifecycle_status
+      - published_at
+    validation_effect: 已进入VALIDATING的修订须通过既有VALIDATING到DRAFT转换返回草稿后才能编辑；编辑后的DRAFT必须重新校验。
+  return_to_draft:
+    source_state: VALIDATING
+    target_state: DRAFT
+    lifecycle_transition_id: LCT-00082
+    purpose: 校验后发现配置错误时，必须先通过正式状态转换返回DRAFT再编辑修正。
+    event: environment_terminal_access_revision.draft
+    required:
+      - RBAC
+      - Idempotency
+      - AppendOnlyAudit
+      - Outbox
+      - OptimisticConcurrency
+  abandon:
+    command_result: ABANDONED
+    lifecycle_state_added: false
+    storage_effect: 通过正式Abandon命令受控物理清理从未发布且未被引用的DRAFT修订；禁止绕过命令直接删除。
+    preconditions:
+      - lifecycle_status=DRAFT
+      - published_at为空
+      - 不是BusinessTerminal current_published_revision_id
+      - 未被ExecutionBindingSnapshot或其他正式对象引用
+    fail_closed: 任一前置不满足时拒绝；数据库RESTRICT约束仍为最终保护。
+  publish:
+    source_state: VALIDATING
+    target_state: PUBLISHED
+    atomic_effects:
+      - 记录published_at
+      - 更新BusinessTerminal current_published_revision_id
+      - 将旧current PUBLISHED修订转为SUPERSEDED
+    correction: 发布后纠错必须创建新Revision并保留历史Revision。
+  create_successor: UI可读取一个已发布修订的正式字段并通过既有create命令创建下一条DRAFT；revision_no仍由服务端生成。
+security_and_consistency:
+  permissions:
+    login_strategy: PROJECT_EDIT
+    terminal_access_revision_mutation: BUSINESS_TERMINAL_EDIT
+    terminal_access_revision_view: BUSINESS_TERMINAL_VIEW
+  required:
+    - RBAC
+    - Idempotency
+    - AppendOnlyAudit
+    - Outbox
+    - OptimisticConcurrency
+  database_migration: published_at通过追加Migration引入；禁止修改既有Migration。无法证明原始发布时间的历史非当前修订必须保持published_at为空，不得用后续更新时间伪造发布时间。

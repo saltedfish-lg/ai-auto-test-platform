@@ -7,6 +7,7 @@ from types import SimpleNamespace
 import pytest
 from platform_api.execution_binding_router import router
 from platform_api.execution_binding_schemas import (
+    CreateRuntimePolicyRevisionRequest,
     ExecutionBindingInput,
     RuntimePolicyRevisionResource,
     RuntimePolicySnapshot,
@@ -80,9 +81,7 @@ def _policy(
         total_exploration_timeout_seconds=total_timeout,
         model_transient_retry_per_step=retry_per_step,
         allowed_origins=[] if allowed_origins is None else allowed_origins,
-        authentication_redirect_origins=(
-            [] if redirect_origins is None else redirect_origins
-        ),
+        authentication_redirect_origins=([] if redirect_origins is None else redirect_origins),
         retry_mode="UNIFIED",
         network_requirement="INTRANET",
         serial_execution_policy="SINGLE_PROCESS_UNIFIED_RETRY",
@@ -198,6 +197,11 @@ def test_execution_binding_routes_are_command_oriented() -> None:
             "/api/v1/project-runtime-policy-revisions",
             "list_project_runtime_policy_revisions",
         ),
+        (
+            "POST",
+            "/api/v1/project-runtime-policy-revisions",
+            "create_project_runtime_policy_revision",
+        ),
     }
     assert all(method != "PATCH" for method, _, _ in operations)
 
@@ -264,9 +268,12 @@ def test_runtime_policy_resources_project_v17_values_and_json_origins() -> None:
         }
     )
     assert RuntimePolicySnapshot.model_validate_json(snapshot.model_dump_json()) == snapshot
-    assert RuntimePolicySnapshot.model_validate(
-        {**snapshot.model_dump(), "allowed_origins": [], "authentication_redirect_origins": []}
-    ).allowed_origins == []
+    assert (
+        RuntimePolicySnapshot.model_validate(
+            {**snapshot.model_dump(), "allowed_origins": [], "authentication_redirect_origins": []}
+        ).allowed_origins
+        == []
+    )
 
 
 def test_binding_snapshot_keeps_its_historical_runtime_policy_revision() -> None:
@@ -291,7 +298,10 @@ def test_binding_snapshot_keeps_its_historical_runtime_policy_revision() -> None
     )
 
     assert db.policy_ids_requested == [revision_one.runtime_policy_revision_id]
-    assert resource.runtime_policy.runtime_policy_revision_id == revision_one.runtime_policy_revision_id
+    assert (
+        resource.runtime_policy.runtime_policy_revision_id
+        == revision_one.runtime_policy_revision_id
+    )
     assert resource.runtime_policy.revision_no == 1
     assert resource.runtime_policy.max_steps == 11
     assert resource.runtime_policy.total_exploration_timeout_seconds == 1200
@@ -307,6 +317,47 @@ def test_runtime_policy_api_constraints_match_database_checks() -> None:
     ):
         with pytest.raises(ValidationError):
             RuntimePolicyRevisionResource.model_validate({**valid, field: value})
+
+
+def test_runtime_policy_create_is_atomic_publish_input_without_revision_mutation_fields() -> None:
+    request = CreateRuntimePolicyRevisionRequest(
+        project_id="P" * 26,
+        browser_runtime="CHROMIUM",
+        artifact_policy="SCREENSHOT",
+        timeout_seconds=30,
+        max_steps=20,
+        total_exploration_timeout_seconds=600,
+        model_transient_retry_per_step=1,
+        allowed_origins=["https://app.example.test"],
+        authentication_redirect_origins=["https://login.example.test"],
+        retry_mode="UNIFIED_OWNER",
+        network_requirement="INTERNET",
+        serial_execution_policy="SINGLE_PROCESS_UNIFIED_RETRY",
+        reason="publish project browser policy",
+    )
+    assert request.browser_runtime == "CHROMIUM"
+    assert not {"revision_no", "lifecycle_status", "row_version"}.intersection(
+        CreateRuntimePolicyRevisionRequest.model_fields
+    )
+    with pytest.raises(ValidationError):
+        CreateRuntimePolicyRevisionRequest.model_validate(
+            {**request.model_dump(mode="json"), "revision_no": 99}
+        )
+
+
+def test_v18_adds_only_append_only_runtime_policy_audit() -> None:
+    migration = (
+        ROOT
+        / "docs"
+        / "authority"
+        / "编码权威事实"
+        / "DATABASE_DDL"
+        / "V18__runtime_policy_management_audit.sql"
+    ).read_text(encoding="utf-8")
+    assert "CREATE TABLE atp_project_runtime_policy_audit" in migration
+    assert "trg_atp_runtime_policy_audit_no_update" in migration
+    assert "trg_atp_runtime_policy_audit_no_delete" in migration
+    assert "ALTER TABLE atp_project_runtime_policy_revision" not in migration
 
 
 def test_preflight_does_not_invent_an_environment_accessibility_requirement() -> None:

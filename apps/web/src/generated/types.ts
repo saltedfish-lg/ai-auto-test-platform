@@ -194,6 +194,7 @@ export type EnvironmentTerminalAccessRevisionResource = {
   row_version: number;
   created_at: string;
   updated_at: string;
+  published_at?: string | null;
   environment_id: string;
   business_terminal_id: string;
   project_id: string;
@@ -617,6 +618,13 @@ export type RunnerCapabilityResource = {
   observed_metadata?: Record<string, unknown> | null;
   lifecycle_status: "ACTIVE" | "DISABLED";
   reported_at: string;
+  row_version: number;
+};
+
+export type ValidateRunnerCapabilityRequest = {
+  expected_capability_version: number;
+  evidence_summary: string;
+  reason: string;
 };
 
 export type RunnerResource = {
@@ -1272,6 +1280,17 @@ export type CreateEnvironmentTerminalAccessRevisionRequest = {
 export type CreateEnvironmentTerminalAccessRevisionResponse = {
   data: EnvironmentTerminalAccessRevisionResource;
   correlation_id: string;
+};
+
+export type UpdateEnvironmentTerminalAccessRevisionRequest = {
+  expected_version: number;
+  reason: string;
+  display_name?: string | null;
+  entry_url?: string;
+  login_url?: string | null;
+  login_strategy_id?: string | null;
+  login_prerequisites?: Record<string, unknown> | null;
+  network_requirements?: Record<string, unknown> | null;
 };
 
 export type GetEnvironmentTerminalAccessRevisionResponse = {
@@ -3657,6 +3676,27 @@ export type RuntimePolicyRevisionResource = {
   serial_execution_policy: "SINGLE_PROCESS_UNIFIED_RETRY";
   lifecycle_status: "PUBLISHED" | "RETIRED";
   row_version: number;
+};
+
+export type CreateRuntimePolicyRevisionRequest = {
+  project_id: string;
+  browser_runtime: "CHROMIUM" | "CHROME" | "EDGE";
+  artifact_policy: "SCREENSHOT" | "VIDEO" | "TRACE";
+  timeout_seconds: number;
+  max_steps: number;
+  total_exploration_timeout_seconds: number;
+  model_transient_retry_per_step: number;
+  allowed_origins: Array<string>;
+  authentication_redirect_origins: Array<string>;
+  retry_mode: "UNIFIED_OWNER";
+  network_requirement: "INTERNET" | "INTRANET" | "PROXY";
+  serial_execution_policy: "SINGLE_PROCESS_UNIFIED_RETRY";
+  reason: string;
+};
+
+export type RuntimePolicyRevisionResponse = {
+  data: RuntimePolicyRevisionResource;
+  correlation_id: string;
 };
 
 export type RuntimePolicyRevisionListResponse = {

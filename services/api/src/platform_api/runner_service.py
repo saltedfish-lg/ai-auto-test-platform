@@ -44,6 +44,7 @@ from platform_api.runner_schemas import (
     RunnerListResponse,
     RunnerResource,
     UpdateRunnerRequest,
+    ValidateRunnerCapabilityRequest,
 )
 from platform_api.security import new_ulid, utc_now
 
@@ -104,13 +105,14 @@ class RunnerService:
         """Authenticate the Runner Agent before it can receive a bound direct command."""
         with self._factory.begin() as db:
             runner, _agent = _authenticate_agent(db, runner_id, agent_token)
-            if (
-                runner.lifecycle_status != "ACTIVE"
-                or runner.registration_status != "REGISTERED"
-                or runner.enable_status != "ENABLED"
-                or runner.project_binding_status != "BOUND"
-            ):
+            if not _runner_execution_eligible(runner):
                 raise _machine_unauthenticated("Runner Agent is not eligible for execution.")
+
+    def machine_execution_eligible(self, runner_id: str, agent_token: str) -> bool:
+        """Authenticate the Agent and report eligibility without conflating it with identity."""
+        with self._factory.begin() as db:
+            runner, _agent = _authenticate_agent(db, runner_id, agent_token)
+            return _runner_execution_eligible(runner)
 
     def create_enrollment(
         self,
@@ -255,9 +257,7 @@ class RunnerService:
                     db, principal, "register_runner", key, _payload(body)
                 )
                 if replay:
-                    return _replayed_registration(
-                        db, record, credential_hash, raw_agent_token
-                    )
+                    return _replayed_registration(db, record, credential_hash, raw_agent_token)
                 enrollment = db.scalar(
                     select(RunnerEnrollment)
                     .where(RunnerEnrollment.credential_hash == credential_hash)
@@ -661,7 +661,6 @@ class RunnerService:
             runner.health_status = body.health_status
             runner.last_heartbeat_at = now
             runner.runtime_metadata_json = body.runtime_metadata
-            runner.row_version += 1
             runner.updated_at = now
             runner.updated_by = agent.runner_agent_id
             agent.agent_version = body.agent_version
@@ -708,6 +707,125 @@ class RunnerService:
                 self._audit_capability_change(db, runner, agent, context)
             db.flush()
             return _resource(db, runner)
+
+    def validate_capability(
+        self,
+        bearer_token: str,
+        runner_id: str,
+        capability_code: str,
+        body: ValidateRunnerCapabilityRequest,
+        key: str,
+        context: AuditContext,
+    ) -> RunnerResource:
+        operation = "validate_runner_capability"
+        try:
+            with self._factory.begin() as db:
+                actor = self._authentication.authenticate_access_in_transaction(
+                    db, bearer_token, operation, context
+                )
+                record, replay = self._idempotency.claim(
+                    db,
+                    actor.user.user_id,
+                    operation,
+                    key,
+                    _capability_payload(body, runner_id, capability_code),
+                )
+                if replay:
+                    return _stored_runner(record)
+                runner = _locked_runner(db, runner_id)
+                self._require_human_scope(
+                    db,
+                    actor,
+                    operation,
+                    "RUNNER_REGISTER",
+                    runner.project_id,
+                    context,
+                )
+                _require_capability_validation_runner_state(runner)
+                capability = db.scalar(
+                    select(RunnerCapability)
+                    .where(
+                        RunnerCapability.runner_id == runner.runner_id,
+                        RunnerCapability.project_id == runner.project_id,
+                        RunnerCapability.capability_code == capability_code,
+                    )
+                    .with_for_update()
+                )
+                if capability is None:
+                    raise _not_found()
+                if capability.row_version != body.expected_capability_version:
+                    raise _state_error("The reported capability changed after it was loaded.")
+                if (
+                    capability.availability_status != "CONFIGURED"
+                    or capability.lifecycle_status != "ACTIVE"
+                    or capability.validation_status != "PENDING"
+                ):
+                    raise _state_error(
+                        "Only a current CONFIGURED, ACTIVE, PENDING machine report "
+                        "can be validated."
+                    )
+                evidence_hash = hashlib.sha256(body.evidence_summary.encode("utf-8")).hexdigest()
+                previous_capability_version = capability.row_version
+                now = utc_now()
+                before = {
+                    "runner_capability_id": capability.runner_capability_id,
+                    "capability_code": capability.capability_code,
+                    "validation_status": capability.validation_status,
+                    "row_version": capability.row_version,
+                }
+                capability.validation_status = "VALID"
+                capability.row_version += 1
+                capability.updated_at = now
+                capability.updated_by = actor.user.user_id
+                self._audit(
+                    db,
+                    runner=runner,
+                    enrollment=None,
+                    actor_type="HUMAN",
+                    actor_id=actor.user.user_id,
+                    context=context,
+                    action="VALIDATE_CAPABILITY",
+                    operation=operation,
+                    required_permission="RUNNER_REGISTER",
+                    previous_status="PENDING",
+                    new_status="VALID",
+                    reason=body.reason,
+                    before=before,
+                    after={
+                        "runner_capability_id": capability.runner_capability_id,
+                        "capability_code": capability.capability_code,
+                        "validation_status": capability.validation_status,
+                        "row_version": capability.row_version,
+                        "validation_evidence_hash": evidence_hash,
+                    },
+                    credential_changed=False,
+                )
+                self._event(
+                    db,
+                    runner.runner_id,
+                    runner.project_id,
+                    "runner.capability_validated",
+                    context,
+                    key,
+                    {
+                        "runner_id": runner.runner_id,
+                        "runner_capability_id": capability.runner_capability_id,
+                        "capability_code": capability.capability_code,
+                        "from_state": "PENDING",
+                        "to_state": "VALID",
+                        "expected_version": previous_capability_version,
+                        "new_version": capability.row_version,
+                        "changed_by": actor.user.user_id,
+                        "change_summary": {"validation_evidence_hash": evidence_hash},
+                    },
+                )
+                resource = _resource(db, runner)
+                self._idempotency.complete(
+                    record, 200, {"runner": resource.model_dump(mode="json")}
+                )
+                return resource
+        except IntegrityError as error:
+            raise _integrity_error(error) from None
 
     def _human_mutation(
         self,
@@ -1048,6 +1166,32 @@ def _authenticate_agent(db: Session, runner_id: str, raw_token: str) -> tuple[Ru
     return runner, agent
 
 
+def _runner_execution_eligible(runner: Runner) -> bool:
+    return (
+        runner.lifecycle_status == "ACTIVE"
+        and runner.registration_status == "REGISTERED"
+        and runner.enable_status == "ENABLED"
+        and runner.project_binding_status == "BOUND"
+        and runner.connection_status == "ONLINE"
+        and runner.health_status == "HEALTHY"
+    )
+
+
+def _require_capability_validation_runner_state(runner: Runner) -> None:
+    requirements = (
+        (runner.lifecycle_status == "ACTIVE", "Runner lifecycle must be ACTIVE."),
+        (runner.registration_status == "REGISTERED", "Runner must be registered."),
+        (runner.enable_status == "ENABLED", "Runner must be enabled."),
+        (runner.project_binding_status == "BOUND", "Runner must be bound to its Project."),
+        (runner.connection_status == "ONLINE", "Runner must be ONLINE."),
+        (runner.health_status == "HEALTHY", "Runner must be HEALTHY."),
+        (runner.last_heartbeat_at is not None, "Runner must have formal heartbeat evidence."),
+    )
+    for satisfied, detail in requirements:
+        if not satisfied:
+            raise _state_error(f"Capability validation rejected: {detail}")
+
+
 def _locked_runner(db: Session, runner_id: str) -> Runner:
     runner = db.scalar(select(Runner).where(Runner.runner_id == runner_id).with_for_update())
     if runner is None:
@@ -1100,6 +1244,7 @@ def _resource(db: Session, runner: Runner) -> RunnerResource:
                 observed_metadata=item.observed_metadata_json,
                 lifecycle_status=item.lifecycle_status,
                 reported_at=item.reported_at,
+                row_version=item.row_version,
             )
             for item in capabilities
         ],
@@ -1139,6 +1284,16 @@ def _payload(body: BaseModel, resource_id: str | None = None) -> bytes:
             document[key] = hashlib.sha256(value.encode("utf-8")).hexdigest()
     if resource_id is not None:
         document["runner_id"] = resource_id
+    return json.dumps(document, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+
+def _capability_payload(
+    body: ValidateRunnerCapabilityRequest, runner_id: str, capability_code: str
+) -> bytes:
+    document = body.model_dump(mode="json")
+    document["evidence_summary"] = hashlib.sha256(body.evidence_summary.encode("utf-8")).hexdigest()
+    document["runner_id"] = runner_id
+    document["capability_code"] = capability_code
     return json.dumps(document, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
 

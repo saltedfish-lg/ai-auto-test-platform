@@ -33,10 +33,7 @@ async function fetchAllConfigurations(reviewMode: boolean): Promise<ModelConfigR
       ? await apiClient.list_model_config_reviews(options)
       : await apiClient.list_model_config(options);
     allItems.push(...response.items);
-    if (
-      allItems.length >= response.page.total ||
-      response.items.length < MODEL_CONFIG_PAGE_SIZE
-    ) {
+    if (allItems.length >= response.page.total || response.items.length < MODEL_CONFIG_PAGE_SIZE) {
       return allItems;
     }
     page += 1;
@@ -120,9 +117,8 @@ export const useModelConfigurationsStore = defineStore("model-configurations", (
         items.value = responseItems;
         if (current.value) {
           current.value =
-            responseItems.find(
-              (item) => item.model_config_id === current.value?.model_config_id,
-            ) ?? null;
+            responseItems.find((item) => item.model_config_id === current.value?.model_config_id) ??
+            null;
         }
       }
     } catch (error) {

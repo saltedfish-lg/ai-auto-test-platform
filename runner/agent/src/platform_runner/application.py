@@ -184,6 +184,7 @@ class RunnerApplication:
                 )
                 retry_delay = 1.0
                 if envelope is None:
+                    await self._sleep(1.0)
                     continue
                 await self._run_claimed_browser_command(identity, envelope)
             except PlatformTransportError as error:
@@ -210,6 +211,7 @@ class RunnerApplication:
                 )
                 retry_delay = 1.0
                 if envelope is None:
+                    await self._sleep(1.0)
                     continue
                 await self._run_claimed_browser_command(identity, envelope)
             except PlatformTransportError as error:

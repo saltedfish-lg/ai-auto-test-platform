@@ -479,8 +479,7 @@ class AutomationAssetService:
                 return _stored(record.response_json)
             _assert_asset_writable(asset)
             _check_version(strategy.row_version, body.expected_version)
-            if strategy.lifecycle_status not in {"DRAFT", "RECOVERED"}:
-                raise _state_error("Only DRAFT or RECOVERED strategies can be activated.")
+            _assert_login_strategy_activatable(strategy.lifecycle_status)
             _validate_captcha(strategy)
             previous_status = strategy.lifecycle_status
             before = _strategy_projection(strategy)
@@ -640,6 +639,11 @@ class AutomationAssetService:
                 attempt_count=0,
             )
         )
+
+
+def _assert_login_strategy_activatable(status: str) -> None:
+    if status not in {"DRAFT", "RECOVERED"}:
+        raise _state_error("Only DRAFT or RECOVERED strategies can be activated.")
 
 
 def _assert_asset_writable(asset: AutomationAsset) -> None:

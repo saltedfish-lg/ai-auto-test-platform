@@ -3517,6 +3517,148 @@ paths:
       x-permission-code: BUSINESS_TERMINAL_EDIT
       security:
       - BearerAuth: []
+  /api/v1/environment-terminal-access-revision/{id}/return-to-draft:
+    post:
+      operationId: return_to_draft_environment_terminal_access_revision
+      summary: 将VALIDATING终端访问修订返回DRAFT以便纠错
+      tags:
+      - 环境终端访问配置修订
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 26
+          maxLength: 26
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 191
+      responses:
+        '200':
+          description: 已从VALIDATING返回DRAFT
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateEnvironmentTerminalAccessRevisionResponse'
+        '401':
+          description: Unauthenticated
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: 非VALIDATING、版本过期或幂等冲突
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          $ref: '#/components/responses/RequestValidationFailed'
+        '500':
+          description: Internal error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LifecycleCommandRequest'
+      x-permission-code: BUSINESS_TERMINAL_EDIT
+      security:
+      - BearerAuth: []
+  /api/v1/environment-terminal-access-revision/{id}/abandon:
+    post:
+      operationId: abandon_environment_terminal_access_revision
+      summary: 放弃未发布且未被引用的DRAFT终端访问修订
+      tags:
+      - 环境终端访问配置修订
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 26
+          maxLength: 26
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 191
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LifecycleCommandRequest'
+      responses:
+        '200':
+          description: 已放弃；重复相同幂等请求返回同一删除前事实
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateEnvironmentTerminalAccessRevisionResponse'
+        '401':
+          description: Unauthenticated
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: 非DRAFT、已发布、已被引用、版本过期或幂等冲突
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          $ref: '#/components/responses/RequestValidationFailed'
+      x-permission-code: BUSINESS_TERMINAL_EDIT
+      security:
+      - BearerAuth: []
   /api/v1/environment-terminal-access-revision/{id}/publish:
     post:
       operationId: publish_environment_terminal_access_revision
@@ -3848,6 +3990,73 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
       x-permission-code: BUSINESS_TERMINAL_VIEW
+      security:
+      - BearerAuth: []
+    patch:
+      operationId: update_environment_terminal_access_revision
+      summary: 编辑从未发布的DRAFT终端访问修订
+      tags:
+      - 环境终端访问配置修订
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 26
+          maxLength: 26
+      - name: X-Correlation-Id
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 191
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateEnvironmentTerminalAccessRevisionRequest'
+      responses:
+        '200':
+          description: DRAFT已更新且仍为DRAFT
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateEnvironmentTerminalAccessRevisionResponse'
+        '401':
+          description: Unauthenticated
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: 非DRAFT、已发布或版本过期
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          $ref: '#/components/responses/RequestValidationFailed'
+      x-permission-code: BUSINESS_TERMINAL_EDIT
       security:
       - BearerAuth: []
   /api/v1/test-account:
@@ -13398,6 +13607,27 @@ paths:
         '403': {description: Forbidden, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
         '404': {description: Not found, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
         '409': {description: State conflict, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '422': {$ref: '#/components/responses/RequestValidationFailed'}
+      x-permission-code: RUNNER_REGISTER
+      security: [{BearerAuth: []}]
+  /api/v1/runner/{id}/capabilities/{capability_code}/validate:
+    post:
+      operationId: validate_runner_capability
+      summary: 验证真实Runner已上报的当前Capability
+      tags: [Runner]
+      parameters:
+      - {name: id, in: path, required: true, schema: {type: string, minLength: 26, maxLength: 26}}
+      - {name: capability_code, in: path, required: true, schema: {type: string, maxLength: 64}}
+      - {name: Idempotency-Key, in: header, required: true, schema: {type: string, minLength: 1, maxLength: 191}}
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/ValidateRunnerCapabilityRequest'}}}
+      responses:
+        '200': {description: Capability validated, content: {application/json: {schema: {$ref: '#/components/schemas/GetRunnerResponse'}}}}
+        '401': {description: Unauthenticated, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '403': {description: Forbidden, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '404': {description: Runner or reported capability not found, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
+        '409': {description: Runner evidence or capability state conflict, content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}}
         '422': {$ref: '#/components/responses/RequestValidationFailed'}
       x-permission-code: RUNNER_REGISTER
       security: [{BearerAuth: []}]
@@ -23051,6 +23281,35 @@ paths:
       x-permission-code: PROJECT_EDIT
       security: [{BearerAuth: []}]
   /api/v1/project-runtime-policy-revisions:
+    post:
+      operationId: create_project_runtime_policy_revision
+      summary: 原子创建并发布Project RuntimePolicy Revision
+      tags: [执行绑定]
+      parameters:
+      - $ref: '#/components/parameters/CorrelationId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateRuntimePolicyRevisionRequest'}
+      responses:
+        '201':
+          description: Created and published
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RuntimePolicyRevisionResponse'}
+        '400': {$ref: '#/components/responses/ExecutionBindingProblem'}
+        '401': {$ref: '#/components/responses/ExecutionBindingProblem'}
+        '403': {$ref: '#/components/responses/ExecutionBindingProblem'}
+        '404': {$ref: '#/components/responses/ExecutionBindingProblem'}
+        '409': {$ref: '#/components/responses/ExecutionBindingProblem'}
+        '422': {$ref: '#/components/responses/RequestValidationFailed'}
+        '429': {$ref: '#/components/responses/ExecutionBindingProblem'}
+        '500': {$ref: '#/components/responses/ExecutionBindingProblem'}
+        '503': {$ref: '#/components/responses/ExecutionBindingProblem'}
+      x-permission-code: PROJECT_EDIT
+      security: [{BearerAuth: []}]
     get:
       operationId: list_project_runtime_policy_revisions
       summary: 查询Project正式RuntimePolicy Revision
@@ -24031,6 +24290,11 @@ components:
           format: date-time
         updated_at:
           type: string
+          format: date-time
+        published_at:
+          type:
+          - string
+          - 'null'
           format: date-time
         environment_id:
           type: string
@@ -26241,7 +26505,7 @@ components:
     RunnerCapabilityResource:
       type: object
       additionalProperties: false
-      required: [runner_capability_id, capability_code, capability_type, availability_status, validation_status, lifecycle_status, reported_at]
+      required: [runner_capability_id, capability_code, capability_type, availability_status, validation_status, lifecycle_status, reported_at, row_version]
       properties:
         runner_capability_id: {type: string, minLength: 26, maxLength: 26}
         capability_code:
@@ -26254,6 +26518,15 @@ components:
         observed_metadata: {type: [object, 'null'], additionalProperties: true}
         lifecycle_status: {type: string, enum: [ACTIVE, DISABLED]}
         reported_at: {type: string, format: date-time}
+        row_version: {type: integer, minimum: 1}
+    ValidateRunnerCapabilityRequest:
+      type: object
+      additionalProperties: false
+      required: [expected_capability_version, evidence_summary, reason]
+      properties:
+        expected_capability_version: {type: integer, minimum: 1}
+        evidence_summary: {type: string, minLength: 1, maxLength: 1000}
+        reason: {type: string, minLength: 1, maxLength: 1000}
     RunnerResource:
       type: object
       additionalProperties: false
@@ -29215,6 +29488,51 @@ components:
           updated_at: '2026-08-06T06:46:00Z'
           lifecycle_status: DRAFT
         correlation_id: example
+    UpdateEnvironmentTerminalAccessRevisionRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        expected_version:
+          type: integer
+          minimum: 0
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        display_name:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+        entry_url:
+          type: string
+          format: uri
+          maxLength: 2048
+        login_url:
+          type:
+          - string
+          - 'null'
+          format: uri
+          maxLength: 2048
+        login_strategy_id:
+          type:
+          - string
+          - 'null'
+          minLength: 26
+          maxLength: 26
+        login_prerequisites:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+        network_requirements:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+      required:
+      - expected_version
+      - reason
     GetEnvironmentTerminalAccessRevisionResponse:
       type: object
       additionalProperties: false
@@ -37861,6 +38179,31 @@ components:
         serial_execution_policy: {type: string, enum: [SINGLE_PROCESS_UNIFIED_RETRY]}
         lifecycle_status: {type: string, enum: [PUBLISHED, RETIRED]}
         row_version: {type: integer, minimum: 1}
+    CreateRuntimePolicyRevisionRequest:
+      type: object
+      additionalProperties: false
+      required: [project_id, browser_runtime, artifact_policy, timeout_seconds, max_steps, total_exploration_timeout_seconds, model_transient_retry_per_step, allowed_origins, authentication_redirect_origins, retry_mode, network_requirement, serial_execution_policy, reason]
+      properties:
+        project_id: {type: string, minLength: 26, maxLength: 26}
+        browser_runtime: {type: string, enum: [CHROMIUM, CHROME, EDGE]}
+        artifact_policy: {type: string, enum: [SCREENSHOT, VIDEO, TRACE]}
+        timeout_seconds: {type: integer, minimum: 1}
+        max_steps: {type: integer, minimum: 1}
+        total_exploration_timeout_seconds: {type: integer, minimum: 1}
+        model_transient_retry_per_step: {type: integer, minimum: 0, maximum: 10}
+        allowed_origins: {type: array, minItems: 1, maxItems: 32, items: {type: string, format: uri}}
+        authentication_redirect_origins: {type: array, maxItems: 32, items: {type: string, format: uri}}
+        retry_mode: {type: string, enum: [UNIFIED_OWNER]}
+        network_requirement: {type: string, enum: [INTERNET, INTRANET, PROXY]}
+        serial_execution_policy: {type: string, enum: [SINGLE_PROCESS_UNIFIED_RETRY]}
+        reason: {type: string, minLength: 1, maxLength: 1000}
+    RuntimePolicyRevisionResponse:
+      type: object
+      additionalProperties: false
+      required: [data, correlation_id]
+      properties:
+        data: {$ref: '#/components/schemas/RuntimePolicyRevisionResource'}
+        correlation_id: {type: string}
     RuntimePolicyRevisionListResponse:
       type: object
       additionalProperties: false

@@ -5952,6 +5952,64 @@ events:
   aggregate_id_field: environment_terminal_access_revision_id
   payload_identity_fields:
   - environment_terminal_access_revision_id
+- event_type: environment_terminal_access_revision.updated
+  event_id: EVT-3A9B62E840D1
+  version: 1.0.0
+  producer_object_id: OBJ-012
+  producer: 业务终端与访问配置_module
+  source_transition_ids: []
+  partition_key: aggregate_id
+  ordering: PER_AGGREGATE_SEQUENCE
+  idempotency: event_id
+  delivery: AT_LEAST_ONCE_OUTBOX
+  consumers:
+  - audit_projection
+  sensitive_fields: []
+  forbidden_fields:
+  - plaintext_password
+  - secret_value
+  - access_token
+  - refresh_token
+  - raw_credential
+  retry_policy:
+    max_attempts: 12
+    backoff: EXPONENTIAL_JITTER
+    dead_letter_after: MAX_ATTEMPTS
+  compatibility: BACKWARD_COMPATIBLE_WITHIN_MAJOR
+  schema_path: schemas/environment_terminal_access_revision.updated.schema.json
+  release_id: PDBR-2026.08.07-R4.2
+  aggregate_id_field: environment_terminal_access_revision_id
+  payload_identity_fields:
+  - environment_terminal_access_revision_id
+- event_type: environment_terminal_access_revision.abandoned
+  event_id: EVT-14F7CB88D2A0
+  version: 1.0.0
+  producer_object_id: OBJ-012
+  producer: 业务终端与访问配置_module
+  source_transition_ids: []
+  partition_key: aggregate_id
+  ordering: PER_AGGREGATE_SEQUENCE
+  idempotency: event_id
+  delivery: AT_LEAST_ONCE_OUTBOX
+  consumers:
+  - audit_projection
+  sensitive_fields: []
+  forbidden_fields:
+  - plaintext_password
+  - secret_value
+  - access_token
+  - refresh_token
+  - raw_credential
+  retry_policy:
+    max_attempts: 12
+    backoff: EXPONENTIAL_JITTER
+    dead_letter_after: MAX_ATTEMPTS
+  compatibility: BACKWARD_COMPATIBLE_WITHIN_MAJOR
+  schema_path: schemas/environment_terminal_access_revision.abandoned.schema.json
+  release_id: PDBR-2026.08.07-R4.2
+  aggregate_id_field: environment_terminal_access_revision_id
+  payload_identity_fields:
+  - environment_terminal_access_revision_id
 - event_type: event_chain.active
   event_id: EVT-5161C8B7A21A
   version: 1.0.0
@@ -19548,6 +19606,44 @@ events:
   aggregate_id_field: user_id
   payload_identity_fields:
   - user_id
+- event_type: project_runtime_policy_revision.published
+  event_id: EVT-4C9A54AF265D
+  version: 1.0.0
+  producer_object_id: OBJ-007
+  producer: Project与ExecutionBinding管理
+  source_transition_ids: []
+  partition_key: aggregate_id
+  ordering: PER_AGGREGATE_SEQUENCE
+  idempotency: event_id
+  delivery: AT_LEAST_ONCE_OUTBOX
+  consumers: [audit_projection, operations_console]
+  sensitive_fields: []
+  forbidden_fields: [plaintext_password, secret_value, access_token, refresh_token, raw_credential]
+  retry_policy: {max_attempts: 12, backoff: EXPONENTIAL_JITTER, dead_letter_after: MAX_ATTEMPTS}
+  compatibility: BACKWARD_COMPATIBLE_WITHIN_MAJOR
+  schema_path: schemas/project_runtime_policy_revision.published.schema.json
+  release_id: RUNNER_REAL_EXECUTION_CLOSURE
+  aggregate_id_field: runtime_policy_revision_id
+  payload_identity_fields: [runtime_policy_revision_id, project_id]
+- event_type: runner.capability_validated
+  event_id: EVT-8C75D7A6B049
+  version: 1.0.0
+  producer_object_id: OBJ-053
+  producer: Runner中心与资源_module
+  source_transition_ids: []
+  partition_key: aggregate_id
+  ordering: PER_AGGREGATE_SEQUENCE
+  idempotency: event_id
+  delivery: AT_LEAST_ONCE_OUTBOX
+  consumers: [audit_projection, scheduler_projection, operations_console]
+  sensitive_fields: []
+  forbidden_fields: [plaintext_password, secret_value, access_token, refresh_token, raw_credential]
+  retry_policy: {max_attempts: 12, backoff: EXPONENTIAL_JITTER, dead_letter_after: MAX_ATTEMPTS}
+  compatibility: BACKWARD_COMPATIBLE_WITHIN_MAJOR
+  schema_path: schemas/runner.capability_validated.schema.json
+  release_id: RUNNER_REAL_EXECUTION_CLOSURE
+  aggregate_id_field: runner_id
+  payload_identity_fields: [runner_id, runner_capability_id]
 authentication_audit_contract:
   decision: NO_NEW_DOMAIN_EVENTS_FOR_P1_AUTHENTICATION
   reason: P1认证与普通用户治理动作没有跨边界事件消费者，使用不可变安全审计；仅默认admin初始化沿用admin.active与user.active，atp_user_role_binding不得冒充OBJ-087发布role_binding事件。

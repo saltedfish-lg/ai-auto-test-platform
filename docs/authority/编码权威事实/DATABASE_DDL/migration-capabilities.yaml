@@ -26,3 +26,9 @@ capabilities:
     migration_name: V16__execution_binding_snapshot_foundation.sql
   AI_EXPLORATION_BROWSER_LOOP_SCHEMA:
     migration_name: V17__ai_exploration_browser_loop.sql
+  RUNTIME_POLICY_MANAGEMENT_AUDIT_SCHEMA:
+    migration_name: V18__runtime_policy_management_audit.sql
+  BUSINESS_TERMINAL_CONFIGURATION_MANAGEMENT_SCHEMA:
+    migration_name: V19__business_terminal_configuration_management.sql
+  BUSINESS_TERMINAL_PUBLICATION_EVIDENCE_REPAIR:
+    migration_name: V20__business_terminal_publication_evidence_repair.sql

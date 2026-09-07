@@ -780,7 +780,7 @@ def _database_evidence(
         or runner_enable_status != "DISABLED"
         or runner_binding_status != "BOUND"
         or runner_scheduling_status != "UNSCHEDULABLE"
-        or int(runner_row_version) != 6
+        or int(runner_row_version) != 4
     ):
         raise RuntimeError("Runner separated state persistence is inconsistent")
     if (

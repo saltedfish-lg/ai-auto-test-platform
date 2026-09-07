@@ -2,18 +2,24 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from platform_api.automation_asset_service import AutomationAssetService, _strategy_projection
+from platform_api.automation_asset_service import (
+    AutomationAssetService,
+    _assert_login_strategy_activatable,
+    _strategy_projection,
+)
 from platform_api.business_terminal_router import router
 from platform_api.business_terminal_schemas import (
     CreateLoginStrategyRequest,
     CreateTerminalAccessRevisionRequest,
     LocalStoragePreset,
     UpdateLoginStrategyRequest,
+    UpdateTerminalAccessRevisionRequest,
     normalize_web_url,
 )
 from platform_api.business_terminal_service import (
     _TERMINAL_TRANSITIONS,
     BusinessTerminalService,
+    _assert_revision_draft_mutable,
     _check_version,
     _integrity_error,
     _parse_filter,
@@ -45,9 +51,20 @@ def test_business_terminal_routes_use_explicit_lifecycle_commands() -> None:
         "create_environment_terminal_access_revision",
         "get_environment_terminal_access_revision",
         "validate_environment_terminal_access_revision",
+        "return_to_draft_environment_terminal_access_revision",
         "publish_environment_terminal_access_revision",
+        "update_environment_terminal_access_revision",
+        "abandon_environment_terminal_access_revision",
     }.issubset(operations)
-    assert "update_environment_terminal_access_revision" not in operations
+
+
+def test_login_strategy_activation_keeps_formal_lifecycle_boundary() -> None:
+    _assert_login_strategy_activatable("DRAFT")
+    _assert_login_strategy_activatable("RECOVERED")
+    with pytest.raises(PlatformError) as raised:
+        _assert_login_strategy_activatable("CREATED")
+    assert raised.value.status == 409
+    assert raised.value.code == "LOGIN_STRATEGY_STATE_CONFLICT"
 
 
 def test_url_normalization_allows_only_absolute_web_urls() -> None:
@@ -153,6 +170,44 @@ def test_revision_url_and_separate_terminal_creation_contract() -> None:
     assert "revision_no" not in CreateTerminalAccessRevisionRequest.model_fields
 
 
+def test_revision_update_contract_only_exposes_draft_configuration_fields() -> None:
+    request = UpdateTerminalAccessRevisionRequest(
+        expected_version=3,
+        entry_url="HTTPS://Example.TEST:443/corrected",
+        login_strategy_id=None,
+        reason="correct invalid draft",
+    )
+    assert request.entry_url == "https://example.test/corrected"
+    assert {
+        "environment_terminal_access_revision_id",
+        "project_id",
+        "environment_id",
+        "business_terminal_id",
+        "revision_no",
+        "lifecycle_status",
+        "published_at",
+    }.isdisjoint(UpdateTerminalAccessRevisionRequest.model_fields)
+    with pytest.raises(ValidationError):
+        UpdateTerminalAccessRevisionRequest(expected_version=3, reason="no changes")
+
+
+def test_only_never_published_draft_is_mutable_or_abandonable() -> None:
+    _assert_revision_draft_mutable(
+        SimpleNamespace(lifecycle_status="DRAFT", published_at=None), "edited"
+    )
+    for status, published_at in (
+        ("VALIDATING", None),
+        ("PUBLISHED", "2026-09-04T00:00:00Z"),
+        ("SUPERSEDED", "2026-09-04T00:00:00Z"),
+        ("DRAFT", "2026-09-04T00:00:00Z"),
+    ):
+        with pytest.raises(PlatformError) as raised:
+            _assert_revision_draft_mutable(
+                SimpleNamespace(lifecycle_status=status, published_at=published_at), "abandoned"
+            )
+        assert raised.value.code == "TERMINAL_ACCESS_REVISION_OPERATION_FORBIDDEN_FOR_STATE"
+
+
 def test_terminal_lifecycle_matches_lc_011_and_has_no_patch_escape() -> None:
     assert _TERMINAL_TRANSITIONS["validate"][:2] == ({"CONFIGURING"}, "VALIDATING")
     assert _TERMINAL_TRANSITIONS["activate"][:2] == ({"VALIDATING", "RECOVERING"}, "ACTIVE")
@@ -194,6 +249,32 @@ def test_terminal_migration_encodes_revision_ownership_and_no_future_modules() -
     assert "trg_atp_login_strategy_audit_no_update" in migration
     for prohibited in ("test_account", "runner_id", "resource_lease", "execution_context"):
         assert prohibited not in migration.casefold()
+
+
+def test_configuration_management_migration_preserves_publication_time_without_new_state() -> None:
+    root = Path(__file__).resolve().parents[3]
+    migration = (
+        root
+        / "docs/authority/编码权威事实/DATABASE_DDL"
+        / "V19__business_terminal_configuration_management.sql"
+    ).read_text(encoding="utf-8")
+    assert "ADD COLUMN published_at DATETIME(6) NULL" in migration
+    assert "ABANDONED" not in migration
+    assert "DROP" not in migration.upper()
+
+
+def test_publication_evidence_repair_clears_unprovable_historical_timestamps() -> None:
+    root = Path(__file__).resolve().parents[3]
+    migration = (
+        root
+        / "docs/authority/编码权威事实/DATABASE_DDL"
+        / "V20__business_terminal_publication_evidence_repair.sql"
+    ).read_text(encoding="utf-8")
+    assert "SET published_at = NULL" in migration
+    assert "SUPERSEDED" in migration
+    assert "RETIRED" in migration
+    assert "ARCHIVED" in migration
+    assert "PUBLISHED" not in migration.split("WHERE", 1)[1]
 
 
 def test_only_terminal_business_key_maps_to_conflict() -> None:
@@ -261,3 +342,37 @@ def test_revision_event_uses_revision_aggregate_identity() -> None:
     assert payload["aggregate_id"] == revision_id
     assert payload["payload"]["environment_terminal_access_revision_id"] == revision_id
     assert "business_terminal_id" not in payload["payload"]
+
+
+@pytest.mark.parametrize(
+    ("event_type", "to_state"),
+    [
+        ("environment_terminal_access_revision.updated", "DRAFT"),
+        ("environment_terminal_access_revision.abandoned", "ABANDONED"),
+    ],
+)
+def test_revision_management_events_are_revision_scoped_and_secret_free(
+    event_type: str, to_state: str
+) -> None:
+    session = _EventSession()
+    revision_id = "R" * 26
+    BusinessTerminalService._event(
+        session,
+        revision_id,
+        "P" * 26,
+        event_type,
+        "U" * 26,
+        SimpleNamespace(correlation_id="corr"),
+        "stable-idempotency-key",
+        "DRAFT",
+        to_state,
+        2,
+        3 if to_state == "DRAFT" else 2,
+        {"changed_fields": ["entry_url"]},
+        identity_field="environment_terminal_access_revision_id",
+    )
+    payload = session.added.payload_json
+    assert payload["aggregate_id"] == revision_id
+    assert payload["causation_id"] == "stable-idempotency-key"
+    assert payload["payload"]["to_state"] == to_state
+    assert "password" not in str(payload).casefold()

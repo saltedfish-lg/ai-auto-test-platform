@@ -23791,6 +23791,9 @@ runner_registration_rules:
 - rule_id: RREG-009
   sequence: 9
   rule: enrollment credential成功使用后立即失效；Agent token只允许显式rotate或revoke，rotate后旧token立即失效，任何接口和日志不得再次返回历史token。
+- rule_id: RREG-010
+  sequence: 10
+  rule: Runner capability必须先由已认证真实Agent上报为PENDING；具备目标Project RUNNER_REGISTER权限的人工或正式系统主体只能验证该Runner已存在、CONFIGURED且ACTIVE的当前上报能力，并须读取最新Runner事实，校验Runner处于ACTIVE、REGISTERED、ENABLED、BOUND、ONLINE、HEALTHY且有正式心跳证据。验证并发owner是目标RunnerCapability，必须以其当前row_version进行fail-closed乐观并发控制；周期性heartbeat及connection/health telemetry不得推进Runner管理命令使用的row_version，也不得造成capability验证并发冲突。验证只将capability从PENDING转换为VALID，不得创建能力或改变Runner注册、连接、健康、启用、项目绑定、资源状态或Runner row_version；命令必须幂等，并在同一事务写append-only Runner Audit与runner.capability_validated Outbox事件，审计只保存脱敏证据摘要。
 runner_authentication_rules:
 - rule_id: RAUTH-001
   rule: 每次连接必须使用独立Runner Agent机器身份建立受控会话；平台验证runner_id、opaque token哈希、凭证状态和Agent实例约束，不执行人工BearerAuth或RBAC权限映射。

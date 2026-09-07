@@ -150,11 +150,7 @@ async function submitCreate(): Promise<void> {
       </el-form>
       <template #footer>
         <el-button @click="createVisible = false">取消</el-button>
-        <el-button
-          type="primary"
-          :loading="projects.status === 'creating'"
-          @click="submitCreate"
-        >
+        <el-button type="primary" :loading="projects.status === 'creating'" @click="submitCreate">
           创建并启用
         </el-button>
       </template>

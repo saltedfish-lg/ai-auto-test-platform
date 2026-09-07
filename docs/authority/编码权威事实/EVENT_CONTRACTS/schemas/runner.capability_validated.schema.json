@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ai-test-platform:event:runner.capability_validated:1.0.0",
+  "title": "runner.capability_validated",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["event_id", "event_type", "event_version", "occurred_at", "aggregate_id", "sequence", "correlation_id", "causation_id", "project_id", "payload"],
+  "properties": {
+    "event_id": {"type": "string", "minLength": 26, "maxLength": 26},
+    "event_type": {"const": "runner.capability_validated"},
+    "event_version": {"const": "1.0.0"},
+    "occurred_at": {"type": "string", "format": "date-time"},
+    "aggregate_id": {"type": "string", "minLength": 26, "maxLength": 26},
+    "sequence": {"type": "integer", "minimum": 1},
+    "correlation_id": {"type": "string", "minLength": 1},
+    "causation_id": {"type": "string", "minLength": 1},
+    "project_id": {"type": "string", "minLength": 26, "maxLength": 26},
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runner_id", "runner_capability_id", "capability_code", "from_state", "to_state", "expected_version", "new_version", "changed_by", "change_summary"],
+      "properties": {
+        "runner_id": {"type": "string", "minLength": 26, "maxLength": 26},
+        "runner_capability_id": {"type": "string", "minLength": 26, "maxLength": 26},
+        "capability_code": {"type": "string", "minLength": 1, "maxLength": 64},
+        "from_state": {"const": "PENDING"},
+        "to_state": {"const": "VALID"},
+        "expected_version": {"type": "integer", "minimum": 1},
+        "new_version": {"type": "integer", "minimum": 2},
+        "changed_by": {"type": "string", "minLength": 26, "maxLength": 26},
+        "change_summary": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["validation_evidence_hash"],
+          "properties": {
+            "validation_evidence_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+          }
+        }
+      }
+    }
+  },
+  "x-forbidden-fields": ["plaintext_password", "secret_value", "access_token", "refresh_token", "raw_credential"],
+  "x-aggregate-id-field": "runner_id"
+}

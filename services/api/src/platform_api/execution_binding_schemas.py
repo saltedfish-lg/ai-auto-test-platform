@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, field_validator
 
 BindingStatus = Literal["READY", "IN_USE", "RELEASED", "EXPIRED"]
 LeaseStatus = Literal["ACTIVE", "EXPIRED", "FENCED", "RELEASED"]
@@ -174,6 +174,44 @@ class RuntimePolicyRevisionResource(BaseModel):
     serial_execution_policy: str
     lifecycle_status: Literal["PUBLISHED", "RETIRED"]
     row_version: int
+
+
+class CreateRuntimePolicyRevisionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    project_id: str = Field(min_length=26, max_length=26)
+    browser_runtime: Literal["CHROMIUM", "CHROME", "EDGE"]
+    artifact_policy: Literal["SCREENSHOT", "VIDEO", "TRACE"]
+    timeout_seconds: int = Field(gt=0)
+    max_steps: int = Field(gt=0)
+    total_exploration_timeout_seconds: int = Field(gt=0)
+    model_transient_retry_per_step: int = Field(ge=0, le=10)
+    allowed_origins: list[AnyHttpUrl] = Field(min_length=1, max_length=32)
+    authentication_redirect_origins: list[AnyHttpUrl] = Field(max_length=32)
+    retry_mode: Literal["UNIFIED_OWNER"]
+    network_requirement: Literal["INTERNET", "INTRANET", "PROXY"]
+    serial_execution_policy: Literal["SINGLE_PROCESS_UNIFIED_RETRY"]
+    reason: str = Field(min_length=1, max_length=1000)
+
+    @field_validator("allowed_origins", "authentication_redirect_origins")
+    @classmethod
+    def validate_origins(cls, value: list[AnyHttpUrl]) -> list[AnyHttpUrl]:
+        normalized = [str(item).rstrip("/") for item in value]
+        if len(normalized) != len(set(normalized)):
+            raise ValueError("origin values must be unique")
+        for item in value:
+            if (
+                item.path not in {None, "", "/"}
+                or item.query is not None
+                or item.fragment is not None
+            ):
+                raise ValueError("origin values must contain only scheme, host, and optional port")
+        return value
+
+
+class RuntimePolicyRevisionResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    data: RuntimePolicyRevisionResource
+    correlation_id: str
 
 
 class RuntimePolicyRevisionListResponse(BaseModel):

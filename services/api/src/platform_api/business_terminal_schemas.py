@@ -263,6 +263,7 @@ class TerminalAccessRevisionResource(BaseModel):
     network_requirements: dict[str, Any] | None = None
     display_name: str | None = Field(default=None, max_length=255)
     lifecycle_status: RevisionLifecycleStatus
+    published_at: datetime | None = None
     row_version: int = Field(ge=0)
     created_at: datetime
     updated_at: datetime
@@ -283,6 +284,31 @@ class CreateTerminalAccessRevisionRequest(BaseModel):
     @classmethod
     def validate_url(cls, value: str | None) -> str | None:
         return normalize_web_url(value)
+
+
+class UpdateTerminalAccessRevisionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_version: int = Field(ge=0)
+    entry_url: str | None = Field(default=None, min_length=1, max_length=2048)
+    login_url: str | None = Field(default=None, max_length=2048)
+    login_strategy_id: str | None = Field(default=None, min_length=26, max_length=26)
+    login_prerequisites: dict[str, Any] | None = None
+    network_requirements: dict[str, Any] | None = None
+    display_name: str | None = Field(default=None, max_length=255)
+    reason: str = Field(min_length=1, max_length=1000)
+
+    @field_validator("entry_url", "login_url")
+    @classmethod
+    def validate_url(cls, value: str | None) -> str | None:
+        return normalize_web_url(value)
+
+    @model_validator(mode="after")
+    def require_change(self) -> UpdateTerminalAccessRevisionRequest:
+        if not (self.model_fields_set - {"expected_version", "reason"}):
+            raise ValueError("at least one editable revision field is required")
+        if "entry_url" in self.model_fields_set and self.entry_url is None:
+            raise ValueError("entry_url may be omitted but must not be null")
+        return self
 
 
 class PublishTerminalAccessRevisionRequest(LifecycleCommandRequest):

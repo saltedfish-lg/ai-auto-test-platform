@@ -21,6 +21,7 @@ from platform_api.runner_schemas import (
     RunnerListResponse,
     RunnerResponse,
     UpdateRunnerRequest,
+    ValidateRunnerCapabilityRequest,
 )
 from platform_api.runner_service import RunnerService
 
@@ -249,6 +250,30 @@ def report_runner_capabilities(
 
 
 @router.post(
+    "/api/v1/runner/{id}/capabilities/{capability_code}/validate",
+    response_model=RunnerResponse,
+    operation_id="validate_runner_capability",
+)
+def validate_runner_capability(
+    id: Annotated[str, Path(min_length=26, max_length=26)],
+    capability_code: Annotated[str, Path(min_length=1, max_length=64)],
+    body: ValidateRunnerCapabilityRequest,
+    request: Request,
+    idempotency_key: str = Header(min_length=1, max_length=191, alias="Idempotency-Key"),
+    authorization: str | None = Header(None),
+) -> RunnerResponse:
+    data = _service(request).validate_capability(
+        _bearer(authorization),
+        id,
+        capability_code,
+        body,
+        idempotency_key,
+        _audit_context(request),
+    )
+    return RunnerResponse(data=data, correlation_id=_correlation_id(request))
+
+
+@router.post(
     "/api/v1/runners/{id}/browser-runtime/commands:claim",
     include_in_schema=False,
 )
@@ -257,7 +282,8 @@ def claim_bound_browser_command(
     request: Request,
     agent_token: str = Header(min_length=32, max_length=512, alias="X-Runner-Agent-Token"),
 ) -> dict[str, object]:
-    _service(request).require_machine_identity(id, agent_token)
+    if not _service(request).machine_execution_eligible(id, agent_token):
+        return {"data": None, "correlation_id": _correlation_id(request)}
     return {"data": _browser_broker(request).claim(id), "correlation_id": _correlation_id(request)}
 
 
@@ -270,7 +296,8 @@ def claim_bound_browser_cancellation(
     request: Request,
     agent_token: str = Header(min_length=32, max_length=512, alias="X-Runner-Agent-Token"),
 ) -> dict[str, object]:
-    _service(request).require_machine_identity(id, agent_token)
+    if not _service(request).machine_execution_eligible(id, agent_token):
+        return {"data": None, "correlation_id": _correlation_id(request)}
     return {
         "data": _browser_broker(request).claim_cancel(id),
         "correlation_id": _correlation_id(request),

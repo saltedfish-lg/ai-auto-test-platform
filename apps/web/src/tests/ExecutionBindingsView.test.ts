@@ -1,11 +1,14 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/vue";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/vue";
 import ElementPlus from "element-plus";
 import { createPinia, setActivePinia } from "pinia";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { apiClient } from "../api/client";
-import type { ExecutionBindingSnapshotResource } from "../generated/types";
+import type {
+  ExecutionBindingSnapshotResource,
+  RuntimePolicyRevisionResource,
+} from "../generated/types";
 import { useSessionStore } from "../stores/session";
 import ExecutionBindingsView from "../views/ExecutionBindingsView.vue";
 import { authenticationResponse, currentUser } from "./auth-fixtures";
@@ -74,6 +77,25 @@ const binding: ExecutionBindingSnapshotResource = {
   updated_at: "2026-09-01T00:00:00Z",
 };
 
+const publishedPolicy: RuntimePolicyRevisionResource = {
+  runtime_policy_revision_id: "Y".repeat(26),
+  project_id: projectId,
+  revision_no: 1,
+  browser_runtime: "CHROMIUM",
+  artifact_policy: "SCREENSHOT",
+  timeout_seconds: 30,
+  max_steps: 20,
+  total_exploration_timeout_seconds: 600,
+  model_transient_retry_per_step: 1,
+  allowed_origins: ["https://ecloud-uat.galasystec.net.cn"],
+  authentication_redirect_origins: ["https://ecloud-uat.galasystec.net.cn"],
+  retry_mode: "UNIFIED_OWNER",
+  network_requirement: "INTERNET",
+  serial_execution_policy: "SINGLE_PROCESS_UNIFIED_RETRY",
+  lifecycle_status: "PUBLISHED",
+  row_version: 1,
+};
+
 describe("Execution binding management view", () => {
   beforeEach(() => vi.restoreAllMocks());
 
@@ -130,6 +152,32 @@ describe("Execution binding management view", () => {
       identity_lease_generation: 7,
       runner_lease_generation: 11,
       reason: "normal completion",
+    });
+  });
+
+  it("creates and publishes an immutable RuntimePolicy revision", async () => {
+    await setup();
+    const create = vi
+      .spyOn(apiClient, "create_project_runtime_policy_revision")
+      .mockResolvedValue({ data: publishedPolicy, correlation_id: "policy-correlation" });
+
+    await fireEvent.click(screen.getByRole("button", { name: "新建 RuntimePolicy" }));
+    const dialog = screen.getByRole("dialog", {
+      name: "创建并发布 RuntimePolicy Revision",
+    });
+    await fireEvent.update(
+      within(dialog).getByLabelText("Allowed Origins"),
+      "https://ecloud-uat.galasystec.net.cn",
+    );
+    await fireEvent.update(within(dialog).getByLabelText("创建发布原因"), "Runner 真机闭环");
+    await fireEvent.click(within(dialog).getByRole("button", { name: "创建并发布" }));
+
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1));
+    expect(create.mock.calls[0]?.[0]).toMatchObject({
+      project_id: projectId,
+      browser_runtime: "CHROMIUM",
+      allowed_origins: ["https://ecloud-uat.galasystec.net.cn"],
+      reason: "Runner 真机闭环",
     });
   });
 });

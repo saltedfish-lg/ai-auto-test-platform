@@ -1,4 +1,7 @@
 import asyncio
+import hashlib
+import json
+import secrets
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -182,6 +185,100 @@ def test_runtime_reuses_stored_agent_token_without_enrollment(tmp_path: Path) ->
             await app.stop()
 
     asyncio.run(scenario())
+
+
+def test_fresh_enrollment_and_restart_authenticate_with_protected_identity(
+    tmp_path: Path,
+) -> None:
+    runner_id = "R" * 26
+    agent_token = "rat_" + "p" * 43
+    token_hash = hashlib.sha256(agent_token.encode("utf-8")).digest()
+    calls = {"register": 0, "capabilities": 0, "heartbeat": 0}
+
+    class MachineAuthHandler(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:
+            content_length = int(self.headers.get("Content-Length", "0"))
+            self.rfile.read(content_length)
+            status = 200
+            response: dict[str, object] = {"data": None}
+            if self.path.endswith("/register"):
+                calls["register"] += 1
+                response = {
+                    "data": {
+                        "runner": {"runner_id": runner_id},
+                        "agent_token": agent_token,
+                        "token_version": 1,
+                    }
+                }
+            else:
+                supplied = self.headers.get("X-Runner-Agent-Token", "")
+                if not secrets.compare_digest(
+                    hashlib.sha256(supplied.encode("utf-8")).digest(), token_hash
+                ):
+                    status = 401
+                    response = {"code": "RUNNER_AGENT_UNAUTHENTICATED"}
+                elif self.path.endswith("/capabilities"):
+                    calls["capabilities"] += 1
+                    response = {"data": {}}
+                elif self.path.endswith("/heartbeat"):
+                    calls["heartbeat"] += 1
+                    response = {"data": {}}
+            payload = json.dumps(response).encode("utf-8")
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+        def log_message(self, format: str, *args: object) -> None:
+            del format, args
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), MachineAuthHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+
+    async def scenario() -> None:
+        identity_path = tmp_path / "agent-identity.json"
+        first = RunnerApplication(
+            RunnerSettings(
+                _env_file=None,
+                environment="test",
+                platform_url=f"http://127.0.0.1:{server.server_port}",
+                work_dir=tmp_path,
+                enrollment_credential="enr_" + "e" * 48,
+                heartbeat_interval_seconds=300,
+                declared_capabilities=["BROWSER_CHROMIUM"],
+            )
+        )
+        await first.start(runtime_enabled=True)
+        await first.stop()
+
+        envelope = json.loads(identity_path.read_text(encoding="utf-8"))
+        assert set(envelope) == {"format", "protected"}
+        assert agent_token not in identity_path.read_text(encoding="utf-8")
+        assert calls == {"register": 1, "capabilities": 1, "heartbeat": 1}
+
+        restarted = RunnerApplication(
+            RunnerSettings(
+                _env_file=None,
+                environment="test",
+                platform_url=f"http://127.0.0.1:{server.server_port}",
+                work_dir=tmp_path,
+                heartbeat_interval_seconds=300,
+                declared_capabilities=["BROWSER_CHROMIUM"],
+            )
+        )
+        await restarted.start(runtime_enabled=True)
+        await restarted.stop()
+
+        assert calls == {"register": 1, "capabilities": 2, "heartbeat": 2}
+
+    try:
+        asyncio.run(scenario())
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
 
 
 class HeaderCaptureTransport(HttpPlatformTransport):

@@ -355,6 +355,7 @@ class TerminalAccessRevision(Base):
     login_prerequisites: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     network_requirements: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     lifecycle_status: Mapped[str] = mapped_column(String(10))
+    published_at: Mapped[datetime | None] = mapped_column(DateTime)
     display_name: Mapped[str | None] = mapped_column(String(255))
     row_version: Mapped[int] = mapped_column(BigInteger)
     created_at: Mapped[datetime] = mapped_column(DateTime)
@@ -678,6 +679,26 @@ class ProjectRuntimePolicyRevision(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime)
     created_by: Mapped[str | None] = mapped_column(String(26))
     updated_by: Mapped[str | None] = mapped_column(String(26))
+
+
+class ProjectRuntimePolicyAudit(Base):
+    __tablename__ = "atp_project_runtime_policy_audit"
+    audit_id: Mapped[str] = mapped_column(String(26), primary_key=True)
+    runtime_policy_revision_id: Mapped[str] = mapped_column(
+        String(26), ForeignKey("atp_project_runtime_policy_revision.runtime_policy_revision_id")
+    )
+    project_id: Mapped[str] = mapped_column(String(26), ForeignKey("atp_project.project_id"))
+    action: Mapped[str] = mapped_column(String(32))
+    actor_user_id: Mapped[str] = mapped_column(String(26), ForeignKey("atp_user.user_id"))
+    required_permission: Mapped[str] = mapped_column(String(64))
+    previous_status: Mapped[str | None] = mapped_column(String(10))
+    new_status: Mapped[str] = mapped_column(String(10))
+    result_code: Mapped[str] = mapped_column(String(64))
+    reason: Mapped[str] = mapped_column(String(1000))
+    policy_snapshot_json: Mapped[dict[str, Any]] = mapped_column(JSON)
+    correlation_id: Mapped[str] = mapped_column(String(128))
+    occurred_at: Mapped[datetime] = mapped_column(DateTime)
+    source_context_hash: Mapped[bytes] = mapped_column(MySQLBinary(32))
 
 
 class ResourceLeaseGeneration(Base):

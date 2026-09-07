@@ -3118,6 +3118,11 @@ tables:
     nullable: false
     primary_key: false
     default: DRAFT
+  - name: published_at
+    type: DATETIME(6)
+    nullable: true
+    primary_key: false
+    default: null
   - name: display_name
     type: VARCHAR(255)
     nullable: true
@@ -10254,6 +10259,40 @@ tables:
   - [project_id, revision_no]
   - [runtime_policy_revision_id, project_id]
   data_owner: ExecutionBindingService
+- table_name: atp_project_runtime_policy_audit
+  columns:
+  - {name: audit_id, type: VARCHAR(26), nullable: false, primary_key: true}
+  - {name: runtime_policy_revision_id, type: VARCHAR(26), nullable: false}
+  - {name: project_id, type: VARCHAR(26), nullable: false}
+  - {name: action, type: VARCHAR(32), nullable: false}
+  - {name: actor_user_id, type: VARCHAR(26), nullable: false}
+  - {name: required_permission, type: VARCHAR(64), nullable: false}
+  - {name: previous_status, type: VARCHAR(10), nullable: true}
+  - {name: new_status, type: VARCHAR(10), nullable: false}
+  - {name: result_code, type: VARCHAR(64), nullable: false}
+  - {name: reason, type: VARCHAR(1000), nullable: false}
+  - {name: policy_snapshot_json, type: JSON, nullable: false}
+  - {name: correlation_id, type: VARCHAR(128), nullable: false}
+  - {name: occurred_at, type: DATETIME(6), nullable: false, default: CURRENT_TIMESTAMP(6)}
+  - {name: source_context_hash, type: BINARY(32), nullable: false}
+  primary_key: [audit_id]
+  unique_keys: []
+  check_constraints:
+  - {name: ck_atp_runtime_policy_audit_action, expression: "(action = 'CREATE_AND_PUBLISH')"}
+  - {name: ck_atp_runtime_policy_audit_new_status, expression: "(new_status = 'PUBLISHED')"}
+  foreign_keys:
+  - {name: fk_atp_runtime_policy_audit_revision, column: runtime_policy_revision_id, referenced_table: atp_project_runtime_policy_revision, referenced_column: runtime_policy_revision_id, on_delete: RESTRICT, on_update: RESTRICT}
+  - {name: fk_atp_runtime_policy_audit_project, column: project_id, referenced_table: atp_project, referenced_column: project_id, on_delete: RESTRICT, on_update: RESTRICT}
+  - {name: fk_atp_runtime_policy_audit_actor, column: actor_user_id, referenced_table: atp_user, referenced_column: user_id, on_delete: RESTRICT, on_update: RESTRICT}
+  indexes:
+  - {name: ix_atp_runtime_policy_audit_policy_time, columns: [runtime_policy_revision_id, occurred_at]}
+  - {name: ix_atp_runtime_policy_audit_project_time, columns: [project_id, occurred_at]}
+  delete_behavior: APPEND_ONLY_TRIGGER_PROTECTED
+  data_owner: ExecutionBindingService
+  idempotency_and_audit: APPEND_ONLY_AUDIT
+  business_unique_key: audit_id
+  state_fields: []
+  relationship_fields: [runtime_policy_revision_id, project_id, actor_user_id]
 - table_name: atp_resource_lease_generation
   columns:
   - {name: resource_type}

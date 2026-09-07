@@ -24,6 +24,7 @@ from platform_api.business_terminal_schemas import (
     TerminalAccessRevisionListData,
     TerminalAccessRevisionResource,
     UpdateBusinessTerminalRequest,
+    UpdateTerminalAccessRevisionRequest,
 )
 from platform_api.errors import PlatformError
 from platform_api.idempotency import IdempotencyCoordinator
@@ -31,6 +32,7 @@ from platform_api.models import (
     BusinessTerminal,
     BusinessTerminalAudit,
     Environment,
+    ExecutionBindingSnapshot,
     IdempotencyRecord,
     LoginStrategy,
     OutboxEvent,
@@ -448,14 +450,9 @@ class BusinessTerminalService:
             if terminal.lifecycle_status == "ARCHIVED":
                 raise _state_error("Archived terminals cannot receive new revisions.")
             if body.login_strategy_id:
-                strategy = db.get(LoginStrategy, body.login_strategy_id)
-                if strategy is None or strategy.project_id != terminal.project_id:
-                    raise PlatformError(
-                        title="Login Strategy not found",
-                        detail="The strategy is unavailable in this project scope.",
-                        status=404,
-                        code="LOGIN_STRATEGY_NOT_FOUND",
-                    )
+                _require_active_login_strategy(
+                    db, body.login_strategy_id, terminal.project_id, "Creating"
+                )
             revision_no = (
                 int(
                     db.scalar(
@@ -481,6 +478,7 @@ class BusinessTerminalService:
                 login_prerequisites=body.login_prerequisites,
                 network_requirements=body.network_requirements,
                 lifecycle_status="DRAFT",
+                published_at=None,
                 display_name=body.display_name,
                 row_version=1,
                 created_at=now,
@@ -605,6 +603,220 @@ class BusinessTerminalService:
             )
             return _revision_resource(revision)
 
+    def update_revision(
+        self,
+        token: str,
+        revision_id: str,
+        body: UpdateTerminalAccessRevisionRequest,
+        key: str,
+        context: AuditContext,
+    ) -> TerminalAccessRevisionResource:
+        with self._factory.begin() as db:
+            actor = self._authentication.authenticate_access_in_transaction(
+                db, token, "update_environment_terminal_access_revision", context
+            )
+            revision = db.scalar(
+                select(TerminalAccessRevision)
+                .where(
+                    TerminalAccessRevision.environment_terminal_access_revision_id == revision_id
+                )
+                .with_for_update()
+            )
+            if revision is None:
+                raise _revision_not_found()
+            terminal = db.scalar(
+                select(BusinessTerminal)
+                .where(BusinessTerminal.business_terminal_id == revision.business_terminal_id)
+                .with_for_update()
+            )
+            if terminal is None:
+                raise _not_found()
+            environment = db.scalar(
+                select(Environment)
+                .where(Environment.environment_id == terminal.environment_id)
+                .with_for_update()
+            )
+            _assert_environment_member_change(environment, terminal)
+            self._authentication.require_project_permissions_in_transaction(
+                db,
+                actor,
+                "update_environment_terminal_access_revision",
+                ("BUSINESS_TERMINAL_EDIT",),
+                terminal.project_id,
+                context,
+            )
+            record, replay = self._claim(
+                db,
+                actor.user.user_id,
+                "update_environment_terminal_access_revision",
+                key,
+                _payload(body, revision_id),
+            )
+            if replay:
+                return _stored(
+                    record.response_json, "terminal_access_revision", TerminalAccessRevisionResource
+                )
+            _check_version(revision.row_version, body.expected_version)
+            _assert_revision_draft_mutable(revision, "edited")
+            fields = body.model_fields_set - {"expected_version", "reason"}
+            if "login_strategy_id" in fields and body.login_strategy_id is not None:
+                _require_active_login_strategy(
+                    db, body.login_strategy_id, terminal.project_id, "Updating"
+                )
+            before = _revision_projection(revision)
+            for name in (
+                "entry_url",
+                "login_url",
+                "login_strategy_id",
+                "login_prerequisites",
+                "network_requirements",
+                "display_name",
+            ):
+                if name in fields:
+                    setattr(revision, name, getattr(body, name))
+            revision.row_version += 1
+            revision.updated_at = utc_now()
+            revision.updated_by = actor.user.user_id
+            after = _revision_projection(revision)
+            self._audit(
+                db,
+                terminal,
+                actor.user.user_id,
+                context,
+                "TERMINAL_ACCESS_REVISION_UPDATED",
+                "update_environment_terminal_access_revision",
+                "DRAFT",
+                before,
+                after,
+                body.reason,
+                "BUSINESS_TERMINAL_EDIT",
+                new_status="DRAFT",
+            )
+            self._event(
+                db,
+                revision_id,
+                terminal.project_id,
+                "environment_terminal_access_revision.updated",
+                actor.user.user_id,
+                context,
+                key,
+                "DRAFT",
+                "DRAFT",
+                body.expected_version,
+                revision.row_version,
+                {"revision_no": revision.revision_no, "changed_fields": sorted(fields)},
+                identity_field="environment_terminal_access_revision_id",
+            )
+            resource = _revision_resource(revision)
+            self._idempotency.complete(
+                record, 200, {"terminal_access_revision": resource.model_dump(mode="json")}
+            )
+            return resource
+
+    def abandon_revision(
+        self,
+        token: str,
+        revision_id: str,
+        body: LifecycleCommandRequest,
+        key: str,
+        context: AuditContext,
+    ) -> TerminalAccessRevisionResource:
+        try:
+            with self._factory.begin() as db:
+                actor = self._authentication.authenticate_access_in_transaction(
+                    db, token, "abandon_environment_terminal_access_revision", context
+                )
+                record, replay = self._claim(
+                    db,
+                    actor.user.user_id,
+                    "abandon_environment_terminal_access_revision",
+                    key,
+                    _payload(body, revision_id),
+                )
+                if replay:
+                    return _stored(
+                        record.response_json,
+                        "terminal_access_revision",
+                        TerminalAccessRevisionResource,
+                    )
+                revision = db.scalar(
+                    select(TerminalAccessRevision)
+                    .where(
+                        TerminalAccessRevision.environment_terminal_access_revision_id
+                        == revision_id
+                    )
+                    .with_for_update()
+                )
+                if revision is None:
+                    raise _revision_not_found()
+                terminal = db.scalar(
+                    select(BusinessTerminal)
+                    .where(BusinessTerminal.business_terminal_id == revision.business_terminal_id)
+                    .with_for_update()
+                )
+                if terminal is None:
+                    raise _not_found()
+                environment = db.scalar(
+                    select(Environment)
+                    .where(Environment.environment_id == terminal.environment_id)
+                    .with_for_update()
+                )
+                _assert_environment_member_change(environment, terminal)
+                self._authentication.require_project_permissions_in_transaction(
+                    db,
+                    actor,
+                    "abandon_environment_terminal_access_revision",
+                    ("BUSINESS_TERMINAL_EDIT",),
+                    terminal.project_id,
+                    context,
+                )
+                _check_version(revision.row_version, body.expected_version)
+                _assert_revision_draft_mutable(revision, "abandoned")
+                if terminal.current_published_revision_id == revision_id or db.scalar(
+                    select(ExecutionBindingSnapshot.execution_binding_snapshot_id).where(
+                        ExecutionBindingSnapshot.terminal_access_revision_id == revision_id
+                    )
+                ):
+                    raise _revision_reference_conflict()
+                resource = _revision_resource(revision)
+                self._audit(
+                    db,
+                    terminal,
+                    actor.user.user_id,
+                    context,
+                    "TERMINAL_ACCESS_REVISION_ABANDONED",
+                    "abandon_environment_terminal_access_revision",
+                    "DRAFT",
+                    _revision_projection(revision),
+                    {"revision_id": revision_id, "command_result": "ABANDONED"},
+                    body.reason,
+                    "BUSINESS_TERMINAL_EDIT",
+                    new_status="ABANDONED",
+                )
+                self._event(
+                    db,
+                    revision_id,
+                    terminal.project_id,
+                    "environment_terminal_access_revision.abandoned",
+                    actor.user.user_id,
+                    context,
+                    key,
+                    "DRAFT",
+                    "ABANDONED",
+                    body.expected_version,
+                    body.expected_version,
+                    {"revision_no": revision.revision_no, "physical_delete": True},
+                    identity_field="environment_terminal_access_revision_id",
+                )
+                db.delete(revision)
+                db.flush()
+                self._idempotency.complete(
+                    record, 200, {"terminal_access_revision": resource.model_dump(mode="json")}
+                )
+                return resource
+        except IntegrityError as error:
+            raise _revision_reference_conflict() from error
+
     def validate_revision(
         self,
         token: str,
@@ -615,6 +827,25 @@ class BusinessTerminalService:
     ) -> TerminalAccessRevisionResource:
         return self._transition_revision(
             token, revision_id, body, key, context, "DRAFT", "VALIDATING", "validate"
+        )
+
+    def return_revision_to_draft(
+        self,
+        token: str,
+        revision_id: str,
+        body: LifecycleCommandRequest,
+        key: str,
+        context: AuditContext,
+    ) -> TerminalAccessRevisionResource:
+        return self._transition_revision(
+            token,
+            revision_id,
+            body,
+            key,
+            context,
+            "VALIDATING",
+            "DRAFT",
+            "return_to_draft",
         )
 
     def publish_revision(
@@ -675,15 +906,9 @@ class BusinessTerminalService:
             if revision.lifecycle_status != "VALIDATING":
                 raise _revision_state_error("Only VALIDATING revisions can be published.")
             if revision.login_strategy_id:
-                strategy = db.get(LoginStrategy, revision.login_strategy_id)
-                if (
-                    strategy is None
-                    or strategy.project_id != terminal.project_id
-                    or strategy.lifecycle_status != "ACTIVE"
-                ):
-                    raise _revision_state_error(
-                        "Publishing requires an ACTIVE in-scope Login Strategy."
-                    )
+                _require_active_login_strategy(
+                    db, revision.login_strategy_id, terminal.project_id, "Publishing"
+                )
             previous_pointer = terminal.current_published_revision_id
             if previous_pointer:
                 previous = db.scalar(
@@ -736,6 +961,7 @@ class BusinessTerminalService:
                         identity_field="environment_terminal_access_revision_id",
                     )
             revision.lifecycle_status = "PUBLISHED"
+            revision.published_at = utc_now()
             revision.row_version += 1
             revision.updated_at = utc_now()
             revision.updated_by = actor.user.user_id
@@ -836,6 +1062,10 @@ class BusinessTerminalService:
             if revision.lifecycle_status != source:
                 raise _revision_state_error(
                     f"{action} is not allowed from {revision.lifecycle_status}."
+                )
+            if action == "validate" and revision.login_strategy_id:
+                _require_active_login_strategy(
+                    db, revision.login_strategy_id, terminal.project_id, "Validating"
                 )
             revision.lifecycle_status = target
             revision.row_version += 1
@@ -1014,6 +1244,7 @@ def _revision_projection(value: TerminalAccessRevision) -> dict[str, object]:
         "revision_no": value.revision_no,
         "login_strategy_id": value.login_strategy_id,
         "lifecycle_status": value.lifecycle_status,
+        "published_at": value.published_at.isoformat() if value.published_at else None,
         "row_version": value.row_version,
     }
 
@@ -1032,6 +1263,7 @@ def _revision_resource(value: TerminalAccessRevision) -> TerminalAccessRevisionR
         network_requirements=value.network_requirements,
         display_name=value.display_name,
         lifecycle_status=value.lifecycle_status,
+        published_at=value.published_at,
         row_version=value.row_version,
         created_at=value.created_at,
         updated_at=value.updated_at,
@@ -1145,6 +1377,37 @@ def _revision_state_error(detail: str) -> PlatformError:
         status=409,
         code="TERMINAL_ACCESS_REVISION_OPERATION_FORBIDDEN_FOR_STATE",
     )
+
+
+def _assert_revision_draft_mutable(revision: TerminalAccessRevision, action: str) -> None:
+    if revision.lifecycle_status != "DRAFT" or revision.published_at is not None:
+        raise _revision_state_error(
+            f"Only never-published DRAFT revisions can be {action}."
+        )
+
+
+def _revision_reference_conflict() -> PlatformError:
+    return PlatformError(
+        title="Terminal Access Revision is referenced",
+        detail="A referenced or published Terminal Access Revision cannot be abandoned.",
+        status=409,
+        code="TERMINAL_ACCESS_REVISION_REFERENCE_CONFLICT",
+    )
+
+
+def _require_active_login_strategy(
+    db: Session, strategy_id: str, project_id: str, action: str
+) -> LoginStrategy:
+    strategy = db.get(LoginStrategy, strategy_id)
+    if (
+        strategy is None
+        or strategy.project_id != project_id
+        or strategy.lifecycle_status != "ACTIVE"
+    ):
+        raise _revision_state_error(
+            f"{action} requires an ACTIVE in-scope Login Strategy."
+        )
+    return strategy
 
 
 def _code_conflict() -> PlatformError:

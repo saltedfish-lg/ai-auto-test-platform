@@ -8,12 +8,14 @@ from platform_api.auth_router import _audit_context, _bearer, _correlation_id
 from platform_api.errors import PlatformError
 from platform_api.execution_binding_schemas import (
     BindingCommandRequest,
+    CreateRuntimePolicyRevisionRequest,
     ExecutionBindingInput,
     ExecutionBindingSnapshotListResponse,
     ExecutionBindingSnapshotResponse,
     PreflightResponse,
     RecoverBindingRequest,
     RuntimePolicyRevisionListResponse,
+    RuntimePolicyRevisionResponse,
 )
 from platform_api.execution_binding_service import ExecutionBindingService
 
@@ -185,3 +187,21 @@ def list_project_runtime_policy_revisions(
     return _service(request).list_runtime_policies(
         _bearer(authorization), project_id, _audit_context(request)
     )
+
+
+@router.post(
+    "/api/v1/project-runtime-policy-revisions",
+    status_code=201,
+    response_model=RuntimePolicyRevisionResponse,
+    operation_id="create_project_runtime_policy_revision",
+)
+def create_project_runtime_policy_revision(
+    body: CreateRuntimePolicyRevisionRequest,
+    request: Request,
+    idempotency_key: str = Header(min_length=1, max_length=191, alias="Idempotency-Key"),
+    authorization: str | None = Header(None),
+) -> RuntimePolicyRevisionResponse:
+    data = _service(request).create_runtime_policy(
+        _bearer(authorization), body, idempotency_key, _audit_context(request)
+    )
+    return RuntimePolicyRevisionResponse(data=data, correlation_id=_correlation_id(request))

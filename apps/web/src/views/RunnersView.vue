@@ -4,7 +4,7 @@ import { computed, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
 import PermissionGate from "../components/PermissionGate.vue";
-import type { RunnerResource } from "../generated/types";
+import type { RunnerCapabilityResource, RunnerResource } from "../generated/types";
 import { type RunnerLifecycleAction, useRunnersStore } from "../stores/runners";
 import { useSessionStore } from "../stores/session";
 
@@ -25,10 +25,12 @@ const credentialVisible = ref(false);
 const editVisible = ref(false);
 const commandVisible = ref(false);
 const tokenVisible = ref(false);
+const capabilityVisible = ref(false);
 const command = ref<RunnerLifecycleAction | "rotate" | "revoke">("enable");
 const createForm = reactive({ runner_code: "", display_name: "", reason: "" });
 const editForm = reactive({ display_name: "", reason: "" });
 const commandReason = ref("");
+const capabilityForm = reactive({ capability_code: "", evidence_summary: "", reason: "" });
 const localError = ref("");
 
 watch(
@@ -176,6 +178,59 @@ async function submitCommand(): Promise<void> {
   }
 }
 
+function pendingCapabilities(runner: RunnerResource): RunnerCapabilityResource[] {
+  return runner.capabilities.filter(
+    (item) =>
+      item.availability_status === "CONFIGURED" &&
+      item.lifecycle_status === "ACTIVE" &&
+      item.validation_status === "PENDING",
+  );
+}
+
+function openCapabilityValidation(runner: RunnerResource): void {
+  selected.value = runner;
+  const first = pendingCapabilities(runner)[0];
+  Object.assign(capabilityForm, {
+    capability_code: first?.capability_code ?? "",
+    evidence_summary: "",
+    reason: "",
+  });
+  localError.value = "";
+  capabilityVisible.value = true;
+}
+
+async function submitCapabilityValidation(): Promise<void> {
+  if (
+    !selected.value ||
+    !capabilityForm.capability_code ||
+    !capabilityForm.evidence_summary.trim() ||
+    !capabilityForm.reason.trim()
+  ) {
+    localError.value = "请选择已上报的待验证能力，并填写运行证据与验证原因。";
+    return;
+  }
+  const capability = selected.value.capabilities.find(
+    (item) => item.capability_code === capabilityForm.capability_code,
+  );
+  if (!capability) {
+    localError.value = "所选能力已不在当前 Runner 上报快照中，请刷新。";
+    return;
+  }
+  try {
+    const updated = await runners.validateCapability(
+      selected.value,
+      capability,
+      capabilityForm.evidence_summary.trim(),
+      capabilityForm.reason.trim(),
+    );
+    selected.value = updated;
+    capabilityVisible.value = false;
+    ElMessage.success("Runner Capability 已完成正式验证。");
+  } catch {
+    // Store exposes the operation-specific error.
+  }
+}
+
 function lifecycleActions(runner: RunnerResource): RunnerLifecycleAction[] {
   if (runner.lifecycle_status === "REGISTERED") return ["enable", "disable"];
   if (runner.lifecycle_status === "ACTIVE") return ["disable"];
@@ -225,22 +280,14 @@ const commandLabels: Record<RunnerLifecycleAction | "rotate" | "revoke", string>
           placement="bottom"
         >
           <span>
-            <el-button
-              type="primary"
-              :disabled="!hasProjectScope"
-              @click="openCreate"
-            >
+            <el-button type="primary" :disabled="!hasProjectScope" @click="openCreate">
               创建 Enrollment
             </el-button>
           </span>
         </el-tooltip>
       </PermissionGate>
     </div>
-    <el-card
-      v-if="!route.params.projectId"
-      shadow="never"
-      class="filter-card"
-    >
+    <el-card v-if="!route.params.projectId" shadow="never" class="filter-card">
       <el-alert
         v-if="localError"
         :title="localError"
@@ -258,17 +305,10 @@ const commandLabels: Record<RunnerLifecycleAction | "rotate" | "revoke", string>
           />
         </el-form-item>
 
-        <el-button
-          type="primary"
-          @click="openProjectScope"
-        >
-          打开 Runner Project
-        </el-button>
+        <el-button type="primary" @click="openProjectScope"> 打开 Runner Project </el-button>
       </el-form>
 
-      <p>
-        Project 范围由服务端按 Runner 管理权限实时校验。
-      </p>
+      <p>Project 范围由服务端按 Runner 管理权限实时校验。</p>
     </el-card>
 
     <el-alert
@@ -347,6 +387,13 @@ const commandLabels: Record<RunnerLifecycleAction | "rotate" | "revoke", string>
           <el-button link type="primary" @click="openDetail(scope.row)">详情</el-button>
           <PermissionGate permission="RUNNER_REGISTER">
             <el-button
+              v-if="pendingCapabilities(scope.row).length > 0"
+              link
+              type="success"
+              @click="openCapabilityValidation(scope.row)"
+              >验证能力</el-button
+            >
+            <el-button
               v-if="scope.row.lifecycle_status !== 'ARCHIVED'"
               link
               type="primary"
@@ -392,11 +439,7 @@ const commandLabels: Record<RunnerLifecycleAction | "rotate" | "revoke", string>
       <el-alert v-if="localError" :title="localError" type="error" :closable="false" />
       <el-form label-position="top">
         <el-form-item label="Project ID" required>
-          <el-input
-            :model-value="projectId"
-            aria-label="Project ID"
-            readonly
-          />
+          <el-input :model-value="projectId" aria-label="Project ID" readonly />
         </el-form-item>
 
         <el-form-item label="Runner Code" required>
@@ -408,10 +451,7 @@ const commandLabels: Record<RunnerLifecycleAction | "rotate" | "revoke", string>
         </el-form-item>
 
         <el-form-item label="原因" required>
-          <el-input
-            v-model="createForm.reason"
-            type="textarea"
-          />
+          <el-input v-model="createForm.reason" type="textarea" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -469,6 +509,49 @@ const commandLabels: Record<RunnerLifecycleAction | "rotate" | "revoke", string>
         /></el-form-item>
       </el-form>
       <template #footer><el-button type="primary" @click="submitCommand">确认</el-button></template>
+    </el-dialog>
+
+    <el-dialog v-model="capabilityVisible" title="验证 Runner Capability" width="600px">
+      <el-alert
+        v-if="localError"
+        :title="localError"
+        type="error"
+        :closable="false"
+        class="workspace-alert"
+      />
+      <el-alert
+        title="验证只作用于真实 Runner 当前上报的 PENDING 能力，不会改变 Runner 的连接、健康或启用状态。"
+        type="info"
+        :closable="false"
+        class="workspace-alert"
+      />
+      <el-form v-if="selected" label-position="top">
+        <el-form-item label="Capability" required>
+          <el-select v-model="capabilityForm.capability_code" style="width: 100%">
+            <el-option
+              v-for="capability in pendingCapabilities(selected)"
+              :key="capability.runner_capability_id"
+              :label="`${capability.capability_code} · report v${capability.row_version}`"
+              :value="capability.capability_code"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="运行证据摘要" required>
+          <el-input v-model="capabilityForm.evidence_summary" type="textarea" :rows="3" />
+        </el-form-item>
+        <el-form-item label="验证原因" required>
+          <el-input v-model="capabilityForm.reason" type="textarea" :rows="2" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="capabilityVisible = false">取消</el-button>
+        <el-button
+          type="primary"
+          :loading="runners.status === 'saving'"
+          @click="submitCapabilityValidation"
+          >确认验证</el-button
+        >
+      </template>
     </el-dialog>
 
     <el-dialog

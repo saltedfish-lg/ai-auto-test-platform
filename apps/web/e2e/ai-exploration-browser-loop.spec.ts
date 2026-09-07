@@ -46,16 +46,17 @@ test("bound Browser Loop persists multi-step evidence and reaches SUCCEEDED", as
 
   const startResponse = page.waitForResponse(
     (response) =>
-      /\/api\/v1\/ai-exploration-sessions\/[^/]+\/start$/.test(
-        new URL(response.url()).pathname,
-      ) && response.request().method() === "POST",
+      /\/api\/v1\/ai-exploration-sessions\/[^/]+\/start$/.test(new URL(response.url()).pathname) &&
+      response.request().method() === "POST",
   );
   await page.getByRole("button", { name: "启动已绑定 Runner" }).click();
   expect((await startResponse).status()).toBe(202);
 
-  await expect(page.locator(".status-actions").getByText("SUCCEEDED", { exact: true })).toBeVisible({
-    timeout: 25_000,
-  });
+  await expect(page.locator(".status-actions").getByText("SUCCEEDED", { exact: true })).toBeVisible(
+    {
+      timeout: 25_000,
+    },
+  );
   await expect(page.getByRole("list", { name: "Browser Loop 步骤证据" }).locator("li")).toHaveCount(
     2,
   );

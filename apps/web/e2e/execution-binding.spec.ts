@@ -221,14 +221,16 @@ test("execution binding and fenced lease browser closure", async ({ page, reques
   expect(secondRelease.status()).toBe(200);
 
   const contenders = await Promise.all(
-    attemptIds.slice(2).map((executionAttemptId, index) =>
-      createBinding(
-        request,
-        headers,
-        { ...basePayload, execution_attempt_id: executionAttemptId },
-        `binding-concurrent-${index}`,
+    attemptIds
+      .slice(2)
+      .map((executionAttemptId, index) =>
+        createBinding(
+          request,
+          headers,
+          { ...basePayload, execution_attempt_id: executionAttemptId },
+          `binding-concurrent-${index}`,
+        ),
       ),
-    ),
   );
   expect(contenders.map((response) => response.status()).sort()).toEqual([201, 409]);
   const winner = contenders.find((response) => response.status() === 201);

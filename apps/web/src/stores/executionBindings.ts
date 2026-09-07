@@ -4,6 +4,7 @@ import { defineStore } from "pinia";
 import { apiClient } from "../api/client";
 import { getApiErrorMessage, getCorrelationId } from "../api/errors";
 import type {
+  CreateRuntimePolicyRevisionRequest,
   ExecutionBindingInput,
   ExecutionBindingPreflightResult,
   ExecutionBindingSnapshotResource,
@@ -68,6 +69,25 @@ export const useExecutionBindingsStore = defineStore("execution-bindings", () =>
     } catch (error) {
       policies.value = [];
       capture(error, "RuntimePolicy Revision 加载失败。");
+    }
+  }
+
+  async function createPolicy(
+    body: CreateRuntimePolicyRevisionRequest,
+  ): Promise<RuntimePolicyRevisionResource> {
+    status.value = "saving";
+    clearError();
+    try {
+      const response = await apiClient.create_project_runtime_policy_revision(
+        body,
+        mutationOptions(),
+      );
+      policies.value.unshift(response.data);
+      return response.data;
+    } catch (error) {
+      return capture(error, "RuntimePolicy Revision 创建发布失败。");
+    } finally {
+      status.value = "idle";
     }
   }
 
@@ -175,6 +195,7 @@ export const useExecutionBindingsStore = defineStore("execution-bindings", () =>
     correlationId,
     load,
     loadPolicies,
+    createPolicy,
     runPreflight,
     create,
     command,

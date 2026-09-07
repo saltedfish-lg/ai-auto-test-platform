@@ -4,7 +4,11 @@ import { computed, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
 import PermissionGate from "../components/PermissionGate.vue";
-import type { ExecutionBindingInput, ExecutionBindingSnapshotResource } from "../generated/types";
+import type {
+  CreateRuntimePolicyRevisionRequest,
+  ExecutionBindingInput,
+  ExecutionBindingSnapshotResource,
+} from "../generated/types";
 import { type BindingCommand, useExecutionBindingsStore } from "../stores/executionBindings";
 
 const route = useRoute();
@@ -15,6 +19,7 @@ const statusFilter = ref("");
 const selected = ref<ExecutionBindingSnapshotResource | null>(null);
 const detailVisible = ref(false);
 const createVisible = ref(false);
+const policyVisible = ref(false);
 const commandVisible = ref(false);
 const commandAction = ref<BindingCommand>("release");
 const commandReason = ref("");
@@ -34,11 +39,29 @@ const form = reactive<ExecutionBindingInput>({
   required_capabilities: [],
 });
 const capabilitiesText = ref("");
+const allowedOriginsText = ref("");
+const authenticationOriginsText = ref("");
+const policyForm = reactive<CreateRuntimePolicyRevisionRequest>({
+  project_id: projectId.value,
+  browser_runtime: "CHROMIUM",
+  artifact_policy: "SCREENSHOT",
+  timeout_seconds: 30,
+  max_steps: 20,
+  total_exploration_timeout_seconds: 600,
+  model_transient_retry_per_step: 1,
+  allowed_origins: [],
+  authentication_redirect_origins: [],
+  retry_mode: "UNIFIED_OWNER",
+  network_requirement: "INTERNET",
+  serial_execution_policy: "SINGLE_PROCESS_UNIFIED_RETRY",
+  reason: "",
+});
 
 watch(
   projectId,
   (value) => {
     form.project_id = value;
+    policyForm.project_id = value;
     if (value.length === 26) {
       void Promise.all([
         bindings.load(value).catch(() => undefined),
@@ -58,6 +81,36 @@ function payload(): ExecutionBindingInput {
       .map((item) => item.trim())
       .filter(Boolean),
   };
+}
+
+function parseOrigins(value: string): string[] {
+  return value
+    .split(/[\n,]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+async function createPolicy(): Promise<void> {
+  localError.value = "";
+  const allowed = parseOrigins(allowedOriginsText.value);
+  if (allowed.length === 0 || !policyForm.reason.trim()) {
+    localError.value = "请填写至少一个 allowed origin 与创建发布原因。";
+    return;
+  }
+  const created = await bindings
+    .createPolicy({
+      ...policyForm,
+      project_id: projectId.value,
+      allowed_origins: allowed,
+      authentication_redirect_origins: parseOrigins(authenticationOriginsText.value),
+      reason: policyForm.reason.trim(),
+    })
+    .catch(() => undefined);
+  if (created) {
+    form.runtime_policy_revision_id = created.runtime_policy_revision_id;
+    policyVisible.value = false;
+    ElMessage.success(`RuntimePolicy Revision ${created.revision_no} 已创建并发布。`);
+  }
 }
 
 async function preflight(): Promise<void> {
@@ -147,6 +200,7 @@ const commandLabel = computed(
         </p>
       </div>
       <PermissionGate permission="PROJECT_EDIT">
+        <el-button @click="policyVisible = true">新建 RuntimePolicy</el-button>
         <el-button type="primary" @click="createVisible = true">新建执行绑定</el-button>
       </PermissionGate>
     </div>
@@ -227,6 +281,85 @@ const commandLabel = computed(
         </template>
       </el-table-column>
     </el-table>
+
+    <el-dialog v-model="policyVisible" title="创建并发布 RuntimePolicy Revision" width="720px">
+      <el-alert
+        title="Revision 创建即发布且不可修改；后续配置变化需创建新 Revision。"
+        type="info"
+        :closable="false"
+        class="workspace-alert"
+      />
+      <el-form label-width="220px">
+        <el-form-item label="Browser Runtime">
+          <el-select v-model="policyForm.browser_runtime">
+            <el-option
+              v-for="value in ['CHROMIUM', 'CHROME', 'EDGE']"
+              :key="value"
+              :value="value"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="Artifact Policy">
+          <el-select v-model="policyForm.artifact_policy">
+            <el-option
+              v-for="value in ['SCREENSHOT', 'VIDEO', 'TRACE']"
+              :key="value"
+              :value="value"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="单步超时（秒）"
+          ><el-input-number v-model="policyForm.timeout_seconds" :min="1"
+        /></el-form-item>
+        <el-form-item label="最大步骤数"
+          ><el-input-number v-model="policyForm.max_steps" :min="1"
+        /></el-form-item>
+        <el-form-item label="总探索超时（秒）"
+          ><el-input-number v-model="policyForm.total_exploration_timeout_seconds" :min="1"
+        /></el-form-item>
+        <el-form-item label="模型瞬态重试/步"
+          ><el-input-number v-model="policyForm.model_transient_retry_per_step" :min="0" :max="10"
+        /></el-form-item>
+        <el-form-item label="Allowed Origins" required>
+          <el-input
+            v-model="allowedOriginsText"
+            type="textarea"
+            placeholder="每行一个 origin，例如 https://example.internal"
+          />
+        </el-form-item>
+        <el-form-item label="认证跳转 Origins">
+          <el-input
+            v-model="authenticationOriginsText"
+            type="textarea"
+            placeholder="每行一个允许的认证跳转 origin"
+          />
+        </el-form-item>
+        <el-form-item label="Network Requirement">
+          <el-select v-model="policyForm.network_requirement">
+            <el-option
+              v-for="value in ['INTERNET', 'INTRANET', 'PROXY']"
+              :key="value"
+              :value="value"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="Retry Mode"
+          ><el-input v-model="policyForm.retry_mode" readonly
+        /></el-form-item>
+        <el-form-item label="Serial Execution Policy"
+          ><el-input v-model="policyForm.serial_execution_policy" readonly
+        /></el-form-item>
+        <el-form-item label="创建发布原因" required
+          ><el-input v-model="policyForm.reason" type="textarea"
+        /></el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="policyVisible = false">取消</el-button>
+        <el-button type="primary" :loading="bindings.status === 'saving'" @click="createPolicy"
+          >创建并发布</el-button
+        >
+      </template>
+    </el-dialog>
 
     <el-dialog v-model="createVisible" title="新建 ExecutionBindingSnapshot" width="760px">
       <el-form label-width="190px">

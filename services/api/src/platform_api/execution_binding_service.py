@@ -17,6 +17,7 @@ from platform_api.auth_service import AuthenticatedIdentity, AuthenticationServi
 from platform_api.errors import PlatformError
 from platform_api.execution_binding_schemas import (
     BindingCommandRequest,
+    CreateRuntimePolicyRevisionRequest,
     ExecutionBindingInput,
     ExecutionBindingSnapshotListResponse,
     ExecutionBindingSnapshotResource,
@@ -42,6 +43,7 @@ from platform_api.models import (
     LoginStrategy,
     OutboxEvent,
     Project,
+    ProjectRuntimePolicyAudit,
     ProjectRuntimePolicyRevision,
     ResourceLease,
     ResourceLeaseGeneration,
@@ -483,6 +485,118 @@ class ExecutionBindingService:
                 items=[_policy_resource(item) for item in policies]
             )
 
+    def create_runtime_policy(
+        self,
+        bearer_token: str,
+        body: CreateRuntimePolicyRevisionRequest,
+        key: str,
+        context: AuditContext,
+    ) -> RuntimePolicyRevisionResource:
+        operation = "create_project_runtime_policy_revision"
+        try:
+            with self._factory.begin() as db:
+                actor = self._authenticate(
+                    db,
+                    bearer_token,
+                    operation,
+                    body.project_id,
+                    context,
+                    "PROJECT_EDIT",
+                )
+                record, replay = self._idempotency.claim(
+                    db,
+                    actor.user.user_id,
+                    operation,
+                    key,
+                    body.model_dump_json().encode("utf-8"),
+                )
+                if replay:
+                    policy_id = str(
+                        (record.response_json or {}).get("runtime_policy_revision_id", "")
+                    )
+                    policy = db.get(ProjectRuntimePolicyRevision, policy_id)
+                    if policy is None:
+                        raise _policy_not_found()
+                    return _policy_resource(policy)
+
+                project = db.scalar(
+                    select(Project).where(Project.project_id == body.project_id).with_for_update()
+                )
+                if project is None:
+                    raise _policy_not_found()
+                if project.lifecycle_status != "ACTIVE":
+                    raise _state_conflict(
+                        "Only an ACTIVE Project can receive a RuntimePolicy Revision."
+                    )
+                revision_no = (
+                    int(
+                        db.scalar(
+                            select(func.max(ProjectRuntimePolicyRevision.revision_no)).where(
+                                ProjectRuntimePolicyRevision.project_id == body.project_id
+                            )
+                        )
+                        or 0
+                    )
+                    + 1
+                )
+                now = _server_now(db)
+                policy = ProjectRuntimePolicyRevision(
+                    runtime_policy_revision_id=new_ulid(),
+                    project_id=body.project_id,
+                    revision_no=revision_no,
+                    browser_runtime=body.browser_runtime,
+                    artifact_policy=body.artifact_policy,
+                    timeout_seconds=body.timeout_seconds,
+                    max_steps=body.max_steps,
+                    total_exploration_timeout_seconds=body.total_exploration_timeout_seconds,
+                    model_transient_retry_per_step=body.model_transient_retry_per_step,
+                    allowed_origins=[str(item).rstrip("/") for item in body.allowed_origins],
+                    authentication_redirect_origins=[
+                        str(item).rstrip("/") for item in body.authentication_redirect_origins
+                    ],
+                    retry_mode=body.retry_mode,
+                    network_requirement=body.network_requirement,
+                    serial_execution_policy=body.serial_execution_policy,
+                    lifecycle_status="PUBLISHED",
+                    row_version=1,
+                    created_at=now,
+                    updated_at=now,
+                    created_by=actor.user.user_id,
+                    updated_by=actor.user.user_id,
+                )
+                db.add(policy)
+                db.flush()
+                snapshot = _policy_resource(policy).model_dump(mode="json")
+                db.add(
+                    ProjectRuntimePolicyAudit(
+                        audit_id=new_ulid(),
+                        runtime_policy_revision_id=policy.runtime_policy_revision_id,
+                        project_id=policy.project_id,
+                        action="CREATE_AND_PUBLISH",
+                        actor_user_id=actor.user.user_id,
+                        required_permission="PROJECT_EDIT",
+                        previous_status=None,
+                        new_status="PUBLISHED",
+                        result_code="SUCCESS",
+                        reason=body.reason,
+                        policy_snapshot_json=snapshot,
+                        correlation_id=context.correlation_id,
+                        occurred_at=now,
+                        source_context_hash=hashlib.sha256(
+                            context.source_context.encode("utf-8")
+                        ).digest(),
+                    )
+                )
+                self._runtime_policy_event(db, policy, actor.user.user_id, key, context, now)
+                self._idempotency.complete(
+                    record,
+                    201,
+                    {"runtime_policy_revision_id": policy.runtime_policy_revision_id},
+                )
+                return _policy_resource(policy)
+        except IntegrityError as error:
+            raise _persistence_conflict(error) from None
+
     def _authenticate(
         self,
         db: Session,
@@ -704,8 +818,7 @@ class ExecutionBindingService:
             runner_resource = db.scalar(
                 query_suffix(
                     select(RunnerCapability).where(
-                        RunnerCapability.runner_capability_id
-                        == body.runner_resource_identity,
+                        RunnerCapability.runner_capability_id == body.runner_resource_identity,
                         RunnerCapability.project_id == body.project_id,
                         RunnerCapability.runner_id == body.runner_id,
                         RunnerCapability.capability_type == "SESSION",
@@ -974,8 +1087,7 @@ class ExecutionBindingService:
         if (
             attempt is None
             or attempt.run_task_id is None
-            or attempt.execution_binding_snapshot_id
-            != binding.execution_binding_snapshot_id
+            or attempt.execution_binding_snapshot_id != binding.execution_binding_snapshot_id
             or body.owner_execution_identity != binding.owner_execution_identity
             or binding.owner_execution_identity != attempt.run_task_id
         ):
@@ -1151,6 +1263,54 @@ class ExecutionBindingService:
         )
 
     @staticmethod
+    def _runtime_policy_event(
+        db: Session,
+        policy: ProjectRuntimePolicyRevision,
+        actor_id: str,
+        causation_id: str,
+        context: AuditContext,
+        now: datetime,
+    ) -> None:
+        event_id = new_ulid()
+        db.add(
+            OutboxEvent(
+                event_id=event_id,
+                aggregate_id=policy.runtime_policy_revision_id,
+                sequence=1,
+                event_type="project_runtime_policy_revision.published",
+                payload_json={
+                    "event_id": event_id,
+                    "event_type": "project_runtime_policy_revision.published",
+                    "event_version": "1.0.0",
+                    "occurred_at": now.replace(tzinfo=UTC).isoformat(),
+                    "aggregate_id": policy.runtime_policy_revision_id,
+                    "sequence": 1,
+                    "correlation_id": context.correlation_id,
+                    "causation_id": causation_id,
+                    "project_id": policy.project_id,
+                    "payload": {
+                        "runtime_policy_revision_id": policy.runtime_policy_revision_id,
+                        "project_id": policy.project_id,
+                        "revision_no": policy.revision_no,
+                        "from_state": None,
+                        "to_state": "PUBLISHED",
+                        "expected_version": 0,
+                        "new_version": 1,
+                        "changed_by": actor_id,
+                        "change_summary": {
+                            "browser_runtime": policy.browser_runtime,
+                            "artifact_policy": policy.artifact_policy,
+                            "network_requirement": policy.network_requirement,
+                        },
+                    },
+                },
+                occurred_at=now,
+                published_at=None,
+                attempt_count=0,
+            )
+        )
+
+    @staticmethod
     def _resource(
         db: Session, binding: ExecutionBindingSnapshot
     ) -> ExecutionBindingSnapshotResource:
@@ -1297,6 +1457,15 @@ def _not_found() -> PlatformError:
         detail="The requested binding is unavailable in the authorized Project scope.",
         status=404,
         code="EXECUTION_BINDING_NOT_FOUND",
+    )
+
+
+def _policy_not_found() -> PlatformError:
+    return PlatformError(
+        title="RuntimePolicy Revision not found",
+        detail="The requested Project or RuntimePolicy Revision is unavailable in scope.",
+        status=404,
+        code="RUNTIME_POLICY_REVISION_NOT_FOUND",
     )
 
 

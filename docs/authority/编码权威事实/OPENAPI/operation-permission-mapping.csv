@@ -44,10 +44,13 @@ disable_business_terminal,POST,/api/v1/business-terminal/{id}/disable,BUSINESS_T
 archive_business_terminal,POST,/api/v1/business-terminal/{id}/archive,BUSINESS_TERMINAL_ARCHIVE,CURRENT_LIVING_AUTHORITY
 activate_login_strategy,POST,/api/v1/login-strategy/{id}/activate,PROJECT_EDIT,CURRENT_LIVING_AUTHORITY
 validate_environment_terminal_access_revision,POST,/api/v1/environment-terminal-access-revision/{id}/validate,BUSINESS_TERMINAL_EDIT,CURRENT_LIVING_AUTHORITY
+return_to_draft_environment_terminal_access_revision,POST,/api/v1/environment-terminal-access-revision/{id}/return-to-draft,BUSINESS_TERMINAL_EDIT,CURRENT_LIVING_AUTHORITY
+abandon_environment_terminal_access_revision,POST,/api/v1/environment-terminal-access-revision/{id}/abandon,BUSINESS_TERMINAL_EDIT,CURRENT_LIVING_AUTHORITY
 publish_environment_terminal_access_revision,POST,/api/v1/environment-terminal-access-revision/{id}/publish,BUSINESS_TERMINAL_EDIT,CURRENT_LIVING_AUTHORITY
 list_environment_terminal_access_revision,GET,/api/v1/environment-terminal-access-revision,BUSINESS_TERMINAL_VIEW,CURRENT_LIVING_AUTHORITY
 create_environment_terminal_access_revision,POST,/api/v1/environment-terminal-access-revision,BUSINESS_TERMINAL_EDIT,CURRENT_LIVING_AUTHORITY
 get_environment_terminal_access_revision,GET,/api/v1/environment-terminal-access-revision/{id},BUSINESS_TERMINAL_VIEW,CURRENT_LIVING_AUTHORITY
+update_environment_terminal_access_revision,PATCH,/api/v1/environment-terminal-access-revision/{id},BUSINESS_TERMINAL_EDIT,CURRENT_LIVING_AUTHORITY
 list_test_account,GET,/api/v1/test-account,PROJECT_VIEW,CURRENT_LIVING_AUTHORITY
 create_test_account,POST,/api/v1/test-account,PROJECT_EDIT,CURRENT_LIVING_AUTHORITY
 get_test_account,GET,/api/v1/test-account/{id},PROJECT_VIEW,CURRENT_LIVING_AUTHORITY
@@ -171,6 +174,7 @@ disable_runner,POST,/api/v1/runner/{id}/disable,RUNNER_REGISTER,CURRENT_LIVING_A
 archive_runner,POST,/api/v1/runner/{id}/archive,RUNNER_REGISTER,CURRENT_LIVING_AUTHORITY
 rotate_runner_agent_token,POST,/api/v1/runner/{id}/agent-token/rotate,RUNNER_REGISTER,CURRENT_LIVING_AUTHORITY
 revoke_runner_agent_token,POST,/api/v1/runner/{id}/agent-token/revoke,RUNNER_REGISTER,CURRENT_LIVING_AUTHORITY
+validate_runner_capability,POST,/api/v1/runner/{id}/capabilities/{capability_code}/validate,RUNNER_REGISTER,CURRENT_LIVING_AUTHORITY
 list_execution_slot,GET,/api/v1/execution-slot,PROJECT_VIEW,CURRENT_LIVING_AUTHORITY
 create_execution_slot,POST,/api/v1/execution-slot,PROJECT_EDIT,CURRENT_LIVING_AUTHORITY
 get_execution_slot,GET,/api/v1/execution-slot/{id},PROJECT_VIEW,CURRENT_LIVING_AUTHORITY
@@ -297,4 +301,5 @@ consume_execution_binding_snapshot,POST,/api/v1/execution-binding-snapshots/{id}
 renew_execution_binding_snapshot_leases,POST,/api/v1/execution-binding-snapshots/{id}/leases/renew,PROJECT_EDIT,CURRENT_LIVING_AUTHORITY
 release_execution_binding_snapshot,POST,/api/v1/execution-binding-snapshots/{id}/release,PROJECT_EDIT,CURRENT_LIVING_AUTHORITY
 recover_execution_binding_snapshot,POST,/api/v1/execution-binding-snapshots/{id}/recover,PROJECT_EDIT,CURRENT_LIVING_AUTHORITY
+create_project_runtime_policy_revision,POST,/api/v1/project-runtime-policy-revisions,PROJECT_EDIT,CURRENT_LIVING_AUTHORITY
 list_project_runtime_policy_revisions,GET,/api/v1/project-runtime-policy-revisions,PROJECT_VIEW,CURRENT_LIVING_AUTHORITY

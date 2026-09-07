@@ -25,6 +25,7 @@ from platform_api.business_terminal_schemas import (
     UpdateAutomationAssetRequest,
     UpdateBusinessTerminalRequest,
     UpdateLoginStrategyRequest,
+    UpdateTerminalAccessRevisionRequest,
 )
 from platform_api.business_terminal_service import BusinessTerminalService
 from platform_api.errors import PlatformError
@@ -374,6 +375,24 @@ def get_environment_terminal_access_revision(
     return TerminalAccessRevisionResponse(data=data, correlation_id=_correlation_id(request))
 
 
+@router.patch(
+    "/api/v1/environment-terminal-access-revision/{id}",
+    response_model=TerminalAccessRevisionResponse,
+    operation_id="update_environment_terminal_access_revision",
+)
+def update_environment_terminal_access_revision(
+    id: Annotated[str, Path(min_length=26, max_length=26)],
+    body: UpdateTerminalAccessRevisionRequest,
+    request: Request,
+    idempotency_key: str = Header(min_length=1, max_length=191, alias="Idempotency-Key"),
+    authorization: str | None = Header(None),
+) -> TerminalAccessRevisionResponse:
+    data = _service(request).update_revision(
+        _bearer(authorization), id, body, idempotency_key, _audit_context(request)
+    )
+    return TerminalAccessRevisionResponse(data=data, correlation_id=_correlation_id(request))
+
+
 @router.post(
     "/api/v1/environment-terminal-access-revision/{id}/validate",
     response_model=TerminalAccessRevisionResponse,
@@ -387,6 +406,42 @@ def validate_environment_terminal_access_revision(
     authorization: str | None = Header(None),
 ) -> TerminalAccessRevisionResponse:
     data = _service(request).validate_revision(
+        _bearer(authorization), id, body, idempotency_key, _audit_context(request)
+    )
+    return TerminalAccessRevisionResponse(data=data, correlation_id=_correlation_id(request))
+
+
+@router.post(
+    "/api/v1/environment-terminal-access-revision/{id}/return-to-draft",
+    response_model=TerminalAccessRevisionResponse,
+    operation_id="return_to_draft_environment_terminal_access_revision",
+)
+def return_to_draft_environment_terminal_access_revision(
+    id: Annotated[str, Path(min_length=26, max_length=26)],
+    body: LifecycleCommandRequest,
+    request: Request,
+    idempotency_key: str = Header(min_length=1, max_length=191, alias="Idempotency-Key"),
+    authorization: str | None = Header(None),
+) -> TerminalAccessRevisionResponse:
+    data = _service(request).return_revision_to_draft(
+        _bearer(authorization), id, body, idempotency_key, _audit_context(request)
+    )
+    return TerminalAccessRevisionResponse(data=data, correlation_id=_correlation_id(request))
+
+
+@router.post(
+    "/api/v1/environment-terminal-access-revision/{id}/abandon",
+    response_model=TerminalAccessRevisionResponse,
+    operation_id="abandon_environment_terminal_access_revision",
+)
+def abandon_environment_terminal_access_revision(
+    id: Annotated[str, Path(min_length=26, max_length=26)],
+    body: LifecycleCommandRequest,
+    request: Request,
+    idempotency_key: str = Header(min_length=1, max_length=191, alias="Idempotency-Key"),
+    authorization: str | None = Header(None),
+) -> TerminalAccessRevisionResponse:
+    data = _service(request).abandon_revision(
         _bearer(authorization), id, body, idempotency_key, _audit_context(request)
     )
     return TerminalAccessRevisionResponse(data=data, correlation_id=_correlation_id(request))
