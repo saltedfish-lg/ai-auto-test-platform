@@ -8145,6 +8145,20 @@ state_owners:
   persistence_field: resource_status
   owner: DOMAIN_AGGREGATE
   release_id: PDBR-2026.08.07-R4.2
+- state_dimension_id: SD-EX-018
+  object_id: OBJ-052
+  object_name: Runner
+  dimension_name: version_compatibility
+  values:
+  - UNKNOWN
+  - COMPATIBLE
+  - INCOMPATIBLE
+  - UPGRADE_REQUIRED
+  initial_value: UNKNOWN
+  terminal_values: []
+  persistence_field: version_compatibility
+  owner: DOMAIN_AGGREGATE
+  release_id: RUNNER_COMPATIBILITY_SCHEDULING_REAL_EXECUTION
 - state_dimension_id: SD-EX-009
   object_id: OBJ-035
   object_name: 执行任务

@@ -5412,6 +5412,7 @@ objects:
   - SD-EX-006
   - SD-EX-007
   - SD-EX-008
+  - SD-EX-018
   - R3-LS-006
   versioning_rule: 对象不建立独立业务版本；允许字段变更必须受聚合边界、权限、审计和乐观锁控制。
   snapshot_rule: 正式任务或受控流程创建时必须固化不可变快照；源对象后续变更不得回写既有快照。
@@ -160818,6 +160819,21 @@ state_dimensions:
   persistence_field: resource_status
   owner: DOMAIN_AGGREGATE
   release_id: PDBR-2026.08.06-R4.1
+- state_dimension_id: SD-EX-018
+  object_id: OBJ-052
+  dimension_name: version_compatibility
+  values:
+  - UNKNOWN
+  - COMPATIBLE
+  - INCOMPATIBLE
+  - UPGRADE_REQUIRED
+  initial_value: UNKNOWN
+  terminal_values: []
+  dimension_kind: ORTHOGONAL_STATE_DIMENSION
+  completion_status: USER_APPROVED_RUNNER_COMPATIBILITY_SCHEDULING
+  persistence_field: version_compatibility
+  owner: DOMAIN_AGGREGATE
+  release_id: RUNNER_COMPATIBILITY_SCHEDULING_REAL_EXECUTION
 - state_dimension_id: SD-EX-009
   object_id: OBJ-035
   dimension_name: task_state
@@ -226009,7 +226025,7 @@ coding_readiness_summary:
   needs_refinement_record_count: 0
   open_decisions: []
 r3_state_closure:
-  validated_dimensions: 124
+  validated_dimensions: 125
   lifecycle_objects: 95
   current_facts_source: tools/current_facts.py#domain
   rule: 每个对象具有唯一lifecycle状态维度；正交状态独立持久化；initial_value属于值域；生命周期阶段全部属于对应值域。

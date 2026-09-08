@@ -13658,6 +13658,32 @@ paths:
           minimum: 1
           maximum: 200
           default: 50
+      - name: project_id
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 26
+          maxLength: 26
+      - name: runner_id
+        in: query
+        required: false
+        schema:
+          type: string
+          minLength: 26
+          maxLength: 26
+      - name: lifecycle_status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: [ACTIVE, DISABLED, ARCHIVED]
+      - name: available_only
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
       - name: sort
         in: query
         required: false
@@ -13732,7 +13758,8 @@ paths:
       - BearerAuth: []
     post:
       operationId: create_execution_slot
-      summary: 创建执行槽位
+      summary: 创建执行槽位（系统托管，外部调用拒绝）
+      description: P0 Formal ExecutionSlot 由 Runner Resource Reconciliation 幂等形成；普通 API 调用不得手工创建。
       tags:
       - 执行槽位
       parameters:
@@ -13824,7 +13851,8 @@ paths:
         required: true
         schema:
           type: string
-          minLength: 1
+          minLength: 26
+          maxLength: 26
       - name: X-Correlation-Id
         in: header
         required: false
@@ -13901,7 +13929,8 @@ paths:
         required: true
         schema:
           type: string
-          minLength: 1
+          minLength: 26
+          maxLength: 26
       - name: X-Correlation-Id
         in: header
         required: false
@@ -25630,6 +25659,15 @@ components:
           - 'null'
           minLength: 26
           maxLength: 26
+        task_type:
+          type:
+          - string
+          - 'null'
+          enum:
+          - FORMAL_EXECUTION
+          - AI_EXPLORATION
+          - AI_VALIDATION
+          - null
         lifecycle_status:
           type: string
           enum:
@@ -26574,10 +26612,12 @@ components:
         updated_at:
           type: string
           format: date-time
+        project_id:
+          type: string
+          minLength: 26
+          maxLength: 26
         runner_id:
-          type:
-          - string
-          - 'null'
+          type: string
           minLength: 26
           maxLength: 26
         slot_no:
@@ -26595,18 +26635,35 @@ components:
           - RECOVERED
           - ARCHIVED
           - LOGICALLY_DELETED
+        availability_status:
+          type: string
+          enum: [AVAILABLE, OCCUPIED, UNAVAILABLE]
+          readOnly: true
+        active_lease_owner:
+          type: [string, 'null']
+          minLength: 26
+          maxLength: 26
+          readOnly: true
       required:
       - execution_slot_id
+      - project_id
+      - runner_id
       - row_version
       - created_at
       - updated_at
       - lifecycle_status
+      - availability_status
       example:
         execution_slot_id: 01J00000000000000000000000
+        project_id: 01J00000000000000000000001
+        runner_id: 01J00000000000000000000002
+        slot_no: '0'
+        display_name: 正式执行槽位 1
         row_version: 0
         created_at: '2026-08-06T06:46:00Z'
         updated_at: '2026-08-06T06:46:00Z'
-        lifecycle_status: CREATED
+        lifecycle_status: ACTIVE
+        availability_status: AVAILABLE
     ContextVariableResource:
       type: object
       additionalProperties: false
@@ -31896,6 +31953,12 @@ components:
           - 'null'
           minLength: 26
           maxLength: 26
+        task_type:
+          type: string
+          enum:
+          - FORMAL_EXECUTION
+          - AI_EXPLORATION
+          - AI_VALIDATION
         task_state:
           type: string
           enum:
@@ -31917,8 +31980,10 @@ components:
           - PARTIAL
           - UNKNOWN
           default: UNKNOWN
-      required: []
-      example: {}
+      required:
+      - task_type
+      example:
+        task_type: AI_EXPLORATION
     CreateRunTaskResponse:
       type: object
       additionalProperties: false
@@ -33891,10 +33956,15 @@ components:
       example:
         data:
           execution_slot_id: 01J00000000000000000000000
+          project_id: 01J00000000000000000000001
+          runner_id: 01J00000000000000000000002
+          slot_no: '0'
+          display_name: 正式执行槽位 1
           row_version: 0
           created_at: '2026-08-06T06:46:00Z'
           updated_at: '2026-08-06T06:46:00Z'
-          lifecycle_status: CREATED
+          lifecycle_status: ACTIVE
+          availability_status: AVAILABLE
         correlation_id: example
     GetExecutionSlotResponse:
       type: object
@@ -33910,10 +33980,15 @@ components:
       example:
         data:
           execution_slot_id: 01J00000000000000000000000
+          project_id: 01J00000000000000000000001
+          runner_id: 01J00000000000000000000002
+          slot_no: '0'
+          display_name: 正式执行槽位 1
           row_version: 0
           created_at: '2026-08-06T06:46:00Z'
           updated_at: '2026-08-06T06:46:00Z'
-          lifecycle_status: CREATED
+          lifecycle_status: ACTIVE
+          availability_status: AVAILABLE
         correlation_id: example
     UpdateExecutionSlotRequest:
       type: object
@@ -33961,10 +34036,15 @@ components:
       example:
         data:
           execution_slot_id: 01J00000000000000000000000
+          project_id: 01J00000000000000000000001
+          runner_id: 01J00000000000000000000002
+          slot_no: '0'
+          display_name: 正式执行槽位 1
           row_version: 0
           created_at: '2026-08-06T06:46:00Z'
           updated_at: '2026-08-06T06:46:00Z'
-          lifecycle_status: CREATED
+          lifecycle_status: ACTIVE
+          availability_status: AVAILABLE
         correlation_id: example
     ListModelConfigResponse:
       type: object

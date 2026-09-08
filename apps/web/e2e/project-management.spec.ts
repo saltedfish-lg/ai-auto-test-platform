@@ -76,8 +76,8 @@ test("project management browser closure", async ({ page, request }) => {
 
   await expect(page).toHaveURL(/\/projects\/[0-9A-Z]{26}$/);
   await expect(page.getByRole("heading", { name: initialName })).toBeVisible();
-  await expect(lifecycle(page)).toContainText("ACTIVE");
-  await expect(page.getByText("Owner ALL 仅限当前 project_id，不代表全平台范围。")).toBeVisible();
+  await expect(lifecycle(page)).toContainText("已启用");
+  await expect(page.getByText("项目负责人拥有的全部项目权限仅限当前项目，不代表全平台范围。")).toBeVisible();
 
   const directAuthorizedLogin = await request.post("/api/v1/auth/login", {
     data: { username: authorizedUsername, password: authorizedPassword },
@@ -214,9 +214,9 @@ test("project management browser closure", async ({ page, request }) => {
   const runnerRow = page.getByRole("row").filter({
     has: page.getByText(runnerCode, { exact: true }),
   });
-  await expect(runnerRow).toContainText("ONLINE / HEALTHY");
-  await expect(runnerRow).toContainText("BROWSER_CHROMIUM");
-  await expect(runnerRow).toContainText("CONTEXT_ISOLATION");
+  await expect(runnerRow).toContainText("在线 / 健康");
+  await expect(runnerRow).toContainText("Chromium 浏览器");
+  await expect(runnerRow).toContainText("上下文隔离");
 
   const rotatedResponse = await request.post(`/api/v1/runner/${runnerId}/agent-token/rotate`, {
     headers: {
@@ -520,7 +520,7 @@ test("project management browser closure", async ({ page, request }) => {
   await terminalRow.getByRole("button", { name: "详情" }).click();
 
   await page.getByRole("button", { name: "新建访问修订" }).click();
-  const revisionDialog = page.getByRole("dialog", { name: "新建 DRAFT 访问修订" });
+  const revisionDialog = page.getByRole("dialog", { name: "新建草稿访问修订" });
   await revisionDialog.getByLabel("入口 URL").fill("https://example.test/app");
   await revisionDialog.getByLabel("登录 URL").fill("https://example.test/login");
   await revisionDialog
@@ -535,7 +535,7 @@ test("project management browser closure", async ({ page, request }) => {
       response.url().endsWith("/api/v1/environment-terminal-access-revision") &&
       response.request().method() === "POST",
   );
-  await revisionDialog.getByRole("button", { name: "创建 DRAFT" }).click();
+  await revisionDialog.getByRole("button", { name: "创建草稿" }).click();
   const createdRevisionResponse = await revisionCreated;
   expect(createdRevisionResponse.status()).toBe(201);
   const createdRevision = (await createdRevisionResponse.json()).data;
@@ -699,7 +699,7 @@ test("project management browser closure", async ({ page, request }) => {
   const accountActivatedResponse = await accountActivated;
   expect(accountActivatedResponse.status()).toBe(200);
   expect((await accountActivatedResponse.json()).data.lifecycle_status).toBe("ACTIVE");
-  await expect(accountRow.getByText("ACTIVE", { exact: true })).toBeVisible();
+  await expect(accountRow.getByText("已启用", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: /返回项目详情/ }).click();
 
   const projectListLoaded = page.waitForResponse(

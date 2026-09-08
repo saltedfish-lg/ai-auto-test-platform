@@ -3,13 +3,19 @@ import { ElMessage } from "element-plus";
 import { onMounted, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
 
+import { apiClient } from "../api/client";
 import PermissionGate from "../components/PermissionGate.vue";
+import type { UserResource } from "../generated/types";
+import { statusLabel } from "../presentation/labels";
 import { useProjectsStore } from "../stores/projects";
 
 const projects = useProjectsStore();
 const router = useRouter();
 const createVisible = ref(false);
 const validationMessage = ref("");
+const ownerCandidates = ref<UserResource[]>([]);
+const ownerDirectoryLoading = ref(false);
+const ownerDirectoryWarning = ref("");
 const createForm = reactive({
   project_code: "",
   display_name: "",
@@ -21,13 +27,30 @@ onMounted(() => {
   void projects.loadProjects().catch(() => undefined);
 });
 
+async function loadOwnerCandidates(): Promise<void> {
+  ownerDirectoryLoading.value = true;
+  ownerDirectoryWarning.value = "";
+  try {
+    const response = await apiClient.list_user({
+      query: { page: 1, page_size: 200, filter: "lifecycle_status=ACTIVE" },
+    });
+    ownerCandidates.value = response.items.filter((user) => user.lifecycle_status === "ACTIVE");
+  } catch {
+    ownerCandidates.value = [];
+    ownerDirectoryWarning.value = "负责人目录暂不可用；留空时将按平台规则使用当前合格创建者。";
+  } finally {
+    ownerDirectoryLoading.value = false;
+  }
+}
+
 function ownerNames(owners: Array<{ user_id: string; display_name?: string | null }>): string {
-  return owners.map((owner) => owner.display_name || owner.user_id).join("、");
+  return owners.map((owner) => owner.display_name || "未命名负责人").join("、") || "—";
 }
 
 function openCreate(): void {
   validationMessage.value = "";
   createVisible.value = true;
+  if (ownerCandidates.value.length === 0) void loadOwnerCandidates();
 }
 
 async function submitCreate(): Promise<void> {
@@ -41,7 +64,7 @@ async function submitCreate(): Promise<void> {
     const created = await projects.createProject({
       project_code: projectCode,
       display_name: createForm.display_name.trim() || null,
-      owner_user_id: createForm.owner_user_id.trim() || null,
+      owner_user_id: createForm.owner_user_id || null,
       reason: createForm.reason.trim() || null,
     });
     createVisible.value = false;
@@ -74,8 +97,10 @@ async function submitCreate(): Promise<void> {
       show-icon
       class="workspace-alert"
     >
-      <template v-if="projects.correlationId" #default>
-        <span class="correlation-id">请求标识：{{ projects.correlationId }}</span>
+      <template v-if="projects.errorCode || projects.correlationId" #default>
+        <span v-if="projects.errorCode">错误代码：{{ projects.errorCode }}</span>
+        <span v-if="projects.errorCode && projects.correlationId"> · </span>
+        <span v-if="projects.correlationId" class="correlation-id">请求标识：{{ projects.correlationId }}</span>
       </template>
     </el-alert>
 
@@ -99,7 +124,7 @@ async function submitCreate(): Promise<void> {
         <el-table-column label="状态" width="120">
           <template #default="{ row }">
             <el-tag :type="row.lifecycle_status === 'ACTIVE' ? 'success' : 'info'">
-              {{ row.lifecycle_status }}
+              {{ statusLabel("lifecycle", row.lifecycle_status) }}
             </el-tag>
           </template>
         </el-table-column>
@@ -136,13 +161,24 @@ async function submitCreate(): Promise<void> {
         <el-form-item label="项目名称">
           <el-input v-model="createForm.display_name" maxlength="255" autocomplete="off" />
         </el-form-item>
-        <el-form-item label="首任负责人用户 ID">
-          <el-input
+        <el-form-item label="首任负责人">
+          <el-select
             v-model="createForm.owner_user_id"
-            maxlength="26"
-            placeholder="留空时使用当前合格创建者"
-            autocomplete="off"
-          />
+            clearable
+            filterable
+            style="width: 100%"
+            placeholder="可选；留空时使用当前合格创建者"
+            :loading="ownerDirectoryLoading"
+          >
+            <el-option
+              v-for="user in ownerCandidates"
+              :key="user.user_id"
+              :label="user.display_name || user.username || '未命名用户'"
+              :value="user.user_id"
+            />
+          </el-select>
+          <el-text v-if="ownerDirectoryWarning" type="warning">{{ ownerDirectoryWarning }}</el-text>
+          <el-text v-else type="info">留空时按平台规则使用当前合格创建者。</el-text>
         </el-form-item>
         <el-form-item label="创建原因">
           <el-input v-model="createForm.reason" type="textarea" maxlength="1000" show-word-limit />

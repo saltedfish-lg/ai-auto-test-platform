@@ -608,13 +608,25 @@ class RunnerCapability(Base):
 
 
 class ExecutionSlot(Base):
-    """Existing Runner-owned slot used only as a validated lease resource identity."""
+    """Stable Runner-owned formal execution capacity identity."""
 
     __tablename__ = "atp_execution_slot"
     execution_slot_id: Mapped[str] = mapped_column(String(26), primary_key=True)
-    project_id: Mapped[str | None] = mapped_column(String(26))
-    runner_id: Mapped[str | None] = mapped_column(String(26))
+    project_id: Mapped[str | None] = mapped_column(
+        String(26), ForeignKey("atp_project.project_id"), nullable=True
+    )
+    runner_id: Mapped[str | None] = mapped_column(
+        String(26), ForeignKey("atp_runner.runner_id"), nullable=True
+    )
+    slot_no: Mapped[str | None] = mapped_column(String(191), nullable=True)
     lifecycle_status: Mapped[str] = mapped_column(String(17))
+    display_name: Mapped[str | None] = mapped_column(String(255))
+    row_version: Mapped[int] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime] = mapped_column(DateTime)
+    created_by: Mapped[str | None] = mapped_column(String(26))
+    updated_by: Mapped[str | None] = mapped_column(String(26))
+    extension_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
 
 
 class RunnerAudit(Base):
@@ -642,19 +654,69 @@ class RunnerAudit(Base):
     source_context_hash: Mapped[bytes] = mapped_column(MySQLBinary(32))
 
 
+class RunTask(Base):
+    __tablename__ = "atp_run_task"
+    run_task_id: Mapped[str] = mapped_column(String(26), primary_key=True)
+    project_id: Mapped[str | None] = mapped_column(String(26), ForeignKey("atp_project.project_id"))
+    idempotency_key: Mapped[str | None] = mapped_column(String(191), unique=True)
+    case_suite_id: Mapped[str | None] = mapped_column(String(26), nullable=True)
+    environment_id: Mapped[str] = mapped_column(String(26), ForeignKey("atp_environment.environment_id"))
+    task_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    lifecycle_status: Mapped[str] = mapped_column(String(16))
+    task_state: Mapped[str] = mapped_column(String(16))
+    final_result: Mapped[str] = mapped_column(String(8))
+    display_name: Mapped[str | None] = mapped_column(String(255))
+    row_version: Mapped[int] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime] = mapped_column(DateTime)
+    created_by: Mapped[str | None] = mapped_column(String(26))
+    updated_by: Mapped[str | None] = mapped_column(String(26))
+    extension_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+
+
+class ExecutionOwnerAudit(Base):
+    __tablename__ = "atp_execution_owner_audit"
+    audit_id: Mapped[str] = mapped_column(String(26), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(26), ForeignKey("atp_project.project_id"))
+    aggregate_type: Mapped[str] = mapped_column(String(32))
+    aggregate_id: Mapped[str] = mapped_column(String(26))
+    operation_id: Mapped[str] = mapped_column(String(128))
+    action: Mapped[str] = mapped_column(String(64))
+    actor_user_id: Mapped[str] = mapped_column(String(26), ForeignKey("atp_user.user_id"))
+    previous_status: Mapped[str | None] = mapped_column(String(32))
+    new_status: Mapped[str | None] = mapped_column(String(32))
+    result_code: Mapped[str] = mapped_column(String(64))
+    reason: Mapped[str | None] = mapped_column(String(1000))
+    correlation_id: Mapped[str] = mapped_column(String(128))
+    occurred_at: Mapped[datetime] = mapped_column(DateTime)
+    source_context_hash: Mapped[bytes] = mapped_column(MySQLBinary(32))
+
+
 class ExecutionAttempt(Base):
-    """Minimal mapped projection used to lock an existing execution owner."""
+    """Formal execution owner attempt; case-only relationships are optional for AI exploration."""
 
     __tablename__ = "atp_execution_attempt"
     execution_attempt_id: Mapped[str] = mapped_column(String(26), primary_key=True)
     execution_binding_snapshot_id: Mapped[str | None] = mapped_column(String(26))
     project_id: Mapped[str | None] = mapped_column(String(26))
     run_task_id: Mapped[str | None] = mapped_column(String(26))
+    attempt_no: Mapped[str | None] = mapped_column(String(191))
+    case_attempt_id: Mapped[str | None] = mapped_column(String(26), nullable=True)
     runner_id: Mapped[str] = mapped_column(String(26))
+    configuration_snapshot_id: Mapped[str | None] = mapped_column(String(26), nullable=True)
+    execution_batch_id: Mapped[str | None] = mapped_column(String(26), nullable=True)
+    lease_id: Mapped[str | None] = mapped_column(String(26))
+    execution_lock_id: Mapped[str | None] = mapped_column(String(26))
     execution_status: Mapped[str] = mapped_column(String(16))
     finalization_status: Mapped[str] = mapped_column(String(16))
     lifecycle_status: Mapped[str] = mapped_column(String(12))
+    display_name: Mapped[str | None] = mapped_column(String(255))
     row_version: Mapped[int] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime] = mapped_column(DateTime)
+    created_by: Mapped[str | None] = mapped_column(String(26))
+    updated_by: Mapped[str | None] = mapped_column(String(26))
+    extension_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
 
 
 class ProjectRuntimePolicyRevision(Base):

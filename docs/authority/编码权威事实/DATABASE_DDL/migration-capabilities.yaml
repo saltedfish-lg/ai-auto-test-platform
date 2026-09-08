@@ -32,3 +32,5 @@ capabilities:
     migration_name: V19__business_terminal_configuration_management.sql
   BUSINESS_TERMINAL_PUBLICATION_EVIDENCE_REPAIR:
     migration_name: V20__business_terminal_publication_evidence_repair.sql
+  AI_EXPLORATION_EXECUTION_OWNER_PROVISIONING:
+    migration_name: V21__ai_exploration_execution_owner_provisioning.sql

@@ -3,6 +3,7 @@ import { ElMessage } from "element-plus";
 import { computed, onMounted, reactive, ref } from "vue";
 
 import type { ModelConfigResource, UpdateModelConfigRequest } from "../generated/types";
+import { statusLabel } from "../presentation/labels";
 import { useModelConfigurationsStore } from "../stores/modelConfigurations";
 import { useSessionStore } from "../stores/session";
 
@@ -155,7 +156,7 @@ async function submitCreate(): Promise<void> {
     });
     createForm.secret_value = "";
     createVisible.value = false;
-    ElMessage.success("模型配置已安全保存，当前处于 CONFIGURING。");
+    ElMessage.success("模型配置已安全保存，当前处于配置中状态。");
     await openDetail(created);
   } catch {
     createForm.secret_value = "";
@@ -275,7 +276,7 @@ async function runConnectionTest(configuration: ModelConfigResource): Promise<vo
 async function setDefault(configuration: ModelConfigResource): Promise<void> {
   try {
     await configurations.setAiExplorationDefault(configuration);
-    ElMessage.success("AI_EXPLORATION 默认模型已更新。");
+    ElMessage.success("AI 探索默认模型已更新。");
   } catch {
     // Store error stays visible.
   }
@@ -284,7 +285,7 @@ async function setDefault(configuration: ModelConfigResource): Promise<void> {
 async function clearDefault(configuration: ModelConfigResource): Promise<void> {
   try {
     await configurations.clearAiExplorationDefault(configuration);
-    ElMessage.success("AI_EXPLORATION 默认模型已解除。");
+    ElMessage.success("AI 探索默认模型已解除。");
   } catch {
     // Store error stays visible.
   }
@@ -316,8 +317,10 @@ async function clearDefault(configuration: ModelConfigResource): Promise<void> {
       show-icon
       class="workspace-alert"
     >
-      <template v-if="configurations.correlationId" #default>
-        <span class="correlation-id">请求标识：{{ configurations.correlationId }}</span>
+      <template v-if="configurations.errorCode || configurations.correlationId" #default>
+        <span v-if="configurations.errorCode">错误代码：{{ configurations.errorCode }}</span>
+        <span v-if="configurations.errorCode && configurations.correlationId"> · </span>
+        <span v-if="configurations.correlationId" class="correlation-id">请求标识：{{ configurations.correlationId }}</span>
       </template>
     </el-alert>
 
@@ -329,7 +332,7 @@ async function clearDefault(configuration: ModelConfigResource): Promise<void> {
         <span>已激活 / 待审核</span><strong>{{ activeCount }} / {{ validatingCount }}</strong>
       </el-card>
       <el-card class="model-summary-card" shadow="never">
-        <span>AI_EXPLORATION 默认</span>
+        <span>AI 探索默认模型</span>
         <strong>{{
           defaultConfiguration?.display_name || defaultConfiguration?.model_name || "未绑定"
         }}</strong>
@@ -372,7 +375,7 @@ async function clearDefault(configuration: ModelConfigResource): Promise<void> {
         </el-table-column>
         <el-table-column label="状态" width="130">
           <template #default="{ row }">
-            <el-tag :type="statusTagType(row.lifecycle_status)">{{ row.lifecycle_status }}</el-tag>
+            <el-tag :type="statusTagType(row.lifecycle_status)">{{ statusLabel("lifecycle", row.lifecycle_status) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="Secret" width="110">
@@ -381,7 +384,7 @@ async function clearDefault(configuration: ModelConfigResource): Promise<void> {
             <span v-else class="secret-empty">未配置</span>
           </template>
         </el-table-column>
-        <el-table-column label="AI_EXPLORATION" width="160">
+        <el-table-column label="AI 探索默认" width="160">
           <template #default="{ row }">
             <el-tag v-if="row.is_ai_exploration_default" type="success">当前默认</el-tag>
             <span v-else class="muted">—</span>
@@ -443,7 +446,7 @@ async function clearDefault(configuration: ModelConfigResource): Promise<void> {
                   :disabled="row.is_ai_exploration_default"
                   :title="
                     row.is_ai_exploration_default
-                      ? '请先解除或切换 AI_EXPLORATION 默认模型'
+                      ? '请先解除或切换 AI 探索默认模型'
                       : undefined
                   "
                   @click="openTransition('disable', row)"
@@ -660,7 +663,7 @@ async function clearDefault(configuration: ModelConfigResource): Promise<void> {
         激活表示独立审核已通过；只有拥有 MODEL_VERSION_REVIEW 的身份可以执行。
       </p>
       <p v-if="transitionAction === 'disable'" class="security-form-note">
-        当前 AI_EXPLORATION 默认模型不能直接禁用，必须先解除或切换绑定。
+        当前 AI 探索默认模型不能直接禁用，必须先解除或切换绑定。
       </p>
       <el-form label-position="top" @submit.prevent="submitTransition">
         <el-form-item label="操作原因" required>
@@ -695,7 +698,7 @@ async function clearDefault(configuration: ModelConfigResource): Promise<void> {
             <dt>生命周期</dt>
             <dd>
               <el-tag :type="statusTagType(configurations.current.lifecycle_status)">
-                {{ configurations.current.lifecycle_status }}
+                {{ statusLabel("lifecycle", configurations.current.lifecycle_status) }}
               </el-tag>
             </dd>
             <dt>版本</dt>
@@ -740,7 +743,7 @@ async function clearDefault(configuration: ModelConfigResource): Promise<void> {
               <p>结果不改变模型生命周期，也不会持久化为配置字段。</p>
             </div>
             <el-tag :type="connectionResult.status === 'SUCCESS' ? 'success' : 'danger'">
-              {{ connectionResult.status }}
+              {{ statusLabel("ai", connectionResult.status) }}
             </el-tag>
           </div>
         </template>

@@ -42,7 +42,7 @@ test("bound Browser Loop persists multi-step evidence and reaches SUCCEEDED", as
   );
   await page.getByRole("button", { name: "创建并开始规划" }).click();
   expect((await createResponse).status()).toBe(201);
-  await expect(page.getByText("READY", { exact: true })).toBeVisible();
+  await expect(page.getByText("就绪", { exact: true })).toBeVisible();
 
   const startResponse = page.waitForResponse(
     (response) =>
@@ -52,14 +52,14 @@ test("bound Browser Loop persists multi-step evidence and reaches SUCCEEDED", as
   await page.getByRole("button", { name: "启动已绑定 Runner" }).click();
   expect((await startResponse).status()).toBe(202);
 
-  await expect(page.locator(".status-actions").getByText("SUCCEEDED", { exact: true })).toBeVisible(
+  await expect(page.locator(".status-actions").getByText("成功", { exact: true })).toBeVisible(
     {
       timeout: 25_000,
     },
   );
-  await expect(page.getByRole("list", { name: "Browser Loop 步骤证据" }).locator("li")).toHaveCount(
+  await expect(page.getByRole("list", { name: "浏览器探索步骤证据" }).locator("li")).toHaveCount(
     2,
   );
-  await expect(page.getByText(/COMPLETION_PROPOSED/)).toBeVisible();
+  await expect(page.getByText("已提议完成", { exact: true })).toBeVisible();
   await expect(page.getByText(targetUrl, { exact: false }).first()).toBeVisible();
 });

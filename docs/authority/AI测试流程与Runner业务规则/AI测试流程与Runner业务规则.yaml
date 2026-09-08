@@ -432,7 +432,7 @@ core_objects:
   identity_rule: 使用稳定内部标识project_id；业务唯一键见business_unique_keys。
   scope_level: 由项目成员关系、角色权限点和数据范围交集派生。
   main_relationships: []
-  lifecycle: 创建→启用/维护→停用→归档；被引用时不得直接物理删除。
+  lifecycle: 系统资源对账首次满足静态资格时创建并ACTIVE；静态资格失效时DISABLED，恢复时复用同一execution_slot_id重新ACTIVE；Runner归档后Slot归档；临时OFFLINE/UNHEALTHY不删除Slot，只影响资源发现和Preflight。
   authority_holder: 平台
   snapshot_required: false
   archive_delete_rule: 归档后禁止新写入，保留历史查询和引用完整性。
@@ -953,8 +953,8 @@ core_objects:
   code_identifier: execution_slot
   object_type: CONFIGURATION_ENTITY
   domain_id: DOM-018
-  definition: Runner可并发承载任务的受控资源单元。
-  business_purpose: Runner可并发承载任务的受控资源单元。
+  definition: Runner可并发承载任务的受控长期资源单元；当前P0每个满足正式执行静态资格的Runner由系统幂等物化唯一slot_no=0，资源占用由Runner资源租约派生而非Slot自带锁状态。
+  business_purpose: 为ExecutionBinding提供稳定可发现的正式执行资源Identity，避免用户手工构造execution_slot_id，并在释放/恢复后复用同一Slot。
   aggregate_id: AGG-018
   identity_rule: 使用稳定内部标识execution_slot_id；业务唯一键见business_unique_keys。
   scope_level: 由项目成员关系、角色权限点和数据范围交集派生。
@@ -1781,7 +1781,8 @@ processes:
   - 上报heartbeat、版本、能力和资源指标
   - 平台校验fencing和时序
   - 更新连接/健康/资源投影
-  - 调度器读取平台投影
+  - 当Version Compatibility或FORMAL_EXECUTION能力形成/失效时执行Runner正式ExecutionSlot资源对账；P0确保唯一slot_no=0长期资源，读取接口不得隐式创建Slot
+  - 调度器读取平台投影与ExecutionSlot可用性；Slot当前占用仅由Runner资源租约派生
   - 记录关键人工状态变更审计
   alternative_flows:
   - 技术遥测可进入OTel/Grafana，但业务状态读取平台业务库
@@ -24077,6 +24078,7 @@ runner_capabilities:
   capability_type: VERSION
   availability: CONFIGURED_OR_NOT
   version: null
+  compatibility_policy_ref: RUNNER_VERSION_COMPATIBILITY_POLICY
   capacity: null
   validation_status: MUST_BE_VALIDATED
   last_validated_at: null
@@ -24089,6 +24091,7 @@ runner_capabilities:
   capability_type: VERSION
   availability: CONFIGURED_OR_NOT
   version: null
+  compatibility_policy_ref: RUNNER_VERSION_COMPATIBILITY_POLICY
   capacity: null
   validation_status: MUST_BE_VALIDATED
   last_validated_at: null
@@ -24163,7 +24166,12 @@ runner_state_dimensions:
   - BUSY
   - DRAINING
   initial_value: UNSCHEDULABLE
-  rule: 各维度独立存储和校验；不得压缩为单一Runner状态
+  rule: >-
+    Scheduling Status 是 Runner 当前基础可调度资格与 Resource Status 的确定性投影，独立于 Resource Status 存储。
+    Project/Runner 非 ACTIVE、未 REGISTERED/ENABLED/BOUND、非 ONLINE/HEALTHY、缺少正式 heartbeat、或
+    VERSION_COMPATIBILITY 非 COMPATIBLE 时一律 UNSCHEDULABLE；基础条件全部满足后，AVAILABLE→IDLE、
+    PARTIALLY_OCCUPIED→PARTIALLY_OCCUPIED、EXHAUSTED→BUSY、RECLAIMING→DRAINING。状态恢复后必须正向重算，
+    不得永久停留在注册初始 UNSCHEDULABLE。
   completion_status: VALID_RUNNER_COMPLETION
 - state_dimension_id: RSTATE-007
   dimension_name: RESOURCE_STATUS
@@ -24183,8 +24191,31 @@ runner_state_dimensions:
   - INCOMPATIBLE
   - UPGRADE_REQUIRED
   initial_value: UNKNOWN
-  rule: 各维度独立存储和校验；不得压缩为单一Runner状态
+  rule: >-
+    VERSION_COMPATIBILITY 由服务端根据当前正式 RunnerCapability Snapshot 聚合形成，不接受前端或普通人工命令直接写入。
+    AGENT_VERSION 与 PLAYWRIGHT_VERSION 必须同时 CONFIGURED、ACTIVE、VALID 且 observed_version 非空后才能判定兼容；
+    任一版本能力缺失、NOT_CONFIGURED、DISABLED、PENDING 或无 observed_version 时为 UNKNOWN。版本报告发生变化并回到
+    PENDING 时必须立即 fail-closed 回 UNKNOWN，并使 Scheduling Status 回 UNSCHEDULABLE，直到新报告重新完成正式验证。
   completion_status: VALID_RUNNER_COMPLETION
+runner_version_compatibility_policy:
+  policy_id: RUNNER_VERSION_COMPATIBILITY_POLICY
+  policy_name: Runner版本严格兼容策略
+  owner: Runner中心治理主体
+  supported_agent_version: 0.1.0
+  supported_playwright_version: 1.62.0
+  required_version_capabilities:
+  - AGENT_VERSION
+  - PLAYWRIGHT_VERSION
+  resolution_rules:
+  - condition: 任一必要版本能力缺失、NOT_CONFIGURED、DISABLED、PENDING或observed_version为空
+    result: UNKNOWN
+  - condition: 两项必要版本均为当前正式支持版本且均已VALID
+    result: COMPATIBLE
+  - condition: 任一合法数字版本低于当前正式支持版本
+    result: UPGRADE_REQUIRED
+  - condition: 任一版本高于当前正式支持版本、格式非法、无法识别或组合未被正式支持
+    result: INCOMPATIBLE
+  evolution_rule: 未来扩展支持范围必须先更新本Authority中的单一兼容策略，再修改服务端集中兼容策略实现；不得散落到UI、Service或测试。
 runner_health_rules:
 - rule_id: RHEALTH-001
   rule: 心跳周期、失联阈值和恢复稳定窗口由平台配置管理，不在业务规则中虚构固定秒数。
@@ -24496,8 +24527,11 @@ runner_matching_rules:
   failure: 排除候选
 - rule_id: RMATCH-004
   order: 4
-  check: Agent与Playwright版本兼容
-  failure: 排除或进入升级待办
+  check: >-
+    按 RUNNER_VERSION_COMPATIBILITY_POLICY 聚合 AGENT_VERSION 与 PLAYWRIGHT_VERSION：只有两项当前机器报告均
+    CONFIGURED、ACTIVE、VALID、observed_version 非空且严格等于正式支持版本时才为 COMPATIBLE；低版本为
+    UPGRADE_REQUIRED，高版本/非法版本/未支持组合为 INCOMPATIBLE，报告未完成正式验证时为 UNKNOWN。
+  failure: UNKNOWN/INCOMPATIBLE 排除候选；UPGRADE_REQUIRED 排除候选并进入升级待办
 - rule_id: RMATCH-005
   order: 5
   check: 具备任务所需浏览器、终端、网络、视频、Trace、录制或探索能力并验证通过
@@ -24508,8 +24542,11 @@ runner_matching_rules:
   failure: 暂时不足时排队；永久不匹配时拒绝
 - rule_id: RMATCH-007
   order: 7
-  check: 未处于排空、维护或不可调度状态
-  failure: 排除候选
+  check: >-
+    接收新任务时 Scheduling Status 必须由正式投影得出且处于 IDLE，或在资源模型确认仍有可用容量时处于 PARTIALLY_OCCUPIED；
+    UNSCHEDULABLE、DRAINING 与无新执行资源的 BUSY 不得接收新任务。已取得自己正式 Lease 的当前执行继续运行时，不要求 Runner
+    回到 IDLE，但仍必须保持基础 Runner Ready 与有效 Lease/fencing。
+  failure: 排除新任务候选；已绑定执行按自身Lease/fencing语义继续或终止
 - rule_id: RMATCH-008
   order: 8
   check: 候选满足并发、锁和租约前置

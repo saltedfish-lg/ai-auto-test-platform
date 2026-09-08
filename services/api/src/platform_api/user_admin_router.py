@@ -4,13 +4,15 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Header, Path, Request, Response
+from fastapi import APIRouter, Header, Path, Query, Request, Response
 
 from platform_api.auth_router import _audit_context, _bearer, _correlation_id
 from platform_api.auth_schemas import (
     CreateUserRequest,
     CreateUserResponse,
     CreateUserRoleBindingRequest,
+    ListUserResponse,
+    PageMeta,
     OneTimeCredentialDeliveryResponse,
     ResetUserCredentialRequest,
     RevokeUserRoleBindingRequest,
@@ -34,6 +36,31 @@ def _service(request: Request) -> UserAdministrationService:
             code="INTERNAL_ERROR",
         )
     return service
+
+
+@router.get(
+    "/api/v1/user",
+    response_model=ListUserResponse,
+    response_model_exclude_none=True,
+    operation_id="list_user",
+)
+def list_user(
+    request: Request,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=200),
+    sort: str | None = Query(default=None, max_length=128),
+    filter: str | None = Query(default=None, max_length=1000),
+    authorization: str | None = Header(default=None),
+) -> ListUserResponse:
+    del sort
+    items, total = _service(request).list_users(
+        _bearer(authorization),
+        page=page,
+        page_size=page_size,
+        filter_value=filter,
+        audit_context=_audit_context(request),
+    )
+    return ListUserResponse(items=items, page=PageMeta(page=page, page_size=page_size, total=total))
 
 
 @router.post(

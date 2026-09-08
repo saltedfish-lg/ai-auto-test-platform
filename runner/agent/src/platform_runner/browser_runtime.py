@@ -9,7 +9,7 @@ import uuid
 from contextlib import suppress
 from dataclasses import dataclass, field
 from typing import Any, Protocol, cast
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urlunsplit
 
 from playwright.sync_api import (
     Browser,
@@ -132,6 +132,7 @@ class _Session:
     navigation_violation: str | None = None
     previous_action_result: dict[str, object] | None = None
     captcha_value: str | None = field(default=None, repr=False)
+    login_state_marker: dict[str, object] | None = None
 
 
 class PlaywrightBoundBrowserRuntime:
@@ -150,27 +151,24 @@ class PlaywrightBoundBrowserRuntime:
         target_url = str(command.target_url)
         allowed = self._allowed_origins(command)
         self._require_allowed(target_url, allowed)
-        if self._playwright is None:
-            self._playwright = sync_playwright().start()
-            self._browser = self._playwright.chromium.launch(
-                headless=self._headless,
-                args=["--no-proxy-server"],
-            )
+        self._ensure_browser()
         assert self._browser is not None
-        context = self._browser.new_context()
-        page = context.new_page()
-        session_id = uuid.uuid4().hex
-        session = _Session(
-            context=context,
-            page=page,
-            command_identity=self._command_identity(command),
-            allowed_origins=allowed,
-        )
-        self._sessions[session_id] = session
-        context.route("**/*", lambda route: self._route_navigation(session, route))
-        context.on("page", lambda candidate: self._watch_page(session, candidate))
-        self._watch_page(session, page)
+        context: BrowserContext | None = None
+        session_id: str | None = None
         try:
+            context = self._browser.new_context()
+            page = context.new_page()
+            session_id = uuid.uuid4().hex
+            session = _Session(
+                context=context,
+                page=page,
+                command_identity=self._command_identity(command),
+                allowed_origins=allowed,
+            )
+            self._sessions[session_id] = session
+            context.route("**/*", lambda route: self._route_navigation(session, route))
+            context.on("page", lambda candidate: self._watch_page(session, candidate))
+            self._watch_page(session, page)
             self._configure_captcha_capture(session, command)
             login_url = command.login_material.login_url or target_url
             self._require_allowed(login_url, allowed)
@@ -190,7 +188,14 @@ class PlaywrightBoundBrowserRuntime:
             self._validate_pages(session)
             return self._observe(session_id, session, command)
         except Exception:
-            self.close(command, session_id)
+            if session_id is not None and session_id in self._sessions:
+                with suppress(Exception):
+                    self.close(command, session_id)
+            else:
+                if context is not None:
+                    with suppress(Exception):
+                        context.close()
+                self._shutdown_if_idle()
             raise
 
     def observe(self, command: BoundBrowserCommand, browser_session_id: str) -> BrowserObservation:
@@ -423,13 +428,18 @@ class PlaywrightBoundBrowserRuntime:
                 timeout=PlaywrightBoundBrowserRuntime._timeout_ms(command),
             )
 
-    @staticmethod
-    def _perform_login(session: _Session, command: BoundBrowserCommand) -> None:
+    def _perform_login(self, session: _Session, command: BoundBrowserCommand) -> None:
         page = session.page
-        timeout = PlaywrightBoundBrowserRuntime._timeout_ms(command)
+        timeout = self._timeout_ms(command)
         password = page.locator('input[type="password"]')
         if password.count() == 0 or not password.first.is_visible():
+            session.login_state_marker = {
+                "status": "NOT_OBSERVED",
+                "signal": "LOGIN_FORM_NOT_PRESENT",
+                "login_submitted": False,
+            }
             return
+        login_url_before_submit = page.url
         username = page.locator(
             'input[autocomplete="username"],input[type="email"],'
             'input[name*="user" i],input[name*="account" i]'
@@ -445,8 +455,39 @@ class PlaywrightBoundBrowserRuntime:
             submit.first.click(timeout=timeout)
         else:
             password.first.press("Enter", timeout=timeout)
-        with suppress(Exception):
-            page.wait_for_load_state("domcontentloaded", timeout=timeout)
+        signal = self._wait_for_login_success(
+            session, command, password, login_url_before_submit
+        )
+        session.login_state_marker = {
+            "status": "SUCCEEDED",
+            "signal": signal,
+            "login_submitted": True,
+        }
+
+    def _wait_for_login_success(
+        self,
+        session: _Session,
+        command: BoundBrowserCommand,
+        password: Locator,
+        login_url_before_submit: str,
+    ) -> str:
+        deadline = time.monotonic() + self._timeout_ms(command) / 1000
+        while True:
+            self._raise_if_cancelled(command)
+            self._validate_pages(session)
+            password_visible = password.count() > 0 and password.first.is_visible()
+            if not password_visible:
+                if session.page.url != login_url_before_submit:
+                    return "AUTHENTICATED_URL"
+                return "LOGIN_FORM_DISAPPEARED"
+            remaining_ms = max(1, int((deadline - time.monotonic()) * 1000))
+            if remaining_ms <= 1:
+                raise RuntimeError("observable login success signal was not observed")
+            try:
+                password.first.wait_for(state="hidden", timeout=min(remaining_ms, 250))
+            except PlaywrightTimeoutError:
+                if time.monotonic() >= deadline:
+                    raise RuntimeError("observable login success signal was not observed") from None
 
     def _validate_pages(self, session: _Session) -> None:
         if session.navigation_violation is not None:
@@ -499,7 +540,7 @@ class PlaywrightBoundBrowserRuntime:
                 or focus.first.get_attribute("name"),
             }
         observation = {
-            "current_url": page.url,
+            "current_url": self._sanitized_url(page.url),
             "title": page.title(),
             "visible_semantic_elements": semantic,
             "relevant_text_and_controls": body_text,
@@ -508,6 +549,7 @@ class PlaywrightBoundBrowserRuntime:
             "navigation_or_error": None,
             "necessary_local_accessibility_or_dom_slice": None,
             "artifact_references": [],
+            "login_state_marker": session.login_state_marker,
         }
         return BrowserObservation(
             browser_session_id=browser_session_id,
@@ -525,6 +567,7 @@ class PlaywrightBoundBrowserRuntime:
         captcha_value: str | None = None,
     ) -> object:
         secrets = {
+            command.login_material.account_identifier,
             command.login_material.secret_value,
             command.login_material.captcha_request_header_value,
             *(item.value for item in command.login_material.local_storage_presets),
@@ -544,6 +587,41 @@ class PlaywrightBoundBrowserRuntime:
                 for key, item in value.items()
             }
         return value
+
+    def _ensure_browser(self) -> None:
+        if self._playwright is not None:
+            return
+        playwright = sync_playwright().start()
+        try:
+            browser = playwright.chromium.launch(
+                headless=self._headless,
+                args=["--no-proxy-server"],
+            )
+        except Exception:
+            playwright.stop()
+            raise
+        self._playwright = playwright
+        self._browser = browser
+
+    def _shutdown_if_idle(self) -> None:
+        if self._sessions:
+            return
+        if self._browser is not None:
+            with suppress(Exception):
+                self._browser.close()
+            self._browser = None
+        if self._playwright is not None:
+            with suppress(Exception):
+                self._playwright.stop()
+            self._playwright = None
+
+    @staticmethod
+    def _sanitized_url(value: str) -> str:
+        try:
+            parts = urlsplit(value)
+        except ValueError:
+            return value.split("?", 1)[0].split("#", 1)[0]
+        return urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
 
     @staticmethod
     def _locator(page: Page, selector: str) -> Locator:

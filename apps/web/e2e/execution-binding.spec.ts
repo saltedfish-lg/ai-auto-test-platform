@@ -55,52 +55,96 @@ test("execution binding and fenced lease browser closure", async ({ page, reques
   const runnerId = requiredEnvironment("ATP_BINDING_E2E_RUNNER_ID");
   const policyId = requiredEnvironment("ATP_BINDING_E2E_POLICY_ID");
   const attemptIds = requiredEnvironment("ATP_BINDING_E2E_ATTEMPT_IDS").split(",");
-  const resourceIdentity = requiredEnvironment("ATP_BINDING_E2E_RESOURCE_IDENTITY");
   const ownerIdentity = requiredEnvironment("ATP_BINDING_E2E_OWNER_IDENTITY");
   expect(attemptIds).toHaveLength(4);
 
   await page.goto("/");
   await expect(page).toHaveURL(/\/login(?:\?|$)/);
   expect((await login(page, username, password)).status()).toBe(200);
+  const directLogin = await request.post("/api/v1/auth/login", {
+    data: { username, password },
+  });
+  expect(directLogin.status()).toBe(200);
+  const token = (await directLogin.json()).data.access_token as string;
+  const headers = { Authorization: `Bearer ${token}` };
+
+  const environment = (
+    await (await request.get(`/api/v1/environment/${environmentId}`, { headers })).json()
+  ).data;
+  const runner = (await (await request.get(`/api/v1/runner/${runnerId}`, { headers })).json()).data;
+  const terminal = (
+    await (await request.get(`/api/v1/business-terminal/${terminalId}`, { headers })).json()
+  ).data;
+  const account = (
+    await (await request.get(`/api/v1/test-account/${accountId}`, { headers })).json()
+  ).data;
+  const policyList = await (
+    await request.get(`/api/v1/project-runtime-policy-revisions?project_id=${projectId}`, { headers })
+  ).json();
+  const policy = policyList.items.find(
+    (item: { runtime_policy_revision_id: string }) => item.runtime_policy_revision_id === policyId,
+  );
+  expect(policy).toBeDefined();
+  const slotList = await (
+    await request.get(
+      `/api/v1/execution-slot?project_id=${projectId}&runner_id=${runnerId}&lifecycle_status=ACTIVE&available_only=true`,
+      { headers },
+    )
+  ).json();
+  expect(slotList.items).toHaveLength(1);
+  const resourceIdentity = slotList.items[0].execution_slot_id as string;
+
   await page.goto(`/projects/${projectId}/execution-bindings`);
   await expect(page.getByRole("heading", { name: "执行绑定" })).toBeVisible();
   await page.getByRole("button", { name: "新建执行绑定" }).click();
-  const dialog = page.getByRole("dialog", { name: "新建 ExecutionBindingSnapshot" });
-  await dialog.getByLabel("ExecutionAttempt ID").fill(attemptIds[0]);
-  await dialog.getByLabel("Environment ID").fill(environmentId);
-  await dialog.getByLabel("BusinessTerminal ID").fill(terminalId);
-  await dialog.getByLabel("TestAccount ID").fill(accountId);
-  await dialog.getByLabel("Runner ID").fill(runnerId);
-  await dialog
-    .locator(".el-form-item", { hasText: "RuntimePolicy Revision" })
-    .locator(".el-select__wrapper")
-    .click();
-  await page.getByRole("option", { name: /Revision 1 · CHROMIUM/ }).click();
-  await dialog.getByLabel("Runner Resource Identity").fill(resourceIdentity);
-  await dialog.getByLabel("Owner Execution Identity").fill(ownerIdentity);
+  const dialog = page.getByRole("dialog", { name: "新建执行绑定" });
+
+  const choose = async (label: string, option: RegExp) => {
+    const item = dialog.locator(".el-form-item", { hasText: label });
+    await item.locator(".el-select__wrapper").click();
+    await page.getByRole("option", { name: option }).click();
+  };
+
+  await choose("执行环境", new RegExp(environment.display_name || environment.environment_code));
+  await choose("执行 Runner", new RegExp(runner.display_name || runner.runner_code));
+
+  const attemptResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/api/v1/execution-attempt") &&
+      response.request().method() === "POST",
+  );
+  await dialog.getByRole("button", { name: "准备执行实例" }).click();
+  expect((await attemptResponse).status()).toBe(201);
+  await expect(dialog.getByText(/已准备 · 第 \d+ 次尝试/)).toBeVisible();
+
+  await choose("业务终端", new RegExp(terminal.display_name || terminal.terminal_code));
+  await choose("测试账号", new RegExp(account.display_name || account.account_identifier));
+  await choose("运行策略", new RegExp(`修订 ${policy.revision_no}`));
+  await expect(dialog.getByText(/正式执行槽位 1 · 可用|槽位 1 · 可用/)).toBeVisible();
+  await expect(dialog.getByText("当前 Runner 没有可用的正式执行槽位。", { exact: false })).toHaveCount(0);
   const preflightResponse = page.waitForResponse(
     (response) =>
       response.url().endsWith("/api/v1/execution-binding-snapshots/preflight") &&
       response.request().method() === "POST",
   );
-  await dialog.getByRole("button", { name: "执行 Preflight" }).click();
+  await dialog.getByRole("button", { name: "执行预检查" }).click();
   const preflight = await preflightResponse;
   expect(preflight.status()).toBe(200);
   const preflightPayload = await preflight.json();
   expect(preflightPayload.data.ready, JSON.stringify(preflightPayload.data.checks)).toBe(true);
-  await expect(dialog.getByText("Preflight：PASS")).toBeVisible();
+  await expect(dialog.getByText("执行预检查：通过")).toBeVisible();
 
   const createdResponse = page.waitForResponse(
     (response) =>
       response.url().endsWith("/api/v1/execution-binding-snapshots") &&
       response.request().method() === "POST",
   );
-  await dialog.getByRole("button", { name: "原子创建" }).click();
+  await dialog.getByRole("button", { name: "创建执行绑定" }).click();
   const createdHttp = await createdResponse;
-  expect(createdHttp.status()).toBe(201);
-  const first = (await createdHttp.json()).data as ExecutionBindingSnapshotResource;
+  const createdPayload = await createdHttp.json();
+  expect(createdHttp.status(), JSON.stringify(createdPayload)).toBe(201);
+  const first = createdPayload.data as ExecutionBindingSnapshotResource;
   expect(first).toMatchObject({
-    execution_attempt_id: attemptIds[0],
     project_id: projectId,
     environment_id: environmentId,
     business_terminal_id: terminalId,
@@ -120,17 +164,11 @@ test("execution binding and fenced lease browser closure", async ({ page, reques
   });
   expect(first.identity_lease).toMatchObject({ status: "ACTIVE", fencing_generation: 1 });
   expect(first.runner_lease).toMatchObject({ status: "ACTIVE", fencing_generation: 1 });
-  await expect(page.getByText(`generation ${first.identity_lease.fencing_generation}`)).toHaveCount(
+  await expect(page.getByText(`第 ${first.identity_lease.fencing_generation} 代`, { exact: false })).toHaveCount(
     2,
   );
   expect(await page.locator("body").textContent()).not.toContain(password);
 
-  const directLogin = await request.post("/api/v1/auth/login", {
-    data: { username, password },
-  });
-  expect(directLogin.status()).toBe(200);
-  const token = (await directLogin.json()).data.access_token as string;
-  const headers = { Authorization: `Bearer ${token}` };
   const basePayload = {
     project_id: projectId,
     environment_id: environmentId,
@@ -147,7 +185,7 @@ test("execution binding and fenced lease browser closure", async ({ page, reques
   const rejectedCompetition = await createBinding(
     request,
     headers,
-    { ...basePayload, execution_attempt_id: attemptIds[1] },
+    { ...basePayload, execution_attempt_id: attemptIds[0] },
     "binding-competition-rejected",
   );
   expect(rejectedCompetition.status()).toBe(409);
@@ -189,7 +227,7 @@ test("execution binding and fenced lease browser closure", async ({ page, reques
   const reacquiredResponse = await createBinding(
     request,
     headers,
-    { ...basePayload, execution_attempt_id: attemptIds[1] },
+    { ...basePayload, execution_attempt_id: attemptIds[0] },
     "binding-reacquire",
   );
   expect(reacquiredResponse.status()).toBe(201);
@@ -222,7 +260,7 @@ test("execution binding and fenced lease browser closure", async ({ page, reques
 
   const contenders = await Promise.all(
     attemptIds
-      .slice(2)
+      .slice(1, 3)
       .map((executionAttemptId, index) =>
         createBinding(
           request,

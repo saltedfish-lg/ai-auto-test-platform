@@ -4,6 +4,7 @@ import { computed, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
 import PermissionGate from "../components/PermissionGate.vue";
+import { statusLabel } from "../presentation/labels";
 import { useProjectsStore } from "../stores/projects";
 
 const projects = useProjectsStore();
@@ -172,8 +173,10 @@ async function submitTransition(): Promise<void> {
       show-icon
       class="workspace-alert"
     >
-      <template v-if="projects.correlationId" #default>
-        <span class="correlation-id">请求标识：{{ projects.correlationId }}</span>
+      <template v-if="projects.errorCode || projects.correlationId" #default>
+        <span v-if="projects.errorCode">错误代码：{{ projects.errorCode }}</span>
+        <span v-if="projects.errorCode && projects.correlationId"> · </span>
+        <span v-if="projects.correlationId" class="correlation-id">请求标识：{{ projects.correlationId }}</span>
       </template>
     </el-alert>
 
@@ -189,13 +192,19 @@ async function submitTransition(): Promise<void> {
             <dd>{{ projects.current.display_name || "未设置" }}</dd>
             <dt>生命周期</dt>
             <dd>
-              <el-tag type="success">{{ projects.current.lifecycle_status }}</el-tag>
+              <el-tag type="success">{{ statusLabel("lifecycle", projects.current.lifecycle_status) }}</el-tag>
             </dd>
             <dt>当前版本</dt>
             <dd>v{{ projects.current.row_version }}</dd>
-            <dt>项目 ID</dt>
-            <dd class="monospace">{{ projects.current.project_id }}</dd>
           </dl>
+          <el-collapse style="margin-top: 12px">
+            <el-collapse-item title="技术信息" name="technical">
+              <p>项目标识：<code>{{ projects.current.project_id }}</code></p>
+              <p v-for="owner in projects.current.owners" :key="`owner-tech-${owner.user_id}`">
+                负责人标识：<code>{{ owner.user_id }}</code>
+              </p>
+            </el-collapse-item>
+          </el-collapse>
         </el-card>
 
         <el-card shadow="never">
@@ -203,7 +212,7 @@ async function submitTransition(): Promise<void> {
             <div class="section-heading">
               <div>
                 <strong>项目负责人</strong>
-                <p>ACTIVE 成员与 Owner 职责共同派生项目范围</p>
+                <p>已启用成员与项目负责人职责共同派生项目范围</p>
               </div>
               <el-tag type="info">{{ projects.current.owners.length }} 人</el-tag>
             </div>
@@ -212,12 +221,12 @@ async function submitTransition(): Promise<void> {
             <div v-for="owner in projects.current.owners" :key="owner.user_id" class="owner-row">
               <div>
                 <strong>{{ owner.display_name || "未设置名称" }}</strong>
-                <p class="monospace">{{ owner.user_id }}</p>
+                <p>项目负责人</p>
               </div>
-              <el-tag type="success">{{ owner.membership_status }}</el-tag>
+              <el-tag type="success">{{ statusLabel("lifecycle", owner.membership_status) }}</el-tag>
             </div>
           </div>
-          <p class="scope-note">Owner ALL 仅限当前 project_id，不代表全平台范围。</p>
+          <p class="scope-note">项目负责人拥有的全部项目权限仅限当前项目，不代表全平台范围。</p>
         </el-card>
       </div>
     </template>

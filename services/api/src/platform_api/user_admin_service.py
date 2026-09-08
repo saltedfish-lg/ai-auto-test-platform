@@ -7,7 +7,7 @@ import secrets
 from dataclasses import dataclass
 
 from pydantic import BaseModel
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from platform_api.audit import AuditContext, AuthenticationAuditService
@@ -64,6 +64,43 @@ class UserAdministrationService:
         self._audit = audit
         self._idempotency = idempotency
         self._sessions = sessions
+
+    def list_users(
+        self,
+        token: str,
+        *,
+        page: int,
+        page_size: int,
+        filter_value: str | None,
+        audit_context: AuditContext,
+    ) -> tuple[list[UserResource], int]:
+        """Return the bounded platform user directory used by governed relation selectors."""
+        filters = _parse_user_filter(filter_value)
+        with self._factory() as db:
+            actor = self._authentication.authenticate_access_in_transaction(
+                db, token, "list_user", audit_context
+            )
+            self._authentication.require_platform_permissions_in_transaction(
+                db, actor, "list_user", ("PROJECT_VIEW",), audit_context
+            )
+            conditions = []
+            lifecycle = filters.get("lifecycle_status")
+            if lifecycle is not None:
+                conditions.append(PlatformUser.lifecycle_status == lifecycle)
+            username = filters.get("username")
+            if username is not None:
+                conditions.append(PlatformUser.username == username)
+            query = select(PlatformUser).where(*conditions)
+            count_query = select(func.count()).select_from(PlatformUser).where(*conditions)
+            total = int(db.scalar(count_query) or 0)
+            users = list(
+                db.scalars(
+                    query.order_by(PlatformUser.display_name, PlatformUser.username, PlatformUser.user_id)
+                    .offset((page - 1) * page_size)
+                    .limit(page_size)
+                )
+            )
+            return [_user_resource(user) for user in users], total
 
     def create_user(
         self,
@@ -596,6 +633,25 @@ class UserAdministrationService:
     def _protect_admin(db: Session, user_id: str) -> None:
         if db.scalar(select(Admin.admin_id).where(Admin.user_id == user_id)) is not None:
             raise _admin_immutable()
+
+def _parse_user_filter(value: str | None) -> dict[str, str]:
+    if value is None or not value.strip():
+        return {}
+    result: dict[str, str] = {}
+    for fragment in value.split(","):
+        key, separator, raw = fragment.partition("=")
+        key = key.strip()
+        raw = raw.strip()
+        if separator != "=" or key not in {"lifecycle_status", "username"} or not raw:
+            raise PlatformError(
+                title="Invalid user filter",
+                detail="User directory filters support lifecycle_status and username only.",
+                status=400,
+                code="AUTH_REQUEST_VALIDATION_FAILED",
+            )
+        result[key] = raw
+    return result
+
 
 def _canonical_payload(body: BaseModel, resource_id: str | None = None) -> bytes:
     value: dict[str, object] = body.model_dump(mode="json", exclude_none=False)

@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ai-test-platform:event:execution_attempt.created:1.0.0",
+  "title": "execution_attempt.created",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "event_id",
+    "event_type",
+    "event_version",
+    "occurred_at",
+    "aggregate_id",
+    "sequence",
+    "correlation_id",
+    "causation_id",
+    "project_id",
+    "payload"
+  ],
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "minLength": 26,
+      "maxLength": 26
+    },
+    "event_type": {
+      "const": "execution_attempt.created"
+    },
+    "event_version": {
+      "const": "1.0.0"
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "aggregate_id": {
+      "type": "string",
+      "minLength": 26,
+      "maxLength": 26
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "correlation_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "causation_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "project_id": {
+      "type": "string",
+      "minLength": 26,
+      "maxLength": 26
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "execution_attempt_id",
+        "run_task_id",
+        "runner_id",
+        "attempt_no",
+        "execution_status",
+        "lifecycle_status"
+      ],
+      "properties": {
+        "execution_attempt_id": {
+          "type": "string",
+          "minLength": 26,
+          "maxLength": 26
+        },
+        "run_task_id": {
+          "type": "string",
+          "minLength": 26,
+          "maxLength": 26
+        },
+        "runner_id": {
+          "type": "string",
+          "minLength": 26,
+          "maxLength": 26
+        },
+        "attempt_no": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 191
+        },
+        "execution_status": {
+          "const": "READY"
+        },
+        "lifecycle_status": {
+          "const": "CREATED"
+        }
+      }
+    }
+  },
+  "x-forbidden-fields": [
+    "plaintext_password",
+    "secret_value",
+    "access_token",
+    "refresh_token",
+    "raw_credential",
+    "captcha_value",
+    "cookie"
+  ],
+  "x-aggregate-id-field": "execution_attempt_id"
+}

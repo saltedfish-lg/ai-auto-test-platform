@@ -105,6 +105,32 @@ const completedStep: AIExplorationStepResource = {
 };
 
 async function renderView() {
+  vi.spyOn(apiClient, "list_execution_binding_snapshots").mockResolvedValue({
+    items: [
+      {
+        execution_binding_snapshot_id: "01JBINDING0000000000000001",
+        execution_attempt_id: "01JATTEMPT0000000000000001",
+        project_id: project.project_id,
+        environment_id: "01JENV00000000000000000001",
+        business_terminal_id: "01JTERM0000000000000000001",
+        runner_id: "01JRUNNER00000000000000001",
+        status: "READY",
+      } as any,
+    ],
+    page: { page: 1, page_size: 50, total: 1 },
+  });
+  vi.spyOn(apiClient, "list_environment").mockResolvedValue({
+    items: [{ environment_id: "01JENV00000000000000000001", environment_code: "UAT", display_name: "UAT 环境", lifecycle_status: "ACTIVE" } as any],
+    page: { page: 1, page_size: 200, total: 1 },
+  });
+  vi.spyOn(apiClient, "list_business_terminal").mockResolvedValue({
+    items: [{ business_terminal_id: "01JTERM0000000000000000001", terminal_code: "ADMIN", display_name: "管理端", terminal_type: "MANAGEMENT", lifecycle_status: "ACTIVE" } as any],
+    page: { page: 1, page_size: 200, total: 1 },
+  });
+  vi.spyOn(apiClient, "list_runner").mockResolvedValue({
+    items: [{ runner_id: "01JRUNNER00000000000000001", runner_code: "RUNNER-01", display_name: "本机 Runner" } as any],
+    page: { page: 1, page_size: 200, total: 1 },
+  });
   const pinia = createPinia();
   setActivePinia(pinia);
   const projects = useProjectsStore();
@@ -144,7 +170,7 @@ describe("AI 探索规划页面（组件测试，API 为 mock）", () => {
     expect(screen.getByText("进入工作台")).toBeTruthy();
     expect(screen.getByText("打开登录页")).toBeTruthy();
     expect(screen.getByText("预期观察：页面展示登录表单")).toBeTruthy();
-    expect(screen.getByText("READY")).toBeTruthy();
+    expect(screen.getByText("就绪")).toBeTruthy();
   });
 
   it("renders a persisted FAILED result without inventing a plan", async () => {
@@ -253,10 +279,7 @@ describe("AI 探索规划页面（组件测试，API 为 mock）", () => {
     const explorations = useAIExplorationsStore(pinia);
     explorations.current = readySession;
 
-    await fireEvent.update(
-      await screen.findByLabelText("ExecutionAttempt ID"),
-      runningSession.execution_attempt_id!,
-    );
+    expect(await screen.findByLabelText("执行绑定 / 执行实例")).toBeTruthy();
     await fireEvent.click(screen.getByRole("button", { name: "启动已绑定 Runner" }));
 
     await waitFor(() => expect(start).toHaveBeenCalledTimes(1));
@@ -264,7 +287,7 @@ describe("AI 探索规划页面（组件测试，API 为 mock）", () => {
       execution_attempt_id: runningSession.execution_attempt_id,
       expected_row_version: readySession.row_version,
     });
-    expect(await screen.findByText("SUCCEEDED")).toBeTruthy();
+    expect(await screen.findByText("成功")).toBeTruthy();
     expect(await screen.findByText("goal_completed")).toBeTruthy();
     expect(screen.getByText("Dashboard · https://example.test/dashboard")).toBeTruthy();
   });

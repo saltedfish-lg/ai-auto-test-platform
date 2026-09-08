@@ -10,13 +10,15 @@ import pytest
 from platform_api import runner_router
 from platform_api.audit import AuditContext
 from platform_api.errors import PlatformError
-from platform_api.models import OutboxEvent, Runner, RunnerAgent, RunnerAudit, RunnerCapability
+from platform_api.models import ExecutionSlot, OutboxEvent, Runner, RunnerAgent, RunnerAudit, RunnerCapability
 from platform_api.runner_router import router
 from platform_api.runner_schemas import (
     CreateRunnerEnrollmentRequest,
     HeartbeatRunnerRequest,
     RegisterRunnerRequest,
+    ReportRunnerCapabilitiesRequest,
     RunnerCapabilityReportItem,
+    RunnerLifecycleRequest,
     UpdateRunnerRequest,
     ValidateRunnerCapabilityRequest,
 )
@@ -134,7 +136,7 @@ def test_capability_snapshot_is_controlled_and_duplicate_codes_are_rejected() ->
         RegisterRunnerRequest(
             enrollment_credential="enr_" + "a" * 48,
             machine_fingerprint="machine-01",
-            agent_version="1.0.0",
+            agent_version="0.1.0",
             capabilities=[capability, capability],
         )
 
@@ -230,6 +232,8 @@ def test_machine_identity_and_execution_eligibility_are_distinct() -> None:
         project_binding_status="BOUND",
         connection_status="ONLINE",
         health_status="HEALTHY",
+        last_heartbeat_at=datetime.now(UTC).replace(tzinfo=None),
+        version_compatibility="UNKNOWN",
     )
     active = SimpleNamespace(
         lifecycle_status="ACTIVE",
@@ -238,6 +242,8 @@ def test_machine_identity_and_execution_eligibility_are_distinct() -> None:
         project_binding_status="BOUND",
         connection_status="ONLINE",
         health_status="HEALTHY",
+        last_heartbeat_at=datetime.now(UTC).replace(tzinfo=None),
+        version_compatibility="COMPATIBLE",
     )
 
     assert _runner_execution_eligible(registered) is False  # type: ignore[arg-type]
@@ -341,7 +347,7 @@ class _RunnerValidationSession:
             capability_type="VERSION",
             availability_status="CONFIGURED",
             validation_status="PENDING",
-            observed_version="1.0.0",
+            observed_version="0.1.0",
             observed_metadata_json=None,
             reported_at=now,
             lifecycle_status="ACTIVE",
@@ -353,6 +359,47 @@ class _RunnerValidationSession:
             updated_by=self.agent.runner_agent_id,
             extension_json=None,
         )
+        self.playwright_capability = RunnerCapability(
+            runner_capability_id="D" * 26,
+            project_id=self.runner.project_id,
+            runner_id=self.runner.runner_id,
+            capability_code="PLAYWRIGHT_VERSION",
+            capability_type="VERSION",
+            availability_status="CONFIGURED",
+            validation_status="VALID",
+            observed_version="1.62.0",
+            observed_metadata_json=None,
+            reported_at=now,
+            lifecycle_status="ACTIVE",
+            display_name=None,
+            row_version=1,
+            created_at=now,
+            updated_at=now,
+            created_by=self.agent.runner_agent_id,
+            updated_by=self.agent.runner_agent_id,
+            extension_json=None,
+        )
+        self.formal_capability = RunnerCapability(
+            runner_capability_id="F" * 26,
+            project_id=self.runner.project_id,
+            runner_id=self.runner.runner_id,
+            capability_code="FORMAL_EXECUTION",
+            capability_type="SESSION",
+            availability_status="CONFIGURED",
+            validation_status="VALID",
+            observed_version=None,
+            observed_metadata_json=None,
+            reported_at=now,
+            lifecycle_status="ACTIVE",
+            display_name=None,
+            row_version=1,
+            created_at=now,
+            updated_at=now,
+            created_by=self.agent.runner_agent_id,
+            updated_by=self.agent.runner_agent_id,
+            extension_json=None,
+        )
+        self.execution_slot: ExecutionSlot | None = None
         self.project = SimpleNamespace(project_id=self.runner.project_id, lifecycle_status="ACTIVE")
         self.added: list[object] = []
 
@@ -363,7 +410,18 @@ class _RunnerValidationSession:
             return max(sequences, default=0)
         if "FROM atp_runner_agent" in sql:
             return self.agent
+        if "FROM atp_execution_slot" in sql:
+            return self.execution_slot
         if "FROM atp_runner_capability" in sql:
+            params = getattr(statement.compile(), "params", {})
+            code = next(
+                (value for key, value in params.items() if "capability_code" in key),
+                "AGENT_VERSION",
+            )
+            if code == "PLAYWRIGHT_VERSION":
+                return self.playwright_capability
+            if code == "FORMAL_EXECUTION":
+                return self.formal_capability
             return self.capability
         if "FROM atp_runner" in sql:
             return self.runner
@@ -373,10 +431,20 @@ class _RunnerValidationSession:
 
     def scalars(self, statement: object) -> list[RunnerCapability]:
         assert "FROM atp_runner_capability" in str(statement)
-        return [self.capability]
+        return [self.capability, self.playwright_capability, self.formal_capability]
+
+    def get(self, model: object, identity: object) -> object | None:
+        del identity
+        if getattr(model, "__name__", "") == "Project":
+            return self.project
+        if getattr(model, "__name__", "") == "Runner":
+            return self.runner
+        return None
 
     def add(self, value: object) -> None:
         self.added.append(value)
+        if isinstance(value, ExecutionSlot):
+            self.execution_slot = value
 
     def flush(self) -> None:
         return None
@@ -585,6 +653,350 @@ def test_capability_validation_idempotency_replays_without_duplicate_audit_or_ou
     assert first == second
     assert _audit_and_outbox_counts(session) == (1, 1)
 
+
+def test_validated_version_capabilities_recompute_compatibility_and_scheduling() -> None:
+    service, session = _runner_validation_service()
+    session.runner.version_compatibility = "UNKNOWN"
+    session.runner.scheduling_status = "UNSCHEDULABLE"
+    session.playwright_capability.validation_status = "PENDING"
+    context = AuditContext(correlation_id="compatibility-formation", source_context="test")
+
+    first = service.validate_capability(
+        "bearer",
+        session.runner.runner_id,
+        "AGENT_VERSION",
+        _validation_request(),
+        "validate-agent-version",
+        context,
+    )
+    assert first.version_compatibility == "UNKNOWN"
+    assert first.scheduling_status == "UNSCHEDULABLE"
+
+    second = service.validate_capability(
+        "bearer",
+        session.runner.runner_id,
+        "PLAYWRIGHT_VERSION",
+        ValidateRunnerCapabilityRequest(
+            expected_capability_version=1,
+            evidence_summary="Playwright 1.62.0 launched the configured Chromium runtime.",
+            reason="validate current Playwright version",
+        ),
+        "validate-playwright-version",
+        context,
+    )
+    assert second.version_compatibility == "COMPATIBLE"
+    assert second.scheduling_status == "IDLE"
+    assert session.execution_slot is not None
+    assert session.execution_slot.slot_no == "0"
+    assert session.execution_slot.lifecycle_status == "ACTIVE"
+    assert session.runner.row_version == 7
+
+
+def test_unchanged_valid_version_report_repairs_legacy_unknown_aggregate_state() -> None:
+    service, session = _runner_validation_service()
+    session.capability.validation_status = "VALID"
+    session.playwright_capability.validation_status = "VALID"
+    session.runner.version_compatibility = "UNKNOWN"
+    session.runner.scheduling_status = "UNSCHEDULABLE"
+    initial_runner_version = session.runner.row_version
+
+    repaired = service.report_capabilities(
+        session.runner.runner_id,
+        session.agent_token,
+        ReportRunnerCapabilitiesRequest(
+            capabilities=[
+                RunnerCapabilityReportItem(
+                    capability_code="AGENT_VERSION",
+                    availability_status="CONFIGURED",
+                    observed_version="0.1.0",
+                ),
+                RunnerCapabilityReportItem(
+                    capability_code="PLAYWRIGHT_VERSION",
+                    availability_status="CONFIGURED",
+                    observed_version="1.62.0",
+                ),
+                RunnerCapabilityReportItem(
+                    capability_code="FORMAL_EXECUTION",
+                    availability_status="CONFIGURED",
+                ),
+            ]
+        ),
+        AuditContext(correlation_id="legacy-aggregate-repair", source_context="test"),
+    )
+
+    assert repaired.version_compatibility == "COMPATIBLE"
+    assert repaired.scheduling_status == "IDLE"
+    assert session.execution_slot is not None
+    slot_id = session.execution_slot.execution_slot_id
+    repaired_again = service.report_capabilities(
+        session.runner.runner_id,
+        session.agent_token,
+        ReportRunnerCapabilitiesRequest(
+            capabilities=[
+                RunnerCapabilityReportItem(capability_code="AGENT_VERSION", availability_status="CONFIGURED", observed_version="0.1.0"),
+                RunnerCapabilityReportItem(capability_code="PLAYWRIGHT_VERSION", availability_status="CONFIGURED", observed_version="1.62.0"),
+                RunnerCapabilityReportItem(capability_code="FORMAL_EXECUTION", availability_status="CONFIGURED"),
+            ]
+        ),
+        AuditContext(correlation_id="legacy-aggregate-repair-repeat", source_context="test"),
+    )
+    assert repaired_again.version_compatibility == "COMPATIBLE"
+    assert session.execution_slot.execution_slot_id == slot_id
+    assert sum(isinstance(item, ExecutionSlot) for item in session.added) == 1
+    assert session.capability.validation_status == "VALID"
+    assert session.playwright_capability.validation_status == "VALID"
+    assert session.runner.row_version == initial_runner_version
+
+
+def test_version_report_change_fails_closed_until_revalidated() -> None:
+    service, session = _runner_validation_service()
+    session.capability.validation_status = "VALID"
+    session.playwright_capability.validation_status = "VALID"
+    session.runner.version_compatibility = "COMPATIBLE"
+    session.runner.scheduling_status = "IDLE"
+    context = AuditContext(correlation_id="compatibility-change", source_context="test")
+
+    stable = service.report_capabilities(
+        session.runner.runner_id,
+        session.agent_token,
+        ReportRunnerCapabilitiesRequest(
+            capabilities=[
+                RunnerCapabilityReportItem(capability_code="AGENT_VERSION", availability_status="CONFIGURED", observed_version="0.1.0"),
+                RunnerCapabilityReportItem(capability_code="PLAYWRIGHT_VERSION", availability_status="CONFIGURED", observed_version="1.62.0"),
+                RunnerCapabilityReportItem(capability_code="FORMAL_EXECUTION", availability_status="CONFIGURED"),
+            ]
+        ),
+        context,
+    )
+    assert stable.version_compatibility == "COMPATIBLE"
+    assert session.execution_slot is not None
+    slot_id = session.execution_slot.execution_slot_id
+    assert session.execution_slot.lifecycle_status == "ACTIVE"
+
+    changed = service.report_capabilities(
+        session.runner.runner_id,
+        session.agent_token,
+        ReportRunnerCapabilitiesRequest(
+            capabilities=[
+                RunnerCapabilityReportItem(
+                    capability_code="AGENT_VERSION",
+                    availability_status="CONFIGURED",
+                    observed_version="0.2.0",
+                ),
+                RunnerCapabilityReportItem(
+                    capability_code="PLAYWRIGHT_VERSION",
+                    availability_status="CONFIGURED",
+                    observed_version="1.62.0",
+                ),
+                RunnerCapabilityReportItem(
+                    capability_code="FORMAL_EXECUTION",
+                    availability_status="CONFIGURED",
+                ),
+            ]
+        ),
+        context,
+    )
+
+    assert changed.version_compatibility == "UNKNOWN"
+    assert changed.scheduling_status == "UNSCHEDULABLE"
+    assert session.execution_slot is not None
+    assert session.execution_slot.execution_slot_id == slot_id
+    assert session.execution_slot.lifecycle_status == "DISABLED"
+    assert session.capability.validation_status == "PENDING"
+
+    restored_report = service.report_capabilities(
+        session.runner.runner_id,
+        session.agent_token,
+        ReportRunnerCapabilitiesRequest(
+            capabilities=[
+                RunnerCapabilityReportItem(
+                    capability_code="AGENT_VERSION",
+                    availability_status="CONFIGURED",
+                    observed_version="0.1.0",
+                ),
+                RunnerCapabilityReportItem(
+                    capability_code="PLAYWRIGHT_VERSION",
+                    availability_status="CONFIGURED",
+                    observed_version="1.62.0",
+                ),
+                RunnerCapabilityReportItem(
+                    capability_code="FORMAL_EXECUTION",
+                    availability_status="CONFIGURED",
+                ),
+            ]
+        ),
+        context,
+    )
+    assert restored_report.version_compatibility == "UNKNOWN"
+    assert restored_report.scheduling_status == "UNSCHEDULABLE"
+
+    restored = service.validate_capability(
+        "bearer",
+        session.runner.runner_id,
+        "AGENT_VERSION",
+        ValidateRunnerCapabilityRequest(
+            expected_capability_version=session.capability.row_version,
+            evidence_summary="Runner Agent 0.1.0 was revalidated after version restoration.",
+            reason="restore supported Runner Agent version",
+        ),
+        "revalidate-restored-agent-version",
+        context,
+    )
+    assert restored.version_compatibility == "COMPATIBLE"
+    assert restored.scheduling_status == "IDLE"
+    assert session.execution_slot is not None
+    assert session.execution_slot.execution_slot_id == slot_id
+    assert session.execution_slot.lifecycle_status == "ACTIVE"
+
+
+def test_formal_execution_capability_loss_disables_and_recovery_reuses_same_slot() -> None:
+    service, session = _runner_validation_service()
+    session.capability.validation_status = "VALID"
+    session.playwright_capability.validation_status = "VALID"
+    context = AuditContext(correlation_id="formal-slot-capability", source_context="test")
+
+    initial = service.report_capabilities(
+        session.runner.runner_id,
+        session.agent_token,
+        ReportRunnerCapabilitiesRequest(
+            capabilities=[
+                RunnerCapabilityReportItem(capability_code="AGENT_VERSION", availability_status="CONFIGURED", observed_version="0.1.0"),
+                RunnerCapabilityReportItem(capability_code="PLAYWRIGHT_VERSION", availability_status="CONFIGURED", observed_version="1.62.0"),
+                RunnerCapabilityReportItem(capability_code="FORMAL_EXECUTION", availability_status="CONFIGURED"),
+            ]
+        ),
+        context,
+    )
+    assert initial.version_compatibility == "COMPATIBLE"
+    assert session.execution_slot is not None
+    slot_id = session.execution_slot.execution_slot_id
+
+    lost = service.report_capabilities(
+        session.runner.runner_id,
+        session.agent_token,
+        ReportRunnerCapabilitiesRequest(
+            capabilities=[
+                RunnerCapabilityReportItem(capability_code="AGENT_VERSION", availability_status="CONFIGURED", observed_version="0.1.0"),
+                RunnerCapabilityReportItem(capability_code="PLAYWRIGHT_VERSION", availability_status="CONFIGURED", observed_version="1.62.0"),
+                RunnerCapabilityReportItem(capability_code="FORMAL_EXECUTION", availability_status="NOT_CONFIGURED"),
+            ]
+        ),
+        context,
+    )
+    assert lost.version_compatibility == "COMPATIBLE"
+    assert session.execution_slot.lifecycle_status == "DISABLED"
+
+    restored_report = service.report_capabilities(
+        session.runner.runner_id,
+        session.agent_token,
+        ReportRunnerCapabilitiesRequest(
+            capabilities=[
+                RunnerCapabilityReportItem(capability_code="AGENT_VERSION", availability_status="CONFIGURED", observed_version="0.1.0"),
+                RunnerCapabilityReportItem(capability_code="PLAYWRIGHT_VERSION", availability_status="CONFIGURED", observed_version="1.62.0"),
+                RunnerCapabilityReportItem(capability_code="FORMAL_EXECUTION", availability_status="CONFIGURED"),
+            ]
+        ),
+        context,
+    )
+    assert restored_report.version_compatibility == "COMPATIBLE"
+    assert session.formal_capability.validation_status == "PENDING"
+    assert session.execution_slot.lifecycle_status == "DISABLED"
+
+    service.validate_capability(
+        "bearer",
+        session.runner.runner_id,
+        "FORMAL_EXECUTION",
+        ValidateRunnerCapabilityRequest(
+            expected_capability_version=session.formal_capability.row_version,
+            evidence_summary="Formal execution runtime is available for the single P0 slot.",
+            reason="revalidate formal execution capacity",
+        ),
+        "revalidate-formal-execution",
+        context,
+    )
+    assert session.execution_slot.execution_slot_id == slot_id
+    assert session.execution_slot.lifecycle_status == "ACTIVE"
+    assert sum(isinstance(item, ExecutionSlot) for item in session.added) == 1
+
+
+
+def test_runner_disable_and_enable_reconcile_the_same_formal_execution_slot_identity() -> None:
+    service, session = _runner_validation_service()
+    session.capability.validation_status = "VALID"
+    session.playwright_capability.validation_status = "VALID"
+    context = AuditContext(correlation_id="slot-runner-lifecycle", source_context="test")
+
+    service.report_capabilities(
+        session.runner.runner_id,
+        session.agent_token,
+        ReportRunnerCapabilitiesRequest(
+            capabilities=[
+                RunnerCapabilityReportItem(capability_code="AGENT_VERSION", availability_status="CONFIGURED", observed_version="0.1.0"),
+                RunnerCapabilityReportItem(capability_code="PLAYWRIGHT_VERSION", availability_status="CONFIGURED", observed_version="1.62.0"),
+                RunnerCapabilityReportItem(capability_code="FORMAL_EXECUTION", availability_status="CONFIGURED"),
+            ]
+        ),
+        context,
+    )
+    assert session.execution_slot is not None
+    slot_id = session.execution_slot.execution_slot_id
+
+    service.transition(
+        "bearer",
+        session.runner.runner_id,
+        "disable",
+        RunnerLifecycleRequest(expected_version=session.runner.row_version, reason="maintenance"),
+        "disable-slot-owner",
+        context,
+    )
+    assert session.execution_slot.execution_slot_id == slot_id
+    assert session.execution_slot.lifecycle_status == "DISABLED"
+
+    service.transition(
+        "bearer",
+        session.runner.runner_id,
+        "enable",
+        RunnerLifecycleRequest(expected_version=session.runner.row_version, reason="maintenance completed"),
+        "enable-slot-owner",
+        context,
+    )
+    assert session.execution_slot.execution_slot_id == slot_id
+    assert session.execution_slot.lifecycle_status == "ACTIVE"
+    assert sum(isinstance(item, ExecutionSlot) for item in session.added) == 1
+
+
+def test_runner_archive_archives_existing_formal_execution_slot_without_replacing_identity() -> None:
+    service, session = _runner_validation_service()
+    session.capability.validation_status = "VALID"
+    session.playwright_capability.validation_status = "VALID"
+    context = AuditContext(correlation_id="slot-runner-archive", source_context="test")
+    service.report_capabilities(
+        session.runner.runner_id,
+        session.agent_token,
+        ReportRunnerCapabilitiesRequest(
+            capabilities=[
+                RunnerCapabilityReportItem(capability_code="AGENT_VERSION", availability_status="CONFIGURED", observed_version="0.1.0"),
+                RunnerCapabilityReportItem(capability_code="PLAYWRIGHT_VERSION", availability_status="CONFIGURED", observed_version="1.62.0"),
+                RunnerCapabilityReportItem(capability_code="FORMAL_EXECUTION", availability_status="CONFIGURED"),
+            ]
+        ),
+        context,
+    )
+    assert session.execution_slot is not None
+    slot_id = session.execution_slot.execution_slot_id
+    service.transition(
+        "bearer", session.runner.runner_id, "disable",
+        RunnerLifecycleRequest(expected_version=session.runner.row_version, reason="retire runner"),
+        "disable-before-archive", context,
+    )
+    service.transition(
+        "bearer", session.runner.runner_id, "archive",
+        RunnerLifecycleRequest(expected_version=session.runner.row_version, reason="retire runner"),
+        "archive-slot-owner", context,
+    )
+    assert session.execution_slot.execution_slot_id == slot_id
+    assert session.execution_slot.lifecycle_status == "ARCHIVED"
+    assert sum(isinstance(item, ExecutionSlot) for item in session.added) == 1
 
 def test_registration_delivery_token_is_recoverable_only_from_same_input() -> None:
     enrollment = "enr_" + "e" * 48

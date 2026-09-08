@@ -2,7 +2,7 @@ import { ref } from "vue";
 import { defineStore } from "pinia";
 
 import { apiClient } from "../api/client";
-import { getApiErrorMessage, getCorrelationId } from "../api/errors";
+import { getApiErrorMessage, getCorrelationId, getProblemCode } from "../api/errors";
 import type {
   CreateProjectRequest,
   ProjectLifecycleRequest,
@@ -22,6 +22,7 @@ export const useProjectsStore = defineStore("projects", () => {
   const status = ref<ProjectStatus>("idle");
   const errorMessage = ref("");
   const correlationId = ref<string>();
+  const errorCode = ref<string>();
   let cacheGeneration = 0;
   let listRequestId = 0;
   let detailRequestId = 0;
@@ -39,11 +40,13 @@ export const useProjectsStore = defineStore("projects", () => {
   function clearError(): void {
     errorMessage.value = "";
     correlationId.value = undefined;
+    errorCode.value = undefined;
   }
 
   function captureError(error: unknown, fallback: string): never {
     errorMessage.value = getApiErrorMessage(error, fallback);
     correlationId.value = getCorrelationId(error);
+    errorCode.value = getProblemCode(error);
     throw error;
   }
 
@@ -177,6 +180,7 @@ export const useProjectsStore = defineStore("projects", () => {
     status,
     errorMessage,
     correlationId,
+    errorCode,
     clearProjects,
     clearError,
     loadProjects,

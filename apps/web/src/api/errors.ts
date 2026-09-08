@@ -1,4 +1,5 @@
 import type { AuthenticationErrorCode, ProblemDetails } from "../generated/types";
+import { fieldLabel } from "../presentation/labels";
 
 const authenticationErrorMessages: Partial<Record<AuthenticationErrorCode, string>> = {
   AUTH_REQUIRED: "登录状态已失效，请重新登录。",
@@ -47,13 +48,29 @@ export function getAuthenticationErrorMessage(error: unknown, fallback: string):
   // 正式错误码优先于服务端 detail，确保登录防枚举文案与改密业务文案不被后端英文细节覆盖。
   if (!(error instanceof ApiRequestError)) return fallback;
   const code = error.problem?.code as AuthenticationErrorCode | undefined;
-  return (
-    (code ? authenticationErrorMessages[code] : undefined) ?? error.problem?.detail ?? fallback
-  );
+  if (code && authenticationErrorMessages[code]) return authenticationErrorMessages[code];
+  if (error.status === 422) return validationMessage(error.problem, fallback);
+  return fallback;
 }
 
 export function getCorrelationId(error: unknown): string | undefined {
   return error instanceof ApiRequestError ? error.problem?.correlation_id : undefined;
+}
+
+export function getProblemCode(error: unknown): string | undefined {
+  return error instanceof ApiRequestError ? error.problem?.code : undefined;
+}
+
+export function getProblemDetail(error: unknown): string | undefined {
+  const detail = error instanceof ApiRequestError ? error.problem?.detail : undefined;
+  return detail || undefined;
+}
+
+function validationMessage(problem: ProblemDetails | undefined, fallback: string): string {
+  const fields = [...new Set((problem?.field_errors ?? []).map((item) => fieldLabel(item.field)))];
+  return fields.length > 0
+    ? `请检查以下字段：${fields.join("、")}。`
+    : fallback;
 }
 
 const projectErrorMessages: Record<string, string> = {
@@ -99,6 +116,15 @@ const modelConfigurationErrorMessages: Record<string, string> = {
   AUTH_PERMISSION_DENIED: "当前账号没有执行此操作的权限。",
 };
 
+
+const executionErrorMessages: Record<string, string> = {
+  EXECUTION_SLOT_NOT_FOUND: "当前范围内未找到可用的正式执行槽位。",
+  EXECUTION_SLOT_SYSTEM_MANAGED: "正式执行槽位由系统根据 Runner 状态自动维护，不能手工创建或修改。",
+  EXECUTION_BINDING_PREFLIGHT_FAILED: "执行预检查未通过，请根据检查项修正配置后重试。",
+  EXECUTION_BINDING_STATE_CONFLICT: "执行绑定状态已变化，请刷新后重试。",
+  EXECUTION_OWNER_STATE_CONFLICT: "当前 Runner 或执行实例状态不满足新执行准入条件。",
+};
+
 const aiExplorationErrorMessages: Record<string, string> = {
   AI_EXPLORATION_MODEL_NOT_CONFIGURED: "尚未配置可用的 AI_EXPLORATION 默认模型。",
   AI_EXPLORATION_MODEL_UNAVAILABLE: "AI 探索默认模型当前不可用，请稍后重试。",
@@ -114,12 +140,13 @@ export function getApiErrorMessage(error: unknown, fallback: string): string {
   const code = error.problem?.code;
   if (code && environmentErrorMessages[code]) return environmentErrorMessages[code];
   if (code && projectErrorMessages[code]) return projectErrorMessages[code];
+  if (code && executionErrorMessages[code]) return executionErrorMessages[code];
   if (error.status === 401) return "登录状态已失效，请重新登录。";
   if (error.status === 403) return "当前账号没有执行此操作的权限。";
   if (error.status === 404) return "请求的项目不存在。";
   if (error.status === 409) return "项目状态或版本已变化，请刷新后重试。";
-  if (error.status === 422) return "提交内容不符合接口要求，请检查表单。";
-  return error.problem?.detail ?? fallback;
+  if (error.status === 422) return validationMessage(error.problem, "提交内容不符合接口要求，请检查表单。");
+  return fallback;
 }
 
 export function getModelConfigurationErrorMessage(error: unknown, fallback: string): string {
@@ -132,8 +159,8 @@ export function getModelConfigurationErrorMessage(error: unknown, fallback: stri
   if (error.status === 403) return "当前账号没有执行此操作的权限。";
   if (error.status === 404) return "请求的模型配置不存在。";
   if (error.status === 409) return "模型配置状态或版本已变化，请刷新后重试。";
-  if (error.status === 422) return "提交内容不符合接口要求，请检查表单。";
-  return error.problem?.detail ?? fallback;
+  if (error.status === 422) return validationMessage(error.problem, "提交内容不符合接口要求，请检查表单。");
+  return fallback;
 }
 
 export function getAIExplorationErrorMessage(error: unknown, fallback: string): string {
@@ -144,6 +171,6 @@ export function getAIExplorationErrorMessage(error: unknown, fallback: string): 
   if (error.status === 403) return "当前账号没有执行此操作的权限。";
   if (error.status === 404) return "请求的项目不存在。";
   if (error.status === 409) return "项目状态已变化，请刷新后重试。";
-  if (error.status === 422) return "提交内容不符合接口要求，请检查表单。";
-  return error.problem?.detail ?? fallback;
+  if (error.status === 422) return validationMessage(error.problem, "提交内容不符合接口要求，请检查表单。");
+  return fallback;
 }

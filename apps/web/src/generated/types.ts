@@ -448,6 +448,7 @@ export type RunTaskResource = {
   idempotency_key?: string | null;
   case_suite_id?: string | null;
   environment_id?: string | null;
+  task_type?: "FORMAL_EXECUTION" | "AI_EXPLORATION" | "AI_VALIDATION" | null;
   lifecycle_status: "CREATED" | "SNAPSHOTTED" | "VALIDATING" | "WAITING_RESOURCE" | "DISPATCHING" | "PREPARING" | "RUNNING" | "RETRYING" | "CANCELING" | "ABORTING" | "EXCEPTION" | "RECOVERING" | "COMPLETED" | "REPORTING" | "ARCHIVED";
   task_state: "CREATED" | "WAITING_RESOURCE" | "RUNNING" | "RETRYING" | "COMPLETED" | "CANCELED" | "ABORTED" | "EXCEPTION";
   final_result: "PASSED" | "FAILED" | "CANCELED" | "ABORTED" | "PARTIAL" | "UNKNOWN";
@@ -656,9 +657,12 @@ export type ExecutionSlotResource = {
   row_version: number;
   created_at: string;
   updated_at: string;
-  runner_id?: string | null;
+  project_id: string;
+  runner_id: string;
   slot_no?: string | null;
   lifecycle_status: "CREATED" | "DRAFT" | "ACTIVE" | "DISABLED" | "RECOVERED" | "ARCHIVED" | "LOGICALLY_DELETED";
+  availability_status: "AVAILABLE" | "OCCUPIED" | "UNAVAILABLE";
+  active_lease_owner?: string | null;
 };
 
 export type ContextVariableResource = {
@@ -1886,6 +1890,7 @@ export type CreateRunTaskRequest = {
   idempotency_key?: string | null;
   case_suite_id?: string | null;
   environment_id?: string | null;
+  task_type: "FORMAL_EXECUTION" | "AI_EXPLORATION" | "AI_VALIDATION";
   task_state?: "CREATED" | "WAITING_RESOURCE" | "RUNNING" | "RETRYING" | "COMPLETED" | "CANCELED" | "ABORTED" | "EXCEPTION";
   final_result?: "PASSED" | "FAILED" | "CANCELED" | "ABORTED" | "PARTIAL" | "UNKNOWN";
 };

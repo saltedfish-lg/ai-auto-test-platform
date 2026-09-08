@@ -1,22 +1,26 @@
 <script setup lang="ts">
 import { ref } from "vue";
 
-import { getAuthenticationErrorMessage, getCorrelationId } from "../api/errors";
+import { getAuthenticationErrorMessage, getCorrelationId, getProblemCode } from "../api/errors";
 import PermissionGate from "../components/PermissionGate.vue";
+import { statusLabel } from "../presentation/labels";
 import { useSessionStore } from "../stores/session";
 
 const session = useSessionStore();
 const errorMessage = ref("");
 const correlationId = ref<string>();
+const errorCode = ref<string>();
 
 async function reloadIdentity(): Promise<void> {
   errorMessage.value = "";
   correlationId.value = undefined;
+  errorCode.value = undefined;
   try {
     await session.loadCurrentUser();
   } catch (error) {
     errorMessage.value = getAuthenticationErrorMessage(error, "当前用户信息刷新失败，请稍后重试。");
     correlationId.value = getCorrelationId(error);
+    errorCode.value = getProblemCode(error);
   }
 }
 </script>
@@ -30,8 +34,10 @@ async function reloadIdentity(): Promise<void> {
     show-icon
     class="workspace-alert"
   >
-    <template v-if="correlationId" #default>
-      <span class="correlation-id">请求标识：{{ correlationId }}</span>
+    <template v-if="errorCode || correlationId" #default>
+      <span v-if="errorCode">错误代码：{{ errorCode }}</span>
+      <span v-if="errorCode && correlationId"> · </span>
+      <span v-if="correlationId" class="correlation-id">请求标识：{{ correlationId }}</span>
     </template>
   </el-alert>
 
@@ -60,11 +66,14 @@ async function reloadIdentity(): Promise<void> {
         <dd>{{ session.currentUser?.display_name || "未设置" }}</dd>
         <dt>账号状态</dt>
         <dd>
-          <el-tag type="success">{{ session.currentUser?.lifecycle_status }}</el-tag>
+          <el-tag type="success">{{ statusLabel("lifecycle", session.currentUser?.lifecycle_status) }}</el-tag>
         </dd>
-        <dt>用户标识</dt>
-        <dd class="monospace">{{ session.currentUser?.user_id }}</dd>
       </dl>
+      <el-collapse style="margin-top: 12px">
+        <el-collapse-item title="技术信息" name="technical">
+          <p>用户标识：<code>{{ session.currentUser?.user_id }}</code></p>
+        </el-collapse-item>
+      </el-collapse>
     </el-card>
 
     <el-card class="security-card" shadow="never">
@@ -81,7 +90,7 @@ async function reloadIdentity(): Promise<void> {
         <span class="status-dot" aria-hidden="true"></span>
         <div>
           <strong>当前会话有效</strong>
-          <p>Refresh Session 由 HttpOnly Cookie 承载并按服务端策略轮换。</p>
+          <p>刷新会话由 HttpOnly Cookie 承载并按服务端策略轮换。</p>
         </div>
       </div>
     </el-card>

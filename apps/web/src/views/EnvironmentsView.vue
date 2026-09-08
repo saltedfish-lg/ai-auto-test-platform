@@ -5,6 +5,7 @@ import { useRoute, useRouter } from "vue-router";
 
 import PermissionGate from "../components/PermissionGate.vue";
 import type { EnvironmentResource } from "../generated/types";
+import { statusLabel } from "../presentation/labels";
 import { type EnvironmentLifecycleAction, useEnvironmentsStore } from "../stores/environments";
 
 const route = useRoute();
@@ -56,7 +57,7 @@ async function submitCreate(): Promise<void> {
       reason: createForm.reason.trim() || null,
     });
     createVisible.value = false;
-    ElMessage.success("环境已创建并进入 CONFIGURING。 ");
+    ElMessage.success("环境已创建并进入配置中状态。");
   } catch {
     // Store exposes the formal backend error.
   }
@@ -180,7 +181,7 @@ async function changePageSize(size: number): Promise<void> {
         </el-button>
         <h2 id="environment-title">环境管理</h2>
         <p class="muted">
-          Environment 只维护环境级事实；访问配置由各业务终端自己的 Revision 维护。
+          环境只维护环境级事实；访问配置由各业务终端自己的访问修订维护。
         </p>
       </div>
       <PermissionGate permission="PROJECT_EDIT">
@@ -196,8 +197,10 @@ async function changePageSize(size: number): Promise<void> {
       show-icon
       class="workspace-alert"
     >
-      <template v-if="environments.correlationId" #default>
-        <span class="correlation-id">请求标识：{{ environments.correlationId }}</span>
+      <template v-if="environments.errorCode || environments.correlationId" #default>
+        <span v-if="environments.errorCode">错误代码：{{ environments.errorCode }}</span>
+        <span v-if="environments.errorCode && environments.correlationId"> · </span>
+        <span v-if="environments.correlationId" class="correlation-id">请求标识：{{ environments.correlationId }}</span>
       </template>
     </el-alert>
 
@@ -220,7 +223,7 @@ async function changePageSize(size: number): Promise<void> {
               'ARCHIVED',
             ]"
             :key="status"
-            :label="status"
+            :label="statusLabel('lifecycle', status)"
             :value="status"
           />
         </el-select>
@@ -233,9 +236,9 @@ async function changePageSize(size: number): Promise<void> {
       >
         <el-table-column prop="environment_code" label="环境编码" min-width="160" />
         <el-table-column prop="display_name" label="环境名称" min-width="160" />
-        <el-table-column prop="lifecycle_status" label="生命周期" min-width="130" />
-        <el-table-column prop="enablement_state" label="启用状态" min-width="110" />
-        <el-table-column prop="accessibility_state" label="可达性" min-width="110" />
+        <el-table-column label="生命周期" min-width="130"><template #default="{ row }">{{ statusLabel('lifecycle', row.lifecycle_status) }}</template></el-table-column>
+        <el-table-column label="启用状态" min-width="110"><template #default="{ row }">{{ statusLabel('enablement', row.enablement_state) }}</template></el-table-column>
+        <el-table-column label="可达性" min-width="110"><template #default="{ row }">{{ statusLabel('accessibility', row.accessibility_state) }}</template></el-table-column>
         <el-table-column prop="updated_at" label="更新时间" min-width="190" />
         <el-table-column label="操作" width="380" fixed="right">
           <template #default="{ row }">
@@ -296,7 +299,7 @@ async function changePageSize(size: number): Promise<void> {
           ><el-input v-model="createForm.reason" type="textarea" maxlength="1000"
         /></el-form-item>
         <p class="security-form-note">
-          新环境进入 CONFIGURING；此阶段不要求 Terminal Access Revision。
+          新环境进入“配置中”；此阶段不要求业务终端访问修订。
         </p>
       </el-form>
       <template #footer>
@@ -329,17 +332,23 @@ async function changePageSize(size: number): Promise<void> {
 
     <el-dialog v-model="detailVisible" title="环境详情" width="min(620px, 92vw)">
       <dl v-if="selected" class="identity-list">
-        <dt>Environment ID</dt>
-        <dd class="monospace">{{ selected.environment_id }}</dd>
-        <dt>Project ID</dt>
-        <dd class="monospace">{{ selected.project_id }}</dd>
         <dt>环境编码</dt>
         <dd>{{ selected.environment_code }}</dd>
         <dt>生命周期</dt>
-        <dd>{{ selected.lifecycle_status }}</dd>
+        <dd>{{ statusLabel('lifecycle', selected.lifecycle_status) }}</dd>
+        <dt>启用状态</dt>
+        <dd>{{ statusLabel('enablement', selected.enablement_state) }}</dd>
+        <dt>可达性</dt>
+        <dd>{{ statusLabel('accessibility', selected.accessibility_state) }}</dd>
         <dt>当前版本</dt>
         <dd>v{{ selected.row_version }}</dd>
       </dl>
+      <el-collapse v-if="selected" style="margin-top: 12px">
+        <el-collapse-item title="技术信息" name="technical">
+          <p>环境标识：<code>{{ selected.environment_id }}</code></p>
+          <p>项目标识：<code>{{ selected.project_id }}</code></p>
+        </el-collapse-item>
+      </el-collapse>
     </el-dialog>
   </section>
 </template>

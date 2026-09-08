@@ -956,11 +956,15 @@ export class ApiClient {
     let path = "/api/v1/runner/{id}/capabilities/{capability_code}/validate".replace('{id}', encodeURIComponent(id)).replace('{capability_code}', encodeURIComponent(capability_code));
     return this.request<GetRunnerResponse>(path, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(options.headers ?? {}) }, signal: options.signal, body: JSON.stringify(body) });
   }
-  async list_execution_slot(options: QueryRequestOptions<{ page?: number; page_size?: number; sort?: string; filter?: string }> = {}): Promise<ListExecutionSlotResponse> {
+  async list_execution_slot(options: QueryRequestOptions<{ page?: number; page_size?: number; project_id: string; runner_id?: string; lifecycle_status?: "ACTIVE" | "DISABLED" | "ARCHIVED"; available_only?: boolean; sort?: string; filter?: string }> = {}): Promise<ListExecutionSlotResponse> {
     let path = "/api/v1/execution-slot";
     const query = new URLSearchParams();
     if (options.query?.page !== undefined) query.set("page", String(options.query?.page));
     if (options.query?.page_size !== undefined) query.set("page_size", String(options.query?.page_size));
+    if (options.query?.project_id !== undefined) query.set("project_id", String(options.query?.project_id));
+    if (options.query?.runner_id !== undefined) query.set("runner_id", String(options.query?.runner_id));
+    if (options.query?.lifecycle_status !== undefined) query.set("lifecycle_status", String(options.query?.lifecycle_status));
+    if (options.query?.available_only !== undefined) query.set("available_only", String(options.query?.available_only));
     if (options.query?.sort !== undefined) query.set("sort", String(options.query?.sort));
     if (options.query?.filter !== undefined) query.set("filter", String(options.query?.filter));
     const encodedQuery = query.toString();

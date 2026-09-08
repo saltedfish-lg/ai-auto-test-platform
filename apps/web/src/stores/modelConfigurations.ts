@@ -2,7 +2,7 @@ import { ref } from "vue";
 import { defineStore } from "pinia";
 
 import { apiClient } from "../api/client";
-import { getCorrelationId, getModelConfigurationErrorMessage } from "../api/errors";
+import { getCorrelationId, getModelConfigurationErrorMessage, getProblemCode } from "../api/errors";
 import type {
   CreateModelConfigRequest,
   ModelConfigResource,
@@ -55,6 +55,7 @@ export const useModelConfigurationsStore = defineStore("model-configurations", (
   const activeItemId = ref<string>();
   const errorMessage = ref("");
   const correlationId = ref<string>();
+  const errorCode = ref<string>();
   const connectionResults = ref<Partial<Record<string, ModelConnectionResult>>>({});
   let cacheGeneration = 0;
   let listRequestId = 0;
@@ -63,6 +64,7 @@ export const useModelConfigurationsStore = defineStore("model-configurations", (
   function clearError(): void {
     errorMessage.value = "";
     correlationId.value = undefined;
+    errorCode.value = undefined;
   }
 
   function clearConfigurations(): void {
@@ -80,6 +82,7 @@ export const useModelConfigurationsStore = defineStore("model-configurations", (
   function captureError(error: unknown, fallback: string): never {
     errorMessage.value = getModelConfigurationErrorMessage(error, fallback);
     correlationId.value = getCorrelationId(error);
+    errorCode.value = getProblemCode(error);
     throw error;
   }
 
@@ -436,6 +439,7 @@ export const useModelConfigurationsStore = defineStore("model-configurations", (
     activeItemId,
     errorMessage,
     correlationId,
+    errorCode,
     connectionResults,
     clearConfigurations,
     clearError,

@@ -503,6 +503,34 @@ def test_model_transient_retry_limit_is_per_step_and_uses_frozen_snapshot() -> N
     assert models.invoke_count == 3
 
 
+def test_browser_cleanup_audit_records_success_and_failure_without_changing_session_state() -> None:
+    result = GatewayInvocationResult(
+        status="SUCCESS",
+        content=(
+            '{"goal":"Reach the dashboard","assumptions":[],'
+            '"steps":[{"sequence":1,"intent":"Open dashboard",'
+            '"expected_observation":"Dashboard visible"}]}'
+        ),
+        provider_request_id="provider-request",
+        message="completed",
+    )
+    service, session, _ = _service(_Models(result))
+    context = AuditContext(correlation_id="correlation", source_context="source")
+    resource = service.create("access-token", _request(), "request-key", context)
+    original_status = session.exploration.lifecycle_status if session.exploration else None
+
+    service._record_browser_cleanup(resource.session_id, context, succeeded=True)
+    assert session.audits[-1].action == "BROWSER_CLEANUP_SUCCEEDED"
+    assert session.audits[-1].result_code == "SUCCESS"
+    assert session.exploration is not None
+    assert session.exploration.lifecycle_status == original_status
+
+    service._record_browser_cleanup(resource.session_id, context, succeeded=False)
+    assert session.audits[-1].action == "BROWSER_CLEANUP_FAILED"
+    assert session.audits[-1].result_code == "FAILED"
+    assert session.exploration.lifecycle_status == original_status
+
+
 def test_foundation_creates_ready_session_with_model_snapshot_and_structured_plan() -> None:
     result = GatewayInvocationResult(
         status="SUCCESS",

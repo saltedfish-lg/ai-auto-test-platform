@@ -11678,18 +11678,26 @@ runner_resource_rules:
 - runner_resource_rule_id: RRR-004
   resource_code: FORMAL_EXECUTION_SLOT
   capacity_type: CAPACITY_OR_EXCLUSIVE_SLOT
-  total_capacity: null
-  current_usage_source: Runner能力与资源上报
-  lease_unit: 会话或attempt
+  total_capacity: 1
+  current_usage_source: Runner能力与资源上报；P0由系统资源对账将每个满足静态正式执行资格的Runner物化为唯一slot_no=0长期ExecutionSlot，未来1:N必须由正式Runner capacity report与Authority扩展
+  lease_unit: attempt
   shareable: false
   exclusive: true
-  acquire_condition: Runner绑定当前项目、在线健康、能力匹配且可用容量满足
-  release_condition: 持有会话/attempt结束或租约过期
-  expiry_condition: 续期失败、Runner失联或会话终止
-  capability_mismatch_behavior: RUNNER_CAPABILITY_MISMATCH并重新匹配或拒绝
-  resource_exhausted_behavior: QUEUE、USE_ALTERNATIVE_RESOURCE或WAIT_WITH_TIMEOUT；不得无条件抢占
-  queue_allowed: true
+  acquire_condition: Runner为ACTIVE、REGISTERED、ENABLED、BOUND、COMPATIBLE且FORMAL_EXECUTION能力为CONFIGURED+ACTIVE+VALID；资源发现还要求Runner当前ONLINE+HEALTHY且不存在同Slot的ACTIVE Runner资源租约
+  release_condition: 持有attempt结束、Binding释放或租约过期/恢复完成后，原ExecutionSlot再次成为可发现资源
+  expiry_condition: 续期失败、Runner失联或会话终止；临时OFFLINE/UNHEALTHY不删除ExecutionSlot，只影响当前可发现性与Preflight
+  capability_mismatch_behavior: 静态资格失效时同一ExecutionSlot转为DISABLED并禁止新Binding；资格恢复时恢复原execution_slot_id，不创建新的slot_no=0
+  resource_exhausted_behavior: 当前P0同一Runner只有一个正式槽位；已有ACTIVE Runner资源租约时Preflight稳定拒绝，不通过新建Slot、BROWSER_SESSION或抢占绕过
+  queue_allowed: false
   preemption_allowed: false
+  system_managed: true
+  stable_identity: runner_id+slot_no
+  p0_slot_no: '0'
+  reconciliation_triggers:
+  - Runner注册/启用/停用/归档/绑定状态变化
+  - Version Compatibility重新计算
+  - FORMAL_EXECUTION Capability上报或验证状态变化
+  read_side_effects_forbidden: true
   completion_status: VALID_RESOURCE_COMPLETION
 - runner_resource_rule_id: RRR-005
   resource_code: VIDEO_CAPTURE

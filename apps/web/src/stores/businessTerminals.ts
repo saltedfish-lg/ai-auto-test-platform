@@ -2,7 +2,7 @@ import { ref } from "vue";
 import { defineStore } from "pinia";
 
 import { apiClient } from "../api/client";
-import { getApiErrorMessage, getCorrelationId } from "../api/errors";
+import { getApiErrorMessage, getCorrelationId, getProblemCode } from "../api/errors";
 import type {
   BusinessTerminalResource,
   CreateLoginStrategyRequest,
@@ -68,16 +68,19 @@ export const useBusinessTerminalsStore = defineStore("business-terminals", () =>
   const status = ref<"idle" | "loading" | "saving">("idle");
   const errorMessage = ref("");
   const correlationId = ref<string>();
+  const errorCode = ref<string>();
 
   function capture(error: unknown, fallback: string): never {
     errorMessage.value = getApiErrorMessage(error, fallback);
     correlationId.value = getCorrelationId(error);
+    errorCode.value = getProblemCode(error);
     throw error;
   }
 
   function clearError() {
     errorMessage.value = "";
     correlationId.value = undefined;
+    errorCode.value = undefined;
   }
 
   async function load(
@@ -443,6 +446,7 @@ export const useBusinessTerminalsStore = defineStore("business-terminals", () =>
           "访问修订已发布，但终端或修订列表刷新失败；请刷新页面确认当前指针。",
         );
         correlationId.value = getCorrelationId(refreshError);
+        errorCode.value = getProblemCode(refreshError);
       }
       return response.data;
     } catch (error) {
@@ -478,6 +482,7 @@ export const useBusinessTerminalsStore = defineStore("business-terminals", () =>
     status,
     errorMessage,
     correlationId,
+    errorCode,
     clearError,
     load,
     create,

@@ -3261,7 +3261,7 @@ tables:
     default: null
   - name: case_attempt_id
     type: VARCHAR(26)
-    nullable: false
+    nullable: true
     primary_key: false
     default: null
   - name: runner_id
@@ -3271,12 +3271,12 @@ tables:
     default: null
   - name: configuration_snapshot_id
     type: VARCHAR(26)
-    nullable: false
+    nullable: true
     primary_key: false
     default: null
   - name: execution_batch_id
     type: VARCHAR(26)
-    nullable: false
+    nullable: true
     primary_key: false
     default: null
   - name: lease_id
@@ -6795,12 +6795,17 @@ tables:
     default: null
   - name: case_suite_id
     type: VARCHAR(26)
-    nullable: false
+    nullable: true
     primary_key: false
     default: null
   - name: environment_id
     type: VARCHAR(26)
     nullable: false
+    primary_key: false
+    default: null
+  - name: task_type
+    type: VARCHAR(32)
+    nullable: true
     primary_key: false
     default: null
   - name: lifecycle_status
@@ -6863,6 +6868,8 @@ tables:
   - name: ck_atp_run_task_lifecycle_status
     expression: (lifecycle_status IN ('CREATED', 'SNAPSHOTTED', 'VALIDATING', 'WAITING_RESOURCE', 'DISPATCHING', 'PREPARING',
       'RUNNING', 'RETRYING', 'CANCELING', 'ABORTING', 'EXCEPTION', 'RECOVERING', 'COMPLETED', 'REPORTING', 'ARCHIVED'))
+  - name: ck_atp_run_task_task_type
+    expression: (task_type IN ('FORMAL_EXECUTION', 'AI_EXPLORATION', 'AI_VALIDATION'))
   - name: ck_atp_run_task_task_state
     expression: (task_state IN ('CREATED', 'WAITING_RESOURCE', 'RUNNING', 'RETRYING', 'COMPLETED', 'CANCELED', 'ABORTED',
       'EXCEPTION'))
@@ -10381,6 +10388,114 @@ tables:
   unique_keys: []
   delete_behavior: APPEND_ONLY_UPDATE_DELETE_FORBIDDEN
   data_owner: ExecutionBindingService
+- table_name: atp_execution_owner_audit
+  columns:
+  - name: audit_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: true
+    default: null
+  - name: project_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: aggregate_type
+    type: VARCHAR(32)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: aggregate_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: operation_id
+    type: VARCHAR(128)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: action
+    type: VARCHAR(64)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: actor_user_id
+    type: VARCHAR(26)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: previous_status
+    type: VARCHAR(32)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: new_status
+    type: VARCHAR(32)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: result_code
+    type: VARCHAR(64)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: reason
+    type: VARCHAR(1000)
+    nullable: true
+    primary_key: false
+    default: null
+  - name: correlation_id
+    type: VARCHAR(128)
+    nullable: false
+    primary_key: false
+    default: null
+  - name: occurred_at
+    type: DATETIME(6)
+    nullable: false
+    primary_key: false
+    default: CURRENT_TIMESTAMP(6)
+  - name: source_context_hash
+    type: BINARY(32)
+    nullable: false
+    primary_key: false
+    default: null
+  primary_key:
+  - audit_id
+  unique_keys: []
+  check_constraints:
+  - name: ck_atp_execution_owner_audit_type
+    expression: (aggregate_type IN ('RUN_TASK', 'EXECUTION_ATTEMPT'))
+  foreign_keys:
+  - name: fk_atp_execution_owner_audit_project
+    column: project_id
+    referenced_table: atp_project
+    referenced_column: project_id
+    on_delete: RESTRICT
+    on_update: RESTRICT
+  - name: fk_atp_execution_owner_audit_actor
+    column: actor_user_id
+    referenced_table: atp_user
+    referenced_column: user_id
+    on_delete: RESTRICT
+    on_update: RESTRICT
+  indexes:
+  - name: idx_atp_execution_owner_audit_aggregate
+    columns:
+    - aggregate_type
+    - aggregate_id
+    - occurred_at
+  delete_behavior: APPEND_ONLY_UPDATE_DELETE_FORBIDDEN
+  data_owner: ExecutionOwnerService
+  idempotency_and_audit: APPEND_ONLY_AUDIT
+  object_id: null
+  table_kind: TECHNICAL_TABLE
+  business_unique_key: audit_id
+  state_fields: []
+  relationship_fields:
+  - project_id
+  - actor_user_id
+  extension_json_rule: NOT_APPLICABLE
 rules:
 - 正式关系、状态、权限和唯一约束必须物理化，extension_json仅保存非契约扩展。
 - 对象事实源、对象表映射、DDL、OpenAPI与事件必须使用同一技术身份。
@@ -10427,6 +10542,7 @@ table_classification:
   - atp_data_scope_grant
   - atp_idempotency_record
   - atp_outbox_event
+  - atp_execution_owner_audit
 migration_execution:
   selected_tool: Flyway
   authority_source: docs/authority/编码权威事实/DATABASE_DDL

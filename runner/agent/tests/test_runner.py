@@ -570,3 +570,238 @@ def test_late_start_completion_is_closed_when_api_rendezvous_expired(tmp_path: P
     )
     app._browser_executor.shutdown(wait=False, cancel_futures=True)
     assert closed == [("R" * 26, "browser-session-late")]
+
+
+def test_bound_browser_runtime_requires_observable_login_success_and_keeps_secrets_out() -> None:
+    requests: list[tuple[str, str]] = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def _login_page(self) -> bytes:
+            return (
+                b"<html><title>Login</title><body>"
+                b"<form method='post' action='/login'>"
+                b"<input name='username' autocomplete='username'>"
+                b"<input type='password' name='password'>"
+                b"<input name='captcha' autocomplete='one-time-code'>"
+                b"<button type='submit'>Sign in</button></form></body></html>"
+            )
+
+        def do_GET(self) -> None:
+            requests.append(("GET", self.path))
+            if self.path == "/login":
+                body = self._login_page()
+                self.send_response(200)
+                self.send_header("x-captcha-code", "2468")
+            elif self.path.startswith("/dashboard"):
+                body = b"<html><title>Dashboard</title><body>Authenticated home</body></html>"
+                self.send_response(200)
+            else:
+                body = b"not found"
+                self.send_response(404)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def do_POST(self) -> None:
+            length = int(self.headers.get("Content-Length", "0"))
+            body = self.rfile.read(length).decode("utf-8")
+            requests.append(("POST", self.path))
+            if (
+                self.path == "/login"
+                and "fixture-user" in body
+                and "fixture-password" in body
+                and "2468" in body
+                and self.headers.get("Show-Captcha-Code") == "true"
+            ):
+                self.send_response(302)
+                self.send_header("Location", "/dashboard?session_secret=must-not-persist")
+                self.end_headers()
+                return
+            response = self._login_page()
+            self.send_response(401)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(response)))
+            self.end_headers()
+            self.wfile.write(response)
+
+        def log_message(self, *_args: object) -> None:
+            return None
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    origin = f"http://127.0.0.1:{server.server_port}"
+    command = SimpleNamespace(
+        runner_id="R" * 26,
+        execution_attempt_id="A" * 26,
+        execution_binding_snapshot_id="B" * 26,
+        identity_lease_generation=3,
+        runner_lease_generation=7,
+        target_url=f"{origin}/dashboard",
+        allowed_origins=(origin,),
+        authentication_redirect_origins=(),
+        action_timeout_seconds=5,
+        login_material=SimpleNamespace(
+            account_identifier="fixture-user",
+            secret_value="fixture-password",
+            login_url=f"{origin}/login",
+            local_storage_presets=(),
+            refresh_after_local_storage=False,
+            captcha_policy="RESPONSE_HEADER",
+            captcha_request_header_name="Show-Captcha-Code",
+            captcha_request_header_value="true",
+            captcha_response_header_name="x-captcha-code",
+        ),
+    )
+    runtime = PlaywrightBoundBrowserRuntime()
+    try:
+        observation = runtime.start(command)
+        assert observation.data["title"] == "Dashboard"
+        assert observation.data["current_url"] == f"{origin}/dashboard"
+        assert observation.data["login_state_marker"] == {
+            "status": "SUCCEEDED",
+            "signal": "AUTHENTICATED_URL",
+            "login_submitted": True,
+        }
+        rendered = repr(observation.data)
+        for secret in ("fixture-user", "fixture-password", "2468", "must-not-persist"):
+            assert secret not in rendered
+        assert ("POST", "/login") in requests
+    finally:
+        for session_id in tuple(runtime._sessions):
+            runtime.close(command, session_id)
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def test_bound_browser_runtime_rejects_failed_login_before_target_navigation() -> None:
+    target_requests: list[str] = []
+
+    class Handler(BaseHTTPRequestHandler):
+        @staticmethod
+        def _login_page() -> bytes:
+            return (
+                b"<html><title>Login</title><body><form method='post' action='/login'>"
+                b"<input name='username'><input type='password' name='password'>"
+                b"<button type='submit'>Sign in</button></form></body></html>"
+            )
+
+        def do_GET(self) -> None:
+            if self.path.startswith("/dashboard"):
+                target_requests.append(self.path)
+                body = b"<html><title>Dashboard</title></html>"
+            else:
+                body = self._login_page()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def do_POST(self) -> None:
+            self.rfile.read(int(self.headers.get("Content-Length", "0")))
+            body = self._login_page()
+            self.send_response(401)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *_args: object) -> None:
+            return None
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    origin = f"http://127.0.0.1:{server.server_port}"
+    command = SimpleNamespace(
+        runner_id="R" * 26,
+        execution_attempt_id="A" * 26,
+        execution_binding_snapshot_id="B" * 26,
+        identity_lease_generation=3,
+        runner_lease_generation=7,
+        target_url=f"{origin}/dashboard",
+        allowed_origins=(origin,),
+        authentication_redirect_origins=(),
+        action_timeout_seconds=1,
+        login_material=SimpleNamespace(
+            account_identifier="fixture-user",
+            secret_value="fixture-password",
+            login_url=f"{origin}/login",
+            local_storage_presets=(),
+            refresh_after_local_storage=False,
+            captcha_policy="NONE",
+            captcha_request_header_name=None,
+            captcha_request_header_value=None,
+            captcha_response_header_name=None,
+        ),
+    )
+    runtime = PlaywrightBoundBrowserRuntime()
+    try:
+        try:
+            runtime.start(command)
+        except RuntimeError as error:
+            assert "observable login success signal was not observed" in str(error)
+        else:
+            raise AssertionError("failed login was accepted")
+        assert target_requests == []
+        assert runtime._sessions == {}
+    finally:
+        runtime.shutdown()
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def test_bound_browser_runtime_stops_playwright_when_chromium_launch_fails() -> None:
+    stopped: list[bool] = []
+
+    class Chromium:
+        def launch(self, **_kwargs: object) -> object:
+            raise RuntimeError("chromium unavailable")
+
+    class FakePlaywright:
+        chromium = Chromium()
+
+        def stop(self) -> None:
+            stopped.append(True)
+
+    class Starter:
+        def start(self) -> FakePlaywright:
+            return FakePlaywright()
+
+    command = SimpleNamespace(
+        runner_id="R" * 26,
+        execution_attempt_id="A" * 26,
+        execution_binding_snapshot_id="B" * 26,
+        identity_lease_generation=3,
+        runner_lease_generation=7,
+        target_url="https://example.test",
+        allowed_origins=("https://example.test",),
+        authentication_redirect_origins=(),
+        action_timeout_seconds=1,
+        login_material=SimpleNamespace(
+            account_identifier="fixture-user",
+            secret_value="fixture-password",
+            login_url=None,
+            local_storage_presets=(),
+            refresh_after_local_storage=False,
+            captcha_policy="NONE",
+            captcha_request_header_name=None,
+            captcha_request_header_value=None,
+            captcha_response_header_name=None,
+        ),
+    )
+    runtime = PlaywrightBoundBrowserRuntime()
+    with patch("platform_runner.browser_runtime.sync_playwright", return_value=Starter()):
+        try:
+            runtime.start(command)
+        except RuntimeError as error:
+            assert "chromium unavailable" in str(error)
+        else:
+            raise AssertionError("chromium launch failure was swallowed")
+    assert stopped == [True]
+    assert runtime._playwright is None
+    assert runtime._browser is None

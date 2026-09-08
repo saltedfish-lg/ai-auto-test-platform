@@ -10,7 +10,9 @@ from platform_api.execution_binding_schemas import BindingCommandRequest
 from platform_api.execution_binding_service import (
     ExecutionBindingService,
     _command_idempotency_payload,
+    _persistence_conflict,
 )
+from sqlalchemy.exc import IntegrityError
 
 NOW = datetime(2026, 9, 1, tzinfo=UTC).replace(tzinfo=None)
 
@@ -191,3 +193,19 @@ def test_reacquire_increments_generation_but_new_identity_starts_at_one() -> Non
         correlation_id="correlation",
     )
     assert first.fencing_generation == 1
+
+
+def test_generic_duplicate_is_not_misclassified_as_resource_lease_conflict() -> None:
+    generic_duplicate = IntegrityError(
+        "INSERT",
+        {},
+        Exception("Duplicate entry '1' for key 'uq_outbox_aggregate_sequence'"),
+    )
+    actual_lease_duplicate = IntegrityError(
+        "INSERT",
+        {},
+        Exception("Duplicate entry '1' for key 'uq_atp_resource_lease_active'"),
+    )
+
+    assert _persistence_conflict(generic_duplicate).code == "EXECUTION_BINDING_PERSISTENCE_CONFLICT"
+    assert _persistence_conflict(actual_lease_duplicate).code == "RESOURCE_LEASE_CONFLICT"

@@ -4,7 +4,7 @@
 > 权威源：`state-owner-registry.yaml`；生成器：`tools/authority_projection.py`。
 
 - Authority: `SINGLE_LIVING_AUTHORITY`
-- 状态维度：124
+- 状态维度：125
 - 认证补充Owner：8
 
 |ID|对象|维度|初始值|值域|
@@ -114,6 +114,7 @@
 |SD-EX-006|Runner|project_binding_status|BOUND|BOUND|
 |SD-EX-007|Runner|scheduling_status|UNSCHEDULABLE|UNSCHEDULABLE / IDLE / PARTIALLY_OCCUPIED / BUSY / DRAINING|
 |SD-EX-008|Runner|resource_status|AVAILABLE|AVAILABLE / PARTIALLY_OCCUPIED / EXHAUSTED / RECLAIMING|
+|SD-EX-018|Runner|version_compatibility|UNKNOWN|UNKNOWN / COMPATIBLE / INCOMPATIBLE / UPGRADE_REQUIRED|
 |SD-EX-009|执行任务|task_state|CREATED|CREATED / WAITING_RESOURCE / RUNNING / RETRYING / COMPLETED / CANCELED / ABORTED / EXCEPTION|
 |SD-EX-010|执行任务|final_result|UNKNOWN|PASSED / FAILED / CANCELED / ABORTED / PARTIAL / UNKNOWN|
 |SD-EX-011|测试报告|report_state|PENDING|PENDING / GENERATING / GENERATED / PARTIAL / FAILED / ARCHIVED|

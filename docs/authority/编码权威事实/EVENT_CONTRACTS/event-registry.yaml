@@ -19644,6 +19644,44 @@ events:
   release_id: RUNNER_REAL_EXECUTION_CLOSURE
   aggregate_id_field: runner_id
   payload_identity_fields: [runner_id, runner_capability_id]
+- event_type: run_task.created
+  event_id: EVT-93E3A766C4A1
+  version: 1.0.0
+  producer_object_id: OBJ-035
+  producer: ExecutionOwnerService
+  source_transition_ids: []
+  partition_key: aggregate_id
+  ordering: PER_AGGREGATE_SEQUENCE
+  idempotency: event_id
+  delivery: AT_LEAST_ONCE_OUTBOX
+  consumers: [audit_projection, operations_console]
+  sensitive_fields: []
+  forbidden_fields: [plaintext_password, secret_value, access_token, refresh_token, raw_credential, captcha_value, cookie]
+  retry_policy: {max_attempts: 12, backoff: EXPONENTIAL_JITTER, dead_letter_after: MAX_ATTEMPTS}
+  compatibility: BACKWARD_COMPATIBLE_WITHIN_MAJOR
+  schema_path: schemas/run_task.created.schema.json
+  release_id: AI_EXPLORATION_REAL_RUNNER_ACCEPTANCE
+  aggregate_id_field: run_task_id
+  payload_identity_fields: [run_task_id, project_id, environment_id]
+- event_type: execution_attempt.created
+  event_id: EVT-5A8B23E7C901
+  version: 1.0.0
+  producer_object_id: OBJ-036
+  producer: ExecutionOwnerService
+  source_transition_ids: []
+  partition_key: aggregate_id
+  ordering: PER_AGGREGATE_SEQUENCE
+  idempotency: event_id
+  delivery: AT_LEAST_ONCE_OUTBOX
+  consumers: [audit_projection, operations_console]
+  sensitive_fields: []
+  forbidden_fields: [plaintext_password, secret_value, access_token, refresh_token, raw_credential, captcha_value, cookie]
+  retry_policy: {max_attempts: 12, backoff: EXPONENTIAL_JITTER, dead_letter_after: MAX_ATTEMPTS}
+  compatibility: BACKWARD_COMPATIBLE_WITHIN_MAJOR
+  schema_path: schemas/execution_attempt.created.schema.json
+  release_id: AI_EXPLORATION_REAL_RUNNER_ACCEPTANCE
+  aggregate_id_field: execution_attempt_id
+  payload_identity_fields: [execution_attempt_id, run_task_id, runner_id]
 authentication_audit_contract:
   decision: NO_NEW_DOMAIN_EVENTS_FOR_P1_AUTHENTICATION
   reason: P1认证与普通用户治理动作没有跨边界事件消费者，使用不可变安全审计；仅默认admin初始化沿用admin.active与user.active，atp_user_role_binding不得冒充OBJ-087发布role_binding事件。

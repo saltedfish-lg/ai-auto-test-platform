@@ -66,6 +66,8 @@ for import_root in (API_SRC, COMMON_SRC, OBSERVABILITY_SRC, RUNNER_SRC):
 
 from platform_api.database import create_database_engine, create_session_factory  # noqa: E402
 from platform_api.keygen import generate_development_key_ring  # noqa: E402
+from platform_api.models import Project, Runner  # noqa: E402
+from platform_api.runner_resource_reconciler import reconcile_formal_execution_slot  # noqa: E402
 from platform_api.secret_store import AesGcmSecretProtector  # noqa: E402
 from platform_api.security import PasswordService, new_ulid  # noqa: E402
 from platform_runner.credentials import AgentCredentialStore, StoredAgentIdentity  # noqa: E402
@@ -919,11 +921,16 @@ def _get_json(url: str, *, headers: dict[str, str]) -> tuple[int, dict[str, obje
 def _prepare_execution_binding_acceptance(
     database: str, project_code: str, username: str
 ) -> dict[str, object]:
-    """Stage only the execution-owner facts that have no product create command yet."""
+    """Stage an isolated ExecutionBinding relationship fixture, not Runner readiness proof.
+
+    This controlled SQL fixture deliberately prebuilds schedulable Runner state so the
+    gate can exercise binding relationships that still lack public provisioning commands.
+    Formal Register -> capability validation -> compatibility/scheduling evidence belongs
+    to AI_EXPLORATION_REAL_RUNNER_ACCEPTANCE and must never be inferred from this fixture.
+    """
 
     runner_id = new_ulid()
     runner_agent_token = "rat_" + secrets.token_urlsafe(32)
-    execution_slot_id = new_ulid()
     policy_id = new_ulid()
     run_task_id = new_ulid()
     attempt_ids = [new_ulid() for _ in range(5)]
@@ -1104,19 +1111,6 @@ def _prepare_execution_binding_acceptance(
                 actor_id,
             ),
         )
-        cursor.execute(
-            "INSERT INTO atp_execution_slot "
-            "(execution_slot_id,project_id,runner_id,slot_no,lifecycle_status,display_name,"
-            "row_version,created_by,updated_by) VALUES (%s,%s,%s,'0','ACTIVE',%s,1,%s,%s)",
-            (
-                execution_slot_id,
-                project_id,
-                runner_id,
-                "Binding acceptance formal slot",
-                actor_id,
-                actor_id,
-            ),
-        )
         for attempt_id in attempt_ids:
             configuration_id = new_ulid()
             batch_id = new_ulid()
@@ -1185,6 +1179,25 @@ def _prepare_execution_binding_acceptance(
         if int(cursor.fetchone()[0]) != 5:
             raise RuntimeError("execution binding acceptance owner fixture is inconsistent")
 
+    # The controlled relationship fixture still seeds its surrounding objects, but the
+    # formal slot itself must be formed by the same system-owned reconciliation used by
+    # a real Runner.  This prevents the acceptance gate from masking Slot provisioning.
+    engine = create_database_engine(_test_database_url(database))
+    try:
+        factory = create_session_factory(engine)
+        with factory() as db:
+            runner = db.get(Runner, runner_id)
+            project = db.get(Project, str(project_id))
+            if runner is None or project is None:
+                raise RuntimeError("execution binding runner/project fixture is unavailable")
+            execution_slot = reconcile_formal_execution_slot(db, runner, project)
+            if execution_slot is None or execution_slot.lifecycle_status != "ACTIVE":
+                raise RuntimeError("formal ExecutionSlot was not reconciled from Runner facts")
+            execution_slot_id = execution_slot.execution_slot_id
+            db.commit()
+    finally:
+        engine.dispose()
+
     return {
         "project_id": str(project_id),
         "previous_project_status": str(previous_project_status),
@@ -1202,9 +1215,7 @@ def _prepare_execution_binding_acceptance(
     }
 
 
-def _wait_for_runner_agent(
-    database: str, runner_id: str, process: subprocess.Popen[bytes]
-) -> None:
+def _wait_for_runner_agent(database: str, runner_id: str, process: subprocess.Popen[bytes]) -> None:
     deadline = time.monotonic() + 20
     while time.monotonic() < deadline:
         if process.poll() is not None:
@@ -1658,28 +1669,38 @@ def _create_ai_execution_binding(
     username: str,
     password: str,
     fixture: dict[str, object],
+    *,
+    execution_attempt_id: str | None = None,
+    owner_execution_identity: str | None = None,
+    bearer_token: str | None = None,
 ) -> str:
-    status, login = _post_json(
-        f"http://127.0.0.1:{api_port}/api/v1/auth/login",
-        {"username": username, "password": password},
-    )
-    if status != 200:
-        raise RuntimeError("AI exploration binding login failed")
-    token = str(dict(login["data"])["access_token"])
-    attempt_ids = tuple(fixture["attempt_ids"])
-    with _connection(database) as connection, connection.cursor() as cursor:
-        cursor.execute(
-            "SELECT ea.execution_attempt_id FROM atp_execution_attempt ea "
-            "LEFT JOIN atp_execution_binding_snapshot b "
-            "ON b.execution_attempt_id=ea.execution_attempt_id "
-            "WHERE ea.execution_attempt_id IN (%s,%s,%s,%s,%s) "
-            "AND b.execution_binding_snapshot_id IS NULL ORDER BY ea.execution_attempt_id LIMIT 1",
-            attempt_ids,
+    token = bearer_token
+    if token is None:
+        status, login = _post_json(
+            f"http://127.0.0.1:{api_port}/api/v1/auth/login",
+            {"username": username, "password": password},
         )
-        row = cursor.fetchone()
-    if row is None:
-        raise RuntimeError("AI exploration has no unbound ExecutionAttempt fixture")
-    attempt_id = str(row[0])
+        if status != 200:
+            raise RuntimeError("AI exploration binding login failed")
+        token = str(dict(login["data"])["access_token"])
+    attempt_id = execution_attempt_id
+    if attempt_id is None:
+        attempt_ids = tuple(fixture["attempt_ids"])
+        with _connection(database) as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT ea.execution_attempt_id FROM atp_execution_attempt ea "
+                "LEFT JOIN atp_execution_binding_snapshot b "
+                "ON b.execution_attempt_id=ea.execution_attempt_id "
+                "WHERE ea.execution_attempt_id IN (%s,%s,%s,%s,%s) "
+                "AND b.execution_binding_snapshot_id IS NULL "
+                "ORDER BY ea.execution_attempt_id LIMIT 1",
+                attempt_ids,
+            )
+            row = cursor.fetchone()
+        if row is None:
+            raise RuntimeError("AI exploration has no unbound ExecutionAttempt fixture")
+        attempt_id = str(row[0])
+    owner_identity = owner_execution_identity or str(fixture["owner_execution_identity"])
     create_status, payload = _post_json(
         f"http://127.0.0.1:{api_port}/api/v1/execution-binding-snapshots",
         {
@@ -1692,7 +1713,7 @@ def _create_ai_execution_binding(
             "runtime_policy_revision_id": fixture["policy_id"],
             "runner_resource_type": "FORMAL_EXECUTION_SLOT",
             "runner_resource_identity": fixture["runner_resource_identity"],
-            "owner_execution_identity": fixture["owner_execution_identity"],
+            "owner_execution_identity": owner_identity,
             "required_capabilities": [],
         },
         headers={
@@ -1704,9 +1725,66 @@ def _create_ai_execution_binding(
     if create_status != 201 or binding.get("status") != "READY":
         raise RuntimeError(
             "AI exploration binding creation failed: "
-            f"http={create_status}, code={payload.get('code')}"
+            f"http={create_status}, code={payload.get('code')}, "
+            f"detail={payload.get('detail')}"
         )
     return attempt_id
+
+
+def _provision_ai_cancellation_owner(
+    api_port: int,
+    token: str,
+    fixture: dict[str, object],
+) -> tuple[str, str]:
+    headers = {"Authorization": f"Bearer {token}"}
+    project_id = str(fixture["project_id"])
+
+    run_key = f"ai-exploration-cancel-run-task-{project_id}"
+    run_status, run_payload = _post_json(
+        f"http://127.0.0.1:{api_port}/api/v1/run-task",
+        {
+            "display_name": "AI exploration cancellation acceptance task",
+            "project_id": project_id,
+            "environment_id": fixture["environment_id"],
+            "task_type": "AI_EXPLORATION",
+            "reason": "isolated cancellation acceptance owner",
+        },
+        headers={**headers, "Idempotency-Key": run_key},
+    )
+
+    run_task = dict(run_payload.get("data") or {})
+    run_task_id = str(run_task.get("run_task_id") or "")
+
+    if run_status != 202 or len(run_task_id) != 26:
+        raise RuntimeError(
+            "AI exploration cancellation RunTask provisioning failed: "
+            f"http={run_status}, code={run_payload.get('code')}, "
+            f"detail={run_payload.get('detail')}"
+        )
+
+    attempt_key = f"ai-exploration-cancel-attempt-{run_task_id}"
+    attempt_status, attempt_payload = _post_json(
+        f"http://127.0.0.1:{api_port}/api/v1/execution-attempt",
+        {
+            "display_name": "AI exploration cancellation acceptance attempt",
+            "run_task_id": run_task_id,
+            "runner_id": fixture["runner_id"],
+            "reason": "isolated cancellation acceptance owner",
+        },
+        headers={**headers, "Idempotency-Key": attempt_key},
+    )
+
+    attempt = dict(attempt_payload.get("data") or {})
+    attempt_id = str(attempt.get("execution_attempt_id") or "")
+
+    if attempt_status != 201 or len(attempt_id) != 26:
+        raise RuntimeError(
+            "AI exploration cancellation ExecutionAttempt provisioning failed: "
+            f"http={attempt_status}, code={attempt_payload.get('code')}, "
+            f"detail={attempt_payload.get('detail')}"
+        )
+
+    return run_task_id, attempt_id
 
 
 def _ai_exploration_cancel_probe(
@@ -1717,17 +1795,32 @@ def _ai_exploration_cancel_probe(
     fixture: dict[str, object],
     target_url: str,
 ) -> dict[str, object]:
-    attempt_id = _create_ai_execution_binding(
-        database, api_port, username, password, fixture
-    )
     login_status, login = _post_json(
         f"http://127.0.0.1:{api_port}/api/v1/auth/login",
         {"username": username, "password": password},
     )
     if login_status != 200:
         raise RuntimeError("AI exploration cancellation probe login failed")
+
     token = str(dict(login["data"])["access_token"])
     headers = {"Authorization": f"Bearer {token}"}
+
+    run_task_id, attempt_id = _provision_ai_cancellation_owner(
+        api_port,
+        token,
+        fixture,
+    )
+
+    _create_ai_execution_binding(
+        database,
+        api_port,
+        username,
+        password,
+        fixture,
+        execution_attempt_id=attempt_id,
+        owner_execution_identity=run_task_id,
+        bearer_token=token,
+    )
     create_status, created = _post_json(
         f"http://127.0.0.1:{api_port}/api/v1/ai-exploration-sessions",
         {

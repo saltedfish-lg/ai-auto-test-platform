@@ -111,7 +111,7 @@ describe("项目管理页面（组件测试，API 为 mock）", () => {
 
     expect(await screen.findByRole("heading", { name: "自动化平台" })).toBeTruthy();
     expect(screen.getAllByText("项目负责人").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText("ACTIVE").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("已启用").length).toBeGreaterThanOrEqual(1);
     await fireEvent.click(screen.getByRole("button", { name: "编辑基础信息" }));
     await fireEvent.update(screen.getByLabelText("项目名称"), "自动化平台二期");
     await fireEvent.click(screen.getByRole("button", { name: "保存" }));

@@ -100,7 +100,7 @@ describe("Environment management view", () => {
         }),
       ),
     );
-    await waitFor(() => expect(screen.getAllByText("VALIDATING").length).toBeGreaterThan(0));
+    await waitFor(() => expect(screen.getAllByText("验证中").length).toBeGreaterThan(0));
   });
 
   it("exposes only the Authority commands available from VALIDATING", async () => {

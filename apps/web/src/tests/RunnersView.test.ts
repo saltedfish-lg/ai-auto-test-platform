@@ -36,15 +36,28 @@ const runner: RunnerResource = {
 
 const pendingCapability: RunnerCapabilityResource = {
   runner_capability_id: "C".repeat(26),
-  capability_code: "BROWSER_CHROMIUM",
-  capability_type: "BROWSER",
+  capability_code: "PLAYWRIGHT_VERSION",
+  capability_type: "VERSION",
   availability_status: "CONFIGURED",
   validation_status: "PENDING",
-  observed_version: "1.62.1",
-  observed_metadata: { browser: "chromium" },
+  observed_version: "1.62.0",
+  observed_metadata: null,
   lifecycle_status: "ACTIVE",
   reported_at: "2026-09-03T00:00:00Z",
   row_version: 3,
+};
+
+const validatedAgentCapability: RunnerCapabilityResource = {
+  runner_capability_id: "A".repeat(26),
+  capability_code: "AGENT_VERSION",
+  capability_type: "VERSION",
+  availability_status: "CONFIGURED",
+  validation_status: "VALID",
+  observed_version: "0.1.0",
+  observed_metadata: null,
+  lifecycle_status: "ACTIVE",
+  reported_at: "2026-09-03T00:00:00Z",
+  row_version: 2,
 };
 
 describe("Runner management view", () => {
@@ -79,8 +92,17 @@ describe("Runner management view", () => {
     await setup();
 
     expect(await screen.findByText("RUNNER-01")).toBeTruthy();
-    expect(screen.getByText("OFFLINE / UNKNOWN")).toBeTruthy();
-    expect(screen.getAllByText("REGISTERED").length).toBeGreaterThan(0);
+    expect(screen.getByText("离线 / 未知")).toBeTruthy();
+    expect(screen.getAllByText("不可调度").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("未判定").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("已注册").length).toBeGreaterThan(0);
+    await fireEvent.click(screen.getByRole("button", { name: "详情" }));
+    const detail = screen.getByRole("dialog", { name: "Runner 详情" });
+    expect(within(detail).getByText("已绑定")).toBeTruthy();
+    expect(within(detail).getByText("可用")).toBeTruthy();
+    expect(within(detail).getByText("不可调度")).toBeTruthy();
+    expect(within(detail).getByText("未判定")).toBeTruthy();
+    expect(within(detail).queryByRole("button", { name: /COMPATIBLE/ })).toBeNull();
     expect(apiClient.list_runner).toHaveBeenCalledWith(
       expect.objectContaining({
         query: expect.objectContaining({ project_id: projectId }),
@@ -104,10 +126,10 @@ describe("Runner management view", () => {
       correlation_id: "runner-enrollment-correlation",
     });
 
-    await fireEvent.click(screen.getByRole("button", { name: "创建 Enrollment" }));
-    await fireEvent.update(screen.getByLabelText("Runner Code"), "RUNNER-02");
+    await fireEvent.click(screen.getByRole("button", { name: "创建注册凭据" }));
+    await fireEvent.update(screen.getByLabelText("Runner 编码"), "RUNNER-02");
     await fireEvent.update(screen.getByLabelText("原因"), "bootstrap local runner");
-    const dialog = screen.getByRole("dialog", { name: "创建 Project-scoped Enrollment" });
+    const dialog = screen.getByRole("dialog", { name: "创建 Runner 注册凭据" });
     await fireEvent.click(dialog.querySelector("button.el-button--primary")!);
 
     await waitFor(() => expect(create).toHaveBeenCalledTimes(1));
@@ -129,35 +151,42 @@ describe("Runner management view", () => {
       enable_status: "ENABLED",
       scheduling_status: "IDLE",
       last_heartbeat_at: "2026-09-03T00:00:00Z",
-      capabilities: [pendingCapability],
+      capabilities: [validatedAgentCapability, pendingCapability],
       row_version: 7,
     };
     await setup(readyRunner);
     const validate = vi.spyOn(apiClient, "validate_runner_capability").mockResolvedValue({
       data: {
         ...readyRunner,
+        scheduling_status: "IDLE",
+        version_compatibility: "COMPATIBLE",
         row_version: 8,
-        capabilities: [{ ...pendingCapability, validation_status: "VALID", row_version: 4 }],
+        capabilities: [
+          validatedAgentCapability,
+          { ...pendingCapability, validation_status: "VALID", row_version: 4 },
+        ],
       },
       correlation_id: "corr-capability",
     });
 
     await fireEvent.click(await screen.findByRole("button", { name: "验证能力" }));
-    const dialog = screen.getByRole("dialog", { name: "验证 Runner Capability" });
+    const dialog = screen.getByRole("dialog", { name: "验证 Runner 能力" });
     await fireEvent.update(
       within(dialog).getByLabelText("运行证据摘要"),
-      "Chromium launched and reached the approved UAT origin",
+      "Runner reports Playwright 1.62.0 and the runtime check passed",
     );
     await fireEvent.update(within(dialog).getByLabelText("验证原因"), "Runner 真机验证");
     await fireEvent.click(within(dialog).getByRole("button", { name: "确认验证" }));
 
     await waitFor(() => expect(validate).toHaveBeenCalledTimes(1));
+    expect(screen.getByText("兼容")).toBeTruthy();
+    expect(screen.getAllByText("空闲").length).toBeGreaterThan(0);
     expect(validate.mock.calls[0]?.slice(0, 3)).toEqual([
       runner.runner_id,
-      "BROWSER_CHROMIUM",
+      "PLAYWRIGHT_VERSION",
       {
         expected_capability_version: 3,
-        evidence_summary: "Chromium launched and reached the approved UAT origin",
+        evidence_summary: "Runner reports Playwright 1.62.0 and the runtime check passed",
         reason: "Runner 真机验证",
       },
     ]);

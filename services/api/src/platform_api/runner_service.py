@@ -29,6 +29,11 @@ from platform_api.models import (
     RunnerCapability,
     RunnerEnrollment,
 )
+from platform_api.runner_readiness import (
+    resolve_scheduling_status,
+    resolve_version_compatibility,
+    runner_can_continue_bound_execution,
+)
 from platform_api.runner_schemas import (
     CreateRunnerEnrollmentRequest,
     HeartbeatRunnerRequest,
@@ -46,6 +51,7 @@ from platform_api.runner_schemas import (
     UpdateRunnerRequest,
     ValidateRunnerCapabilityRequest,
 )
+from platform_api.runner_resource_reconciler import reconcile_formal_execution_slot
 from platform_api.security import new_ulid, utc_now
 
 _CAPABILITY_TYPES = {
@@ -105,14 +111,20 @@ class RunnerService:
         """Authenticate the Runner Agent before it can receive a bound direct command."""
         with self._factory.begin() as db:
             runner, _agent = _authenticate_agent(db, runner_id, agent_token)
-            if not _runner_execution_eligible(runner):
+            project = db.get(Project, runner.project_id)
+            if not _runner_execution_eligible(
+                runner, project_lifecycle_status=project.lifecycle_status if project else None
+            ):
                 raise _machine_unauthenticated("Runner Agent is not eligible for execution.")
 
     def machine_execution_eligible(self, runner_id: str, agent_token: str) -> bool:
         """Authenticate the Agent and report eligibility without conflating it with identity."""
         with self._factory.begin() as db:
             runner, _agent = _authenticate_agent(db, runner_id, agent_token)
-            return _runner_execution_eligible(runner)
+            project = db.get(Project, runner.project_id)
+            return _runner_execution_eligible(
+                runner, project_lifecycle_status=project.lifecycle_status if project else None
+            )
 
     def create_enrollment(
         self,
@@ -332,6 +344,7 @@ class RunnerService:
                 self._apply_capability_snapshot(
                     db, runner, body.capabilities, now, actor_id=agent.runner_agent_id
                 )
+                _recompute_runner_runtime_state(db, runner, project)
                 enrollment.enrollment_status = "CONSUMED"
                 enrollment.consumed_runner_id = runner.runner_id
                 enrollment.consumed_at = now
@@ -601,7 +614,8 @@ class RunnerService:
                 agent.updated_at = now
                 agent.updated_by = actor.user.user_id
                 runner.connection_status = "OFFLINE"
-                runner.scheduling_status = "UNSCHEDULABLE"
+                project = db.get(Project, runner.project_id)
+                _recompute_runner_runtime_state(db, runner, project)
                 runner.row_version += 1
                 runner.updated_at = now
                 runner.updated_by = actor.user.user_id
@@ -673,14 +687,7 @@ class RunnerService:
                 )
                 if changed:
                     self._audit_capability_change(db, runner, agent, context)
-            if (
-                runner.lifecycle_status != "ACTIVE"
-                or runner.enable_status != "ENABLED"
-                or project.lifecycle_status != "ACTIVE"
-                or body.health_status not in {"HEALTHY", "DEGRADED"}
-                or runner.registration_status != "REGISTERED"
-            ):
-                runner.scheduling_status = "UNSCHEDULABLE"
+            _recompute_runner_runtime_state(db, runner, project)
             db.flush()
             return _resource(db, runner)
 
@@ -705,6 +712,8 @@ class RunnerService:
                 runner.updated_at = utc_now()
                 runner.updated_by = agent.runner_agent_id
                 self._audit_capability_change(db, runner, agent, context)
+            project = db.get(Project, runner.project_id)
+            _recompute_runner_runtime_state(db, runner, project)
             db.flush()
             return _resource(db, runner)
 
@@ -819,6 +828,8 @@ class RunnerService:
                         "change_summary": {"validation_evidence_hash": evidence_hash},
                     },
                 )
+                project = db.get(Project, runner.project_id)
+                _recompute_runner_runtime_state(db, runner, project)
                 resource = _resource(db, runner)
                 self._idempotency.complete(
                     record, 200, {"runner": resource.model_dump(mode="json")}
@@ -883,8 +894,8 @@ class RunnerService:
                             raise _state_error("Only an ACTIVE Project can enable a Runner.")
                     runner.lifecycle_status = target
                     runner.enable_status = "ENABLED" if target == "ACTIVE" else "DISABLED"
-                    if target != "ACTIVE":
-                        runner.scheduling_status = "UNSCHEDULABLE"
+                project = db.get(Project, runner.project_id)
+                _recompute_runner_runtime_state(db, runner, project)
                 runner.row_version += 1
                 runner.updated_at = utc_now()
                 runner.updated_by = actor.user.user_id
@@ -1166,14 +1177,31 @@ def _authenticate_agent(db: Session, runner_id: str, raw_token: str) -> tuple[Ru
     return runner, agent
 
 
-def _runner_execution_eligible(runner: Runner) -> bool:
-    return (
-        runner.lifecycle_status == "ACTIVE"
-        and runner.registration_status == "REGISTERED"
-        and runner.enable_status == "ENABLED"
-        and runner.project_binding_status == "BOUND"
-        and runner.connection_status == "ONLINE"
-        and runner.health_status == "HEALTHY"
+def _recompute_runner_runtime_state(
+    db: Session, runner: Runner, project: Project | None
+) -> None:
+    """Recompute server-owned compatibility and scheduling without touching human row_version."""
+    db.flush()
+    capabilities = list(
+        db.scalars(
+            select(RunnerCapability).where(RunnerCapability.runner_id == runner.runner_id)
+        )
+    )
+    runner.version_compatibility = resolve_version_compatibility(capabilities)
+    runner.scheduling_status = resolve_scheduling_status(
+        runner,
+        project_lifecycle_status=project.lifecycle_status if project is not None else None,
+    )
+    # Compatibility and FORMAL_EXECUTION validation jointly own the stable P0 slot.
+    # ONLINE/HEALTHY affects discovery/preflight, not the long-lived slot lifecycle.
+    reconcile_formal_execution_slot(db, runner, project)
+
+
+def _runner_execution_eligible(
+    runner: Runner, *, project_lifecycle_status: str | None = "ACTIVE"
+) -> bool:
+    return runner_can_continue_bound_execution(
+        runner, project_lifecycle_status=project_lifecycle_status
     )
 
 

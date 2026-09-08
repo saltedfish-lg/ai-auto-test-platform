@@ -142,7 +142,7 @@ test("AI model configuration browser closure", async ({ page }) => {
     .fill("独立审核通过");
   await page.getByRole("button", { name: "确认激活模型配置" }).click();
   expect((await activateResponse).status()).toBe(200);
-  await expect(page.getByText("ACTIVE", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("已启用", { exact: true }).first()).toBeVisible();
 
   await logout(page);
   expect((await login(page, managerUsername, managerPassword)).status()).toBe(200);
@@ -244,7 +244,7 @@ test("SUPER_ADMIN model configuration self-approval", async ({ page }) => {
     .fill("超级管理员自审通过");
   await page.getByRole("button", { name: "确认激活模型配置" }).click();
   expect((await activateResponse).status()).toBe(200);
-  await expect(page.getByText("ACTIVE", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("已启用", { exact: true }).first()).toBeVisible();
   await expectSecretNotRendered(page, providerSecret);
 });
 
@@ -273,7 +273,7 @@ test("AI exploration planning through browser/API/gateway/MySQL", async ({ page 
   expect(payload.data.lifecycle_status).toBe("READY");
   expect(payload.data.ai_task_id).toBeTruthy();
   expect(payload.data.plan.steps).toHaveLength(1);
-  await expect(page.getByText("READY", { exact: true })).toBeVisible();
+  await expect(page.getByText("就绪", { exact: true })).toBeVisible();
   await expect(page.getByText("验证合成用户能够进入合成工作台", { exact: true })).toBeVisible();
   await expect(page.getByText("Open the synthetic login page", { exact: true })).toBeVisible();
   await expect(page.getByText("OPENAI / browser-runtime-model", { exact: true })).toBeVisible();

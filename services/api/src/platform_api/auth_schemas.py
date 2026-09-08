@@ -116,6 +116,21 @@ class UserResource(BaseModel):
     ]
 
 
+
+
+class PageMeta(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    page: int = Field(ge=1)
+    page_size: int = Field(ge=1, le=200)
+    total: int = Field(ge=0)
+
+
+class ListUserResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    items: list[UserResource]
+    page: PageMeta
+
+
 class OneTimeCredentialDeliveryResource(BaseModel):
     model_config = ConfigDict(extra="forbid")
     user: UserResource

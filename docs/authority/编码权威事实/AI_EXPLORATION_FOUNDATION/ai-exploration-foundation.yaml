@@ -109,6 +109,10 @@ browser_loop_decision:
       - AIExplorationStep只是Session下的有序证据实体，不成为execution owner。
       - RUNNING期间禁止更换ExecutionAttempt、ExecutionBindingSnapshot或Runner。
       - ExecutionBindingSnapshot是Project、Environment、Terminal、LoginStrategy、TestAccount、CredentialRevision、Runner、RuntimePolicy与两类Lease的唯一执行来源。
+      - AI探索的RunTask不要求CaseSuite；CaseAttempt与ExecutionBatch只属于正式用例执行，不得为AI探索伪造占位对象。
+      - AI探索ExecutionAttempt必须绑定真实Runner，但case_attempt_id、configuration_snapshot_id与execution_batch_id允许为空；其执行冻结事实由ExecutionBindingSnapshot承担。
+      - AI探索执行owner通过既有create_run_task与create_execution_attempt正式契约创建；本Browser Loop不引入Scheduler、Queue或Runner选择旁路。
+      - AI探索创建RunTask时task_type必须显式为AI_EXPLORATION；task_type属于RunTask创建事实，创建后不可通过通用PATCH变更。
       - 不接受arbitrary target_url、明文credential、arbitrary localStorage、captcha value、Runner Agent token、browser executable或客户端capability JSON作为Browser Loop运行输入。
   public_operations:
     start:
@@ -289,3 +293,12 @@ browser_loop_decision:
       - CAPTCHA_REALTIME_VALUE
       - PROVIDER_SECRET
     login_resolution: TerminalAccessRevision、LoginStrategy与TestAccount/CredentialRevision只能在受信Runtime或Runner边界解析并注入。
+  login_success_validation:
+    rule: 真实登录提交后，Runner必须在继续进入业务目标页之前取得可观察登录成功信号；未取得时fail-closed，不得以固定sleep、无异常或后续强制Navigate冒充登录成功。
+    accepted_signals:
+      - AUTHENTICATED_URL
+      - LOGIN_FORM_DISAPPEARED
+    evidence_rule: 仅将脱敏login_state_marker写入Minimal Observation，包含status与signal等非秘密事实；password、captcha、cookie、localStorage secret与Authorization不得进入该证据。
+  runtime_cleanup_evidence:
+    rule: 已创建真实Browser Session的AI探索在run()结束时必须执行bound Runner close；close成功或失败都写入AIExploration Audit，真实验收仅接受BROWSER_CLEANUP_SUCCEEDED。
+    prohibited: 不得仅依据Session终态或Lease RELEASED推断Chromium已经关闭。

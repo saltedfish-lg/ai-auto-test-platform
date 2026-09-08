@@ -1,22 +1,34 @@
 <script setup lang="ts">
 import { ElMessage } from "element-plus";
-import { computed, reactive, ref, watch } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
 import PermissionGate from "../components/PermissionGate.vue";
 import type { RunnerCapabilityResource, RunnerResource } from "../generated/types";
+import { capabilityLabel, statusLabel } from "../presentation/labels";
+import { useProjectsStore } from "../stores/projects";
 import { type RunnerLifecycleAction, useRunnersStore } from "../stores/runners";
 import { useSessionStore } from "../stores/session";
 
 const route = useRoute();
 const router = useRouter();
 const runners = useRunnersStore();
+const projects = useProjectsStore();
 const session = useSessionStore();
 const projectInput = ref(String(route.query.project_id ?? ""));
 const projectId = computed(() =>
   route.params.projectId ? String(route.params.projectId) : projectInput.value.trim(),
 );
 const hasProjectScope = computed(() => projectId.value.length === 26);
+const activeProjects = computed(() =>
+  projects.items.filter((project) => project.lifecycle_status === "ACTIVE"),
+);
+const selectedProject = computed(() =>
+  projects.items.find((project) => project.project_id === projectId.value),
+);
+const capabilityOptions = computed(() =>
+  [...new Set(runners.items.flatMap((runner) => runner.capabilities.map((item) => item.capability_code)))].sort(),
+);
 const filters = reactive({ lifecycleStatus: "", healthStatus: "", capabilityCode: "" });
 const selected = ref<RunnerResource | null>(null);
 const detailVisible = ref(false);
@@ -33,6 +45,16 @@ const commandReason = ref("");
 const capabilityForm = reactive({ capability_code: "", evidence_summary: "", reason: "" });
 const localError = ref("");
 
+
+onMounted(async () => {
+  if (projects.items.length === 0) {
+    await projects.loadProjects().catch(() => undefined);
+  }
+  if (!route.params.projectId && !projectInput.value && activeProjects.value.length === 1) {
+    projectInput.value = activeProjects.value[0]?.project_id ?? "";
+  }
+});
+
 watch(
   projectId,
   (value) => {
@@ -43,7 +65,7 @@ watch(
 
 async function openProjectScope(): Promise<void> {
   if (!hasProjectScope.value) {
-    localError.value = "请输入 26 位 Project ID。";
+    localError.value = "请选择要管理 Runner 的项目。";
     return;
   }
   localError.value = "";
@@ -53,7 +75,7 @@ async function openProjectScope(): Promise<void> {
 
 async function refresh(page = runners.page.page): Promise<void> {
   if (!hasProjectScope.value) {
-    localError.value = "请先输入有效的 26 位 Project ID。";
+    localError.value = "请先选择要管理 Runner 的项目。";
     return;
   }
   localError.value = "";
@@ -88,12 +110,12 @@ function openCreate(): void {
 
 async function submitCreate(): Promise<void> {
   if (!hasProjectScope.value) {
-    localError.value = "请先选择有效的 Project 范围。";
+    localError.value = "请先选择要管理 Runner 的项目。";
     return;
   }
 
   if (!createForm.runner_code.trim() || !createForm.reason.trim()) {
-    localError.value = "请填写 Runner Code 和创建原因。";
+    localError.value = "请填写 Runner 编码 和创建原因。";
     return;
   }
 
@@ -225,7 +247,7 @@ async function submitCapabilityValidation(): Promise<void> {
     );
     selected.value = updated;
     capabilityVisible.value = false;
-    ElMessage.success("Runner Capability 已完成正式验证。");
+    ElMessage.success("Runner 能力已完成正式验证。");
   } catch {
     // Store exposes the operation-specific error.
   }
@@ -253,8 +275,8 @@ const commandLabels: Record<RunnerLifecycleAction | "rotate" | "revoke", string>
   enable: "启用",
   disable: "停用",
   archive: "归档",
-  rotate: "轮换 Agent Token",
-  revoke: "撤销 Agent Token",
+  rotate: "轮换 Agent 令牌",
+  revoke: "撤销 Agent 令牌",
 };
 </script>
 
@@ -271,17 +293,17 @@ const commandLabels: Record<RunnerLifecycleAction | "rotate" | "revoke", string>
           ← 返回项目详情
         </el-button>
         <h2 id="runner-title">Runner 管理</h2>
-        <p>管理 Project 归属、Agent 注册、分离生命周期与运行健康，以及受控能力事实。</p>
+        <p>管理 项目归属、Agent 注册、分离生命周期与运行健康，以及受控能力事实。</p>
       </div>
       <PermissionGate permission="RUNNER_BIND">
         <el-tooltip
           :disabled="hasProjectScope"
-          content="请先输入 26 位 Project ID 并打开 Runner Project"
+          content="请先选择项目"
           placement="bottom"
         >
           <span>
             <el-button type="primary" :disabled="!hasProjectScope" @click="openCreate">
-              创建 Enrollment
+              创建注册凭据
             </el-button>
           </span>
         </el-tooltip>
@@ -297,18 +319,28 @@ const commandLabels: Record<RunnerLifecycleAction | "rotate" | "revoke", string>
         class="workspace-alert"
       />
       <el-form inline @submit.prevent="openProjectScope">
-        <el-form-item label="Project ID">
-          <el-input
+        <el-form-item label="项目">
+          <el-select
             v-model="projectInput"
-            maxlength="26"
-            placeholder="输入授权范围内的 Project ID"
-          />
+            filterable
+            clearable
+            style="width: 320px"
+            placeholder="选择有权访问的项目"
+            :loading="projects.status === 'loading'"
+          >
+            <el-option
+              v-for="project in activeProjects"
+              :key="project.project_id"
+              :label="project.display_name || project.project_code"
+              :value="project.project_id"
+            />
+          </el-select>
         </el-form-item>
 
-        <el-button type="primary" @click="openProjectScope"> 打开 Runner Project </el-button>
+        <el-button type="primary" @click="openProjectScope">打开 Runner 管理</el-button>
       </el-form>
 
-      <p>Project 范围由服务端按 Runner 管理权限实时校验。</p>
+      <p>项目范围由服务端按 Runner 管理权限实时校验。</p>
     </el-card>
 
     <el-alert
@@ -319,8 +351,10 @@ const commandLabels: Record<RunnerLifecycleAction | "rotate" | "revoke", string>
       show-icon
       class="workspace-alert"
     >
-      <template v-if="runners.correlationId" #default>
-        请求标识：{{ runners.correlationId }}
+      <template v-if="runners.errorCode || runners.correlationId" #default>
+        <span v-if="runners.errorCode">错误代码：{{ runners.errorCode }}</span>
+        <span v-if="runners.errorCode && runners.correlationId"> · </span>
+        <span v-if="runners.correlationId">请求标识：{{ runners.correlationId }}</span>
       </template>
     </el-alert>
 
@@ -332,7 +366,7 @@ const commandLabels: Record<RunnerLifecycleAction | "rotate" | "revoke", string>
               v-for="value in ['REGISTERED', 'ACTIVE', 'DISABLED', 'ARCHIVED']"
               :key="value"
               :value="value"
-              :label="value"
+              :label="statusLabel('lifecycle', value)"
             />
           </el-select>
         </el-form-item>
@@ -342,12 +376,14 @@ const commandLabels: Record<RunnerLifecycleAction | "rotate" | "revoke", string>
               v-for="value in ['UNKNOWN', 'HEALTHY', 'DEGRADED', 'UNHEALTHY']"
               :key="value"
               :value="value"
-              :label="value"
+              :label="statusLabel('health', value)"
             />
           </el-select>
         </el-form-item>
         <el-form-item label="能力">
-          <el-input v-model="filters.capabilityCode" clearable placeholder="Capability Code" />
+          <el-select v-model="filters.capabilityCode" clearable filterable style="width: 200px" placeholder="选择能力">
+            <el-option v-for="code in capabilityOptions" :key="code" :value="code" :label="capabilityLabel(code)" />
+          </el-select>
         </el-form-item>
         <el-button type="primary" @click="refresh(1)">查询</el-button>
       </el-form>
@@ -358,14 +394,24 @@ const commandLabels: Record<RunnerLifecycleAction | "rotate" | "revoke", string>
       v-loading="runners.status === 'loading'"
       empty-text="暂无已注册 Runner"
     >
-      <el-table-column prop="runner_code" label="Runner Code" min-width="160" />
+      <el-table-column prop="runner_code" label="Runner 编码" min-width="160" />
       <el-table-column prop="display_name" label="显示名称" min-width="140" />
-      <el-table-column prop="project_id" label="Project" min-width="210" />
-      <el-table-column prop="lifecycle_status" label="生命周期" width="125" />
+      <el-table-column label="项目" min-width="180">
+        <template #default>{{ selectedProject?.display_name || selectedProject?.project_code || "当前项目" }}</template>
+      </el-table-column>
+      <el-table-column label="生命周期" width="125">
+        <template #default="scope">{{ statusLabel('lifecycle', scope.row.lifecycle_status) }}</template>
+      </el-table-column>
       <el-table-column label="运行状态" min-width="180">
         <template #default="scope">
-          {{ scope.row.connection_status }} / {{ scope.row.health_status }}
+          {{ statusLabel('connection', scope.row.connection_status) }} / {{ statusLabel('health', scope.row.health_status) }}
         </template>
+      </el-table-column>
+      <el-table-column label="调度状态" min-width="150">
+        <template #default="scope">{{ statusLabel('scheduling', scope.row.scheduling_status) }}</template>
+      </el-table-column>
+      <el-table-column label="版本兼容性" min-width="150">
+        <template #default="scope">{{ statusLabel('compatibility', scope.row.version_compatibility) }}</template>
       </el-table-column>
       <el-table-column prop="last_heartbeat_at" label="最后心跳" min-width="190" />
       <el-table-column label="能力" min-width="260">
@@ -377,7 +423,7 @@ const commandLabels: Record<RunnerLifecycleAction | "rotate" | "revoke", string>
             :key="capability.capability_code"
             class="terminal-tag"
           >
-            {{ capability.capability_code }}
+            {{ capabilityLabel(capability.capability_code) }}
           </el-tag>
         </template>
       </el-table-column>
@@ -416,8 +462,8 @@ const commandLabels: Record<RunnerLifecycleAction | "rotate" | "revoke", string>
                     :command="action"
                     >{{ commandLabels[action] }}</el-dropdown-item
                   >
-                  <el-dropdown-item command="rotate">轮换 Agent Token</el-dropdown-item>
-                  <el-dropdown-item command="revoke">撤销 Agent Token</el-dropdown-item>
+                  <el-dropdown-item command="rotate">轮换 Agent 令牌</el-dropdown-item>
+                  <el-dropdown-item command="revoke">撤销 Agent 令牌</el-dropdown-item>
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
@@ -435,14 +481,14 @@ const commandLabels: Record<RunnerLifecycleAction | "rotate" | "revoke", string>
       @current-change="refresh"
     />
 
-    <el-dialog v-model="createVisible" title="创建 Project-scoped Enrollment" width="560px">
+    <el-dialog v-model="createVisible" title="创建 Runner 注册凭据" width="560px">
       <el-alert v-if="localError" :title="localError" type="error" :closable="false" />
       <el-form label-position="top">
-        <el-form-item label="Project ID" required>
-          <el-input :model-value="projectId" aria-label="Project ID" readonly />
+        <el-form-item label="所属项目" required>
+          <el-text>{{ selectedProject?.display_name || selectedProject?.project_code || "当前项目" }}</el-text>
         </el-form-item>
 
-        <el-form-item label="Runner Code" required>
+        <el-form-item label="Runner 编码" required>
           <el-input v-model="createForm.runner_code" />
         </el-form-item>
 
@@ -464,7 +510,7 @@ const commandLabels: Record<RunnerLifecycleAction | "rotate" | "revoke", string>
 
     <el-dialog
       v-model="credentialVisible"
-      title="一次性 Enrollment Credential"
+      title="一次性 Runner 注册凭据"
       width="620px"
       :close-on-click-modal="false"
       @closed="closeEnrollmentCredential"
@@ -511,7 +557,7 @@ const commandLabels: Record<RunnerLifecycleAction | "rotate" | "revoke", string>
       <template #footer><el-button type="primary" @click="submitCommand">确认</el-button></template>
     </el-dialog>
 
-    <el-dialog v-model="capabilityVisible" title="验证 Runner Capability" width="600px">
+    <el-dialog v-model="capabilityVisible" title="验证 Runner 能力" width="600px">
       <el-alert
         v-if="localError"
         :title="localError"
@@ -520,18 +566,18 @@ const commandLabels: Record<RunnerLifecycleAction | "rotate" | "revoke", string>
         class="workspace-alert"
       />
       <el-alert
-        title="验证只作用于真实 Runner 当前上报的 PENDING 能力，不会改变 Runner 的连接、健康或启用状态。"
+        title="验证只作用于真实 Runner 当前上报的待验证能力，不会改变 Runner 的连接、健康或启用状态。"
         type="info"
         :closable="false"
         class="workspace-alert"
       />
       <el-form v-if="selected" label-position="top">
-        <el-form-item label="Capability" required>
+        <el-form-item label="能力" required>
           <el-select v-model="capabilityForm.capability_code" style="width: 100%">
             <el-option
               v-for="capability in pendingCapabilities(selected)"
               :key="capability.runner_capability_id"
-              :label="`${capability.capability_code} · report v${capability.row_version}`"
+              :label="`${capabilityLabel(capability.capability_code)} · 上报版本 ${capability.row_version}`"
               :value="capability.capability_code"
             />
           </el-select>
@@ -556,7 +602,7 @@ const commandLabels: Record<RunnerLifecycleAction | "rotate" | "revoke", string>
 
     <el-dialog
       v-model="tokenVisible"
-      title="新的 Runner Agent Token"
+      title="新的 Runner Agent 令牌"
       width="620px"
       :close-on-click-modal="false"
       @closed="closeRotatedToken"
@@ -582,26 +628,36 @@ const commandLabels: Record<RunnerLifecycleAction | "rotate" | "revoke", string>
 
     <el-drawer v-model="detailVisible" title="Runner 详情" size="580px">
       <el-descriptions v-if="selected" :column="1" border>
-        <el-descriptions-item label="Runner Code">{{ selected.runner_code }}</el-descriptions-item>
+        <el-descriptions-item label="Runner 编码">{{ selected.runner_code }}</el-descriptions-item>
         <el-descriptions-item label="显示名称">{{
           selected.display_name || "—"
         }}</el-descriptions-item>
-        <el-descriptions-item label="Project">{{ selected.project_id }}</el-descriptions-item>
-        <el-descriptions-item label="生命周期">{{
-          selected.lifecycle_status
-        }}</el-descriptions-item>
-        <el-descriptions-item label="连接 / 健康"
-          >{{ selected.connection_status }} / {{ selected.health_status }}</el-descriptions-item
-        >
-        <el-descriptions-item label="启用状态">{{ selected.enable_status }}</el-descriptions-item>
+        <el-descriptions-item label="项目">{{ selectedProject?.display_name || selectedProject?.project_code || "当前项目" }}</el-descriptions-item>
+        <el-descriptions-item label="生命周期">{{ statusLabel('lifecycle', selected.lifecycle_status) }}</el-descriptions-item>
+        <el-descriptions-item label="连接 / 健康">{{ statusLabel('connection', selected.connection_status) }} / {{ statusLabel('health', selected.health_status) }}</el-descriptions-item>
+        <el-descriptions-item label="启用状态">{{ statusLabel('enablement', selected.enable_status) }}</el-descriptions-item>
+        <el-descriptions-item label="项目绑定">{{ statusLabel('binding', selected.project_binding_status) }}</el-descriptions-item>
+        <el-descriptions-item label="调度状态">{{ statusLabel('scheduling', selected.scheduling_status) }}</el-descriptions-item>
+        <el-descriptions-item label="资源状态">{{ statusLabel('resource', selected.resource_status) }}</el-descriptions-item>
+        <el-descriptions-item label="版本兼容性">{{ statusLabel('compatibility', selected.version_compatibility) }}</el-descriptions-item>
         <el-descriptions-item label="最后心跳">{{
           selected.last_heartbeat_at || "尚未心跳"
         }}</el-descriptions-item>
         <el-descriptions-item label="能力">
-          <pre>{{ JSON.stringify(selected.capabilities, null, 2) }}</pre>
+          <el-space wrap>
+            <el-tag v-for="capability in selected.capabilities" :key="capability.runner_capability_id">
+              {{ capabilityLabel(capability.capability_code) }} · {{ statusLabel('capabilityValidation', capability.validation_status) }}
+            </el-tag>
+          </el-space>
         </el-descriptions-item>
-        <el-descriptions-item label="Runtime Metadata">
-          <pre>{{ JSON.stringify(selected.runtime_metadata, null, 2) }}</pre>
+        <el-descriptions-item label="技术信息">
+          <el-collapse>
+            <el-collapse-item title="内部标识与运行元数据" name="technical">
+              <p>Runner 标识：<code>{{ selected.runner_id }}</code></p>
+              <p>项目标识：<code>{{ selected.project_id }}</code></p>
+              <pre>{{ JSON.stringify(selected.runtime_metadata, null, 2) }}</pre>
+            </el-collapse-item>
+          </el-collapse>
         </el-descriptions-item>
         <el-descriptions-item label="更新时间">{{ selected.updated_at }}</el-descriptions-item>
       </el-descriptions>

@@ -3,7 +3,7 @@ import { reactive, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import type { FormInstance, FormRules } from "element-plus";
 
-import { getAuthenticationErrorMessage, getCorrelationId } from "../api/errors";
+import { getAuthenticationErrorMessage, getCorrelationId, getProblemCode } from "../api/errors";
 import type { LoginRequest } from "../generated/types";
 import { useSessionStore } from "../stores/session";
 
@@ -12,6 +12,7 @@ const form = reactive<LoginRequest>({ username: "", password: "" });
 const passwordVisible = ref(false);
 const errorMessage = ref("");
 const correlationId = ref<string>();
+const errorCode = ref<string>();
 const session = useSessionStore();
 const router = useRouter();
 const route = useRoute();
@@ -37,6 +38,7 @@ function safeRedirect(): string {
 async function submit(): Promise<void> {
   errorMessage.value = "";
   correlationId.value = undefined;
+  errorCode.value = undefined;
   if (!form.username || !form.password) {
     errorMessage.value = "请输入用户名和密码。";
     void formRef.value?.validate().catch(() => undefined);
@@ -51,6 +53,7 @@ async function submit(): Promise<void> {
   } catch (error) {
     errorMessage.value = getAuthenticationErrorMessage(error, "登录请求失败，请稍后重试。");
     correlationId.value = getCorrelationId(error);
+    errorCode.value = getProblemCode(error);
   }
 }
 </script>
@@ -83,8 +86,10 @@ async function submit(): Promise<void> {
           show-icon
           class="form-alert"
         >
-          <template v-if="correlationId" #default>
-            <span class="correlation-id">请求标识：{{ correlationId }}</span>
+          <template v-if="errorCode || correlationId" #default>
+            <span v-if="errorCode">错误代码：{{ errorCode }}</span>
+            <span v-if="errorCode && correlationId"> · </span>
+            <span v-if="correlationId" class="correlation-id">请求标识：{{ correlationId }}</span>
           </template>
         </el-alert>
 

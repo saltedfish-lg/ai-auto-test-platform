@@ -5,6 +5,7 @@ import { useRoute, useRouter } from "vue-router";
 
 import PermissionGate from "../components/PermissionGate.vue";
 import type { TestAccountResource } from "../generated/types";
+import { enumLabel, statusLabel } from "../presentation/labels";
 import { useBusinessTerminalsStore } from "../stores/businessTerminals";
 import { useEnvironmentsStore } from "../stores/environments";
 import { type TestAccountLifecycleAction, useTestAccountsStore } from "../stores/testAccounts";
@@ -66,7 +67,7 @@ watch(
 
 function environmentName(id: string): string {
   const item = environments.items.find((environment) => environment.environment_id === id);
-  return item?.display_name || item?.environment_code || id;
+  return item?.display_name || item?.environment_code || "未命名环境";
 }
 
 async function refresh(page = accounts.page.page): Promise<void> {
@@ -259,8 +260,10 @@ const lifecycleLabel: Record<TestAccountLifecycleAction, string> = {
       show-icon
       class="workspace-alert"
     >
-      <template v-if="accounts.correlationId" #default>
-        <span>请求标识：{{ accounts.correlationId }}</span>
+      <template v-if="accounts.errorCode || accounts.correlationId" #default>
+        <span v-if="accounts.errorCode">错误代码：{{ accounts.errorCode }}</span>
+        <span v-if="accounts.errorCode && accounts.correlationId"> · </span>
+        <span v-if="accounts.correlationId">请求标识：{{ accounts.correlationId }}</span>
       </template>
     </el-alert>
 
@@ -276,7 +279,7 @@ const lifecycleLabel: Record<TestAccountLifecycleAction, string> = {
             <el-option
               v-for="item in environments.items"
               :key="item.environment_id"
-              :label="item.display_name || item.environment_code || item.environment_id"
+              :label="item.display_name || item.environment_code || '未命名环境'"
               :value="item.environment_id"
             />
           </el-select>
@@ -314,7 +317,7 @@ const lifecycleLabel: Record<TestAccountLifecycleAction, string> = {
                 'ARCHIVED',
               ]"
               :key="status"
-              :label="status"
+              :label="statusLabel('lifecycle', status)"
               :value="status"
             />
           </el-select>
@@ -340,15 +343,13 @@ const lifecycleLabel: Record<TestAccountLifecycleAction, string> = {
             :key="terminal.business_terminal_id"
             class="terminal-tag"
           >
-            {{ terminal.display_name || terminal.terminal_code }} / {{ terminal.terminal_type }}
+            {{ terminal.display_name || terminal.terminal_code }} / {{ enumLabel("terminalType", terminal.terminal_type) }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="lifecycle_status" label="状态" width="170" />
+      <el-table-column label="状态" width="170"><template #default="scope">{{ statusLabel('lifecycle', scope.row.lifecycle_status) }}</template></el-table-column>
       <el-table-column label="凭据" width="130">
-        <template #default="scope"
-          >{{ scope.row.credential_state }} · v{{ scope.row.credential_revision_no }}</template
-        >
+        <template #default="scope">{{ statusLabel('credential', scope.row.credential_state) }} · v{{ scope.row.credential_revision_no }}</template>
       </el-table-column>
       <el-table-column prop="updated_at" label="更新时间" min-width="180" />
       <el-table-column label="操作" fixed="right" min-width="300">
@@ -414,7 +415,7 @@ const lifecycleLabel: Record<TestAccountLifecycleAction, string> = {
             ><el-option
               v-for="item in environments.items"
               :key="item.environment_id"
-              :label="item.display_name || item.environment_code || item.environment_id"
+              :label="item.display_name || item.environment_code || '未命名环境'"
               :value="item.environment_id" /></el-select
         ></el-form-item>
         <el-form-item label="登录账号" required>
@@ -430,7 +431,7 @@ const lifecycleLabel: Record<TestAccountLifecycleAction, string> = {
             ><el-option
               v-for="item in availableTerminals"
               :key="item.business_terminal_id"
-              :label="`${item.display_name || item.terminal_code} / ${item.terminal_type}`"
+              :label="`${item.display_name || item.terminal_code} / ${enumLabel('terminalType', item.terminal_type)}`"
               :value="item.business_terminal_id" /></el-select
         ></el-form-item>
         <el-form-item label="登录密码" required>
@@ -524,17 +525,14 @@ const lifecycleLabel: Record<TestAccountLifecycleAction, string> = {
         <el-descriptions-item label="环境">{{
           environmentName(selected.environment_id)
         }}</el-descriptions-item>
-        <el-descriptions-item label="状态">{{ selected.lifecycle_status }}</el-descriptions-item>
-        <el-descriptions-item label="密码状态"
-          >{{ selected.credential_state }} · revision
-          {{ selected.credential_revision_no }}</el-descriptions-item
-        >
+        <el-descriptions-item label="状态">{{ statusLabel('lifecycle', selected.lifecycle_status) }}</el-descriptions-item>
+        <el-descriptions-item label="密码状态">{{ statusLabel('credential', selected.credential_state) }} · 修订 {{ selected.credential_revision_no }}</el-descriptions-item>
         <el-descriptions-item label="适用终端"
           ><div
             v-for="terminal in selected.business_terminals"
             :key="terminal.business_terminal_id"
           >
-            {{ terminal.display_name || terminal.terminal_code }} / {{ terminal.terminal_type }}
+            {{ terminal.display_name || terminal.terminal_code }} / {{ enumLabel("terminalType", terminal.terminal_type) }}
           </div></el-descriptions-item
         >
         <el-descriptions-item label="并发版本">{{ selected.row_version }}</el-descriptions-item>

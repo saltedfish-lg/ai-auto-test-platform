@@ -99,7 +99,7 @@ describe("Test Account management view", () => {
   it("loads the project-scoped list and never renders credential material", async () => {
     await setup();
     expect(await screen.findByText("qa-admin")).toBeTruthy();
-    expect(screen.getByText("VALID · v1")).toBeTruthy();
+    expect(screen.getByText("有效 · v1")).toBeTruthy();
     expect(document.body.textContent).not.toContain("secret_value");
     expect(apiClient.list_test_account).toHaveBeenCalledWith(
       expect.objectContaining({

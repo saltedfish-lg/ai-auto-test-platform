@@ -27,6 +27,15 @@ from platform_api.audit import AuditContext
 from platform_api.auth_service import AuthenticatedIdentity, AuthenticationService
 from platform_api.errors import PlatformError
 from platform_api.idempotency import IdempotencyCoordinator
+from platform_api.execution_owner_transitions import (
+    append_transition_evidence,
+    complete_execution_attempt,
+    complete_run_task,
+    prepare_execution_attempt,
+    prepare_run_task,
+    run_execution_attempt,
+    run_run_task,
+)
 from platform_api.model_configuration_service import (
     AI_EXPLORATION,
     ModelConfigurationService,
@@ -44,18 +53,21 @@ from platform_api.models import (
     Environment,
     ExecutionAttempt,
     ExecutionBindingSnapshot,
+    ExecutionOwnerAudit,
     IdempotencyRecord,
     LoginStrategy,
     OutboxEvent,
     Project,
     ProjectRuntimePolicyRevision,
     ResourceLease,
+    RunTask,
     Runner,
     TerminalAccessRevision,
     TestAccount,
     TestAccountSecret,
 )
 from platform_api.secret_store import SecretProtector, SecretStoreError, UnavailableSecretProtector
+from platform_api.runner_readiness import runner_can_continue_bound_execution
 from platform_api.security import new_ulid, utc_now
 
 AI_TASK_CREATE = "AI_TASK_CREATE"
@@ -400,9 +412,49 @@ class AIExplorationService:
             binding.status = "IN_USE"
             binding.row_version += 1
             binding.updated_at = now
-            attempt.execution_status = "RUNNING"
-            attempt.lifecycle_status = "RUNNING"
-            attempt.row_version += 1
+            execution_task = db.get(RunTask, attempt.run_task_id)
+            if execution_task is None:
+                raise RuntimeError("AI exploration RunTask disappeared")
+            owner_summary = {"ai_exploration_session_id": row.session_id}
+            # Binding creation normally leaves both owners at PREPARING.  The
+            # idempotent preparation calls also keep controlled/legacy fixtures on
+            # the canonical LC-035/LC-036 paths instead of skipping lifecycle edges.
+            prepare_run_task(
+                db,
+                execution_task,
+                actor_user_id=actor.user.user_id,
+                operation_id=START_AI_EXPLORATION_SESSION,
+                context=audit_context,
+                now=now,
+                change_summary=owner_summary,
+            )
+            prepare_execution_attempt(
+                db,
+                attempt,
+                actor_user_id=actor.user.user_id,
+                operation_id=START_AI_EXPLORATION_SESSION,
+                context=audit_context,
+                now=now,
+                change_summary=owner_summary,
+            )
+            run_execution_attempt(
+                db,
+                attempt,
+                actor_user_id=actor.user.user_id,
+                operation_id=START_AI_EXPLORATION_SESSION,
+                context=audit_context,
+                now=now,
+                change_summary=owner_summary,
+            )
+            run_run_task(
+                db,
+                execution_task,
+                actor_user_id=actor.user.user_id,
+                operation_id=START_AI_EXPLORATION_SESSION,
+                context=audit_context,
+                now=now,
+                change_summary=owner_summary,
+            )
             task = db.get(AITask, row.ai_task_id)
             if task is None:
                 raise RuntimeError("AI exploration task disappeared")
@@ -589,8 +641,48 @@ class AIExplorationService:
                 )
         finally:
             if command is not None and browser_session_id is not None:
-                with suppress(Exception):
+                cleanup_succeeded = False
+                try:
                     self._browser_runtime.close(command, browser_session_id)
+                    cleanup_succeeded = True
+                except Exception:
+                    cleanup_succeeded = False
+                with suppress(Exception):
+                    self._record_browser_cleanup(
+                        session_id, audit_context, succeeded=cleanup_succeeded
+                    )
+
+    def _record_browser_cleanup(
+        self,
+        session_id: str,
+        audit_context: AuditContext,
+        *,
+        succeeded: bool,
+    ) -> None:
+        """Persist non-secret evidence that the bound Runner close command completed."""
+        with self._factory.begin() as db:
+            row = db.scalar(
+                select(AIExplorationSession)
+                .where(AIExplorationSession.session_id == session_id)
+                .with_for_update()
+            )
+            if row is None:
+                return
+            status = row.lifecycle_status
+            self._append_audit(
+                db,
+                row,
+                audit_context,
+                action=(
+                    "BROWSER_CLEANUP_SUCCEEDED"
+                    if succeeded
+                    else "BROWSER_CLEANUP_FAILED"
+                ),
+                previous_status=status,
+                new_status=status,
+                result_code="SUCCESS" if succeeded else "FAILED",
+                operation_id=START_AI_EXPLORATION_SESSION,
+            )
 
     def cancel(
         self,
@@ -691,7 +783,7 @@ class AIExplorationService:
             if current != command:
                 raise self._fencing_conflict()
             now = _server_now(db)
-            self._release_execution(db, row, "CANCELLED", now)
+            self._release_execution(db, row, "CANCELLED", now, audit_context)
             self._append_audit(
                 db,
                 row,
@@ -815,16 +907,14 @@ class AIExplorationService:
         ):
             raise self._preflight_failed("The frozen terminal/login/account facts are stale.")
         runner = db.get(Runner, binding.runner_id)
+        project = db.get(Project, row.project_id)
         if (
             runner is None
             or runner.project_id != row.project_id
-            or runner.lifecycle_status != "ACTIVE"
-            or runner.registration_status != "REGISTERED"
-            or runner.connection_status != "ONLINE"
-            or runner.health_status != "HEALTHY"
-            or runner.enable_status != "ENABLED"
-            or runner.project_binding_status != "BOUND"
-            or runner.version_compatibility != "COMPATIBLE"
+            or not runner_can_continue_bound_execution(
+                runner,
+                project_lifecycle_status=project.lifecycle_status if project else None,
+            )
             or not binding.runner_capability_snapshot
         ):
             raise self._preflight_failed("The bound Runner is unavailable or incompatible.")
@@ -1319,7 +1409,7 @@ class AIExplorationService:
             row.terminal_at = now
             row.updated_at = now
             row.row_version += 1
-            self._release_execution(db, row, "SUCCEEDED", now)
+            self._release_execution(db, row, "SUCCEEDED", now, audit_context)
             self._append_audit(
                 db,
                 row,
@@ -1374,7 +1464,7 @@ class AIExplorationService:
                         call.lifecycle_status = "FAILED"
                         call.row_version += 1
                         call.updated_at = now
-            self._release_execution(db, row, "FAILED", now)
+            self._release_execution(db, row, "FAILED", now, audit_context)
             action = "LEASE_LOST" if code == "AI_EXPLORATION_LEASE_LOST" else "BROWSER_FAILED"
             self._append_audit(
                 db,
@@ -1411,7 +1501,7 @@ class AIExplorationService:
             row.terminal_at = now
             row.updated_at = now
             row.row_version += 1
-            self._release_execution(db, row, "FAILED", now)
+            self._release_execution(db, row, "FAILED", now, audit_context)
             self._append_audit(
                 db,
                 row,
@@ -1425,7 +1515,12 @@ class AIExplorationService:
             self._append_event(db, row, "ai_exploration.failed", audit_context, now)
 
     def _release_execution(
-        self, db: Session, row: AIExplorationSession, outcome: str, now: datetime
+        self,
+        db: Session,
+        row: AIExplorationSession,
+        outcome: str,
+        now: datetime,
+        audit_context: AuditContext,
     ) -> None:
         if row.execution_binding_snapshot_id is None or row.execution_attempt_id is None:
             return
@@ -1462,14 +1557,38 @@ class AIExplorationService:
             .with_for_update()
         )
         if attempt is not None:
-            attempt.execution_status = outcome
-            attempt.finalization_status = "COMPLETED"
-            attempt.lifecycle_status = {
-                "SUCCEEDED": "PASSED",
-                "FAILED": "FAILED",
-                "CANCELLED": "CANCELED",
-            }[outcome]
-            attempt.row_version += 1
+            actor_user_id = row.created_by
+            if not actor_user_id:
+                raise RuntimeError("AI exploration execution owner has no actor identity")
+            terminal_operation = (
+                CANCEL_AI_EXPLORATION_SESSION
+                if outcome == "CANCELLED"
+                else START_AI_EXPLORATION_SESSION
+            )
+            owner_summary = {"ai_exploration_session_id": row.session_id}
+            complete_execution_attempt(
+                db,
+                attempt,
+                outcome=outcome,
+                actor_user_id=actor_user_id,
+                operation_id=terminal_operation,
+                context=audit_context,
+                now=now,
+                change_summary=owner_summary,
+            )
+            if attempt.run_task_id is not None:
+                execution_task = db.get(RunTask, attempt.run_task_id)
+                if execution_task is not None:
+                    complete_run_task(
+                        db,
+                        execution_task,
+                        outcome=outcome,
+                        actor_user_id=actor_user_id,
+                        operation_id=terminal_operation,
+                        context=audit_context,
+                        now=now,
+                        change_summary=owner_summary,
+                    )
         task = db.get(AITask, row.ai_task_id)
         if task is not None:
             task.status = outcome
@@ -1591,6 +1710,7 @@ class AIExplorationService:
                 "authorization",
                 "captcha",
                 "localstorage",
+                "local_storage",
                 "html",
                 "dom",
                 "chain_of_thought",
@@ -1726,6 +1846,43 @@ class AIExplorationService:
             runner_lease_generation=step.runner_lease_generation,
             started_at=step.started_at,
             completed_at=step.completed_at,
+        )
+
+    @staticmethod
+    def _append_execution_owner_transition(
+        db: Session,
+        *,
+        aggregate_type: str,
+        aggregate_id: str,
+        project_id: str,
+        event_type: str,
+        operation_id: str,
+        action: str,
+        actor_user_id: str,
+        previous_status: str | None,
+        new_status: str,
+        expected_version: int,
+        new_version: int,
+        change_summary: dict[str, object],
+        context: AuditContext,
+        now: datetime,
+    ) -> None:
+        append_transition_evidence(
+            db,
+            aggregate_type=aggregate_type,
+            aggregate_id=aggregate_id,
+            project_id=project_id,
+            event_type=event_type,
+            operation_id=operation_id,
+            action=action,
+            actor_user_id=actor_user_id,
+            previous_status=previous_status,
+            new_status=new_status,
+            expected_version=expected_version,
+            new_version=new_version,
+            change_summary=change_summary,
+            context=context,
+            now=now,
         )
 
     @staticmethod

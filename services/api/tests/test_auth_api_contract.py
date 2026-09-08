@@ -64,6 +64,7 @@ def test_exact_user_governance_operations_are_registered(key_ring_file: Path) ->
         if route.path.startswith(("/api/v1/user", "/api/v1/user-role-binding"))
     }
     assert operations == {
+        ("GET", "/api/v1/user", "list_user"),
         ("POST", "/api/v1/user", "create_user"),
         ("POST", "/api/v1/user/{id}/credential-reset", "reset_user_credential"),
         ("POST", "/api/v1/user/{id}/enable", "enable_user"),

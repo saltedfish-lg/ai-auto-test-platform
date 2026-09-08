@@ -10,8 +10,8 @@
 ## 当前工程事实
 
 - 前端：`Vue 3 + TypeScript`；API：`Python 3.12 + FastAPI`；Runner：`Python 3.12 + Playwright Web`。
-- 状态维度：124。
-- 数据库：105 张表；Migration：`V3__platform_contract_rebuild.sql → V4__rbac_seed_data.sql → V5__platform_authentication_contract.sql → V6__p1_auth_governance_closure.sql → V7__p1_remaining_authentication_closure.sql → V8__retire_platform_design_baseline_release.sql → V9__project_management_foundation.sql → V10__ai_model_configuration_foundation.sql → V11__ai_exploration_foundation.sql → V12__environment_management_foundation.sql → V13__business_terminal_foundation.sql → V14__test_account_foundation.sql → V15__runner_foundation.sql → V16__execution_binding_snapshot_foundation.sql → V17__ai_exploration_browser_loop.sql → V18__runtime_policy_management_audit.sql → V19__business_terminal_configuration_management.sql → V20__business_terminal_publication_evidence_repair.sql`。
+- 状态维度：125。
+- 数据库：106 张表；Migration：`V3__platform_contract_rebuild.sql → V4__rbac_seed_data.sql → V5__platform_authentication_contract.sql → V6__p1_auth_governance_closure.sql → V7__p1_remaining_authentication_closure.sql → V8__retire_platform_design_baseline_release.sql → V9__project_management_foundation.sql → V10__ai_model_configuration_foundation.sql → V11__ai_exploration_foundation.sql → V12__environment_management_foundation.sql → V13__business_terminal_foundation.sql → V14__test_account_foundation.sql → V15__runner_foundation.sql → V16__execution_binding_snapshot_foundation.sql → V17__ai_exploration_browser_loop.sql → V18__runtime_policy_management_audit.sql → V19__business_terminal_configuration_management.sql → V20__business_terminal_publication_evidence_repair.sql → V21__ai_exploration_execution_owner_provisioning.sql`。
 - RBAC：50 个权限点、12 个角色模板、600 条映射。
 - 权限解析：每个受保护请求实时读取关系型RBAC、项目职责和数据范围。
 

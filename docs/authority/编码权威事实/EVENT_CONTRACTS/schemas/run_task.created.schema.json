@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ai-test-platform:event:run_task.created:1.0.0",
+  "title": "run_task.created",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "event_id",
+    "event_type",
+    "event_version",
+    "occurred_at",
+    "aggregate_id",
+    "sequence",
+    "correlation_id",
+    "causation_id",
+    "project_id",
+    "payload"
+  ],
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "minLength": 26,
+      "maxLength": 26
+    },
+    "event_type": {
+      "const": "run_task.created"
+    },
+    "event_version": {
+      "const": "1.0.0"
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "aggregate_id": {
+      "type": "string",
+      "minLength": 26,
+      "maxLength": 26
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "correlation_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "causation_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "project_id": {
+      "type": "string",
+      "minLength": 26,
+      "maxLength": 26
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "run_task_id",
+        "project_id",
+        "environment_id",
+        "task_type",
+        "lifecycle_status",
+        "task_state"
+      ],
+      "properties": {
+        "run_task_id": {
+          "type": "string",
+          "minLength": 26,
+          "maxLength": 26
+        },
+        "project_id": {
+          "type": "string",
+          "minLength": 26,
+          "maxLength": 26
+        },
+        "environment_id": {
+          "type": "string",
+          "minLength": 26,
+          "maxLength": 26
+        },
+        "case_suite_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 26,
+          "maxLength": 26
+        },
+        "lifecycle_status": {
+          "const": "CREATED"
+        },
+        "task_state": {
+          "const": "CREATED"
+        },
+        "task_type": {
+          "type": "string",
+          "enum": [
+            "FORMAL_EXECUTION",
+            "AI_EXPLORATION",
+            "AI_VALIDATION"
+          ]
+        }
+      }
+    }
+  },
+  "x-forbidden-fields": [
+    "plaintext_password",
+    "secret_value",
+    "access_token",
+    "refresh_token",
+    "raw_credential",
+    "captcha_value",
+    "cookie"
+  ],
+  "x-aggregate-id-field": "run_task_id"
+}

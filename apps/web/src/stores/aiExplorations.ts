@@ -2,7 +2,7 @@ import { ref } from "vue";
 import { defineStore } from "pinia";
 
 import { apiClient } from "../api/client";
-import { getAIExplorationErrorMessage, getCorrelationId } from "../api/errors";
+import { getAIExplorationErrorMessage, getCorrelationId, getProblemCode } from "../api/errors";
 import type {
   AIExplorationSessionResource,
   AIExplorationStepResource,
@@ -23,6 +23,7 @@ export const useAIExplorationsStore = defineStore("aiExplorations", () => {
   const status = ref<AIExplorationStatus>("idle");
   const errorMessage = ref("");
   const correlationId = ref<string>();
+  const errorCode = ref<string>();
   const pendingKeys = new Map<string, { fingerprint: string; key: string }>();
 
   function commandKey(operation: string, body: object): string {
@@ -40,6 +41,7 @@ export const useAIExplorationsStore = defineStore("aiExplorations", () => {
     status.value = "idle";
     errorMessage.value = "";
     correlationId.value = undefined;
+    errorCode.value = undefined;
     pendingKeys.clear();
   }
 
@@ -50,6 +52,7 @@ export const useAIExplorationsStore = defineStore("aiExplorations", () => {
     current.value = null;
     errorMessage.value = "";
     correlationId.value = undefined;
+    errorCode.value = undefined;
     const key = commandKey("create", body);
     try {
       const response = await apiClient.create_ai_exploration_session(body, {
@@ -62,6 +65,7 @@ export const useAIExplorationsStore = defineStore("aiExplorations", () => {
     } catch (error) {
       errorMessage.value = getAIExplorationErrorMessage(error, "AI 探索规划失败，请稍后重试。");
       correlationId.value = getCorrelationId(error);
+      errorCode.value = getProblemCode(error);
       throw error;
     } finally {
       status.value = "idle";
@@ -78,6 +82,7 @@ export const useAIExplorationsStore = defineStore("aiExplorations", () => {
     } catch (error) {
       errorMessage.value = getAIExplorationErrorMessage(error, "AI 探索状态读取失败。");
       correlationId.value = getCorrelationId(error);
+      errorCode.value = getProblemCode(error);
       throw error;
     } finally {
       status.value = "idle";
@@ -109,6 +114,7 @@ export const useAIExplorationsStore = defineStore("aiExplorations", () => {
     } catch (error) {
       errorMessage.value = getAIExplorationErrorMessage(error, "AI 浏览器探索启动失败。");
       correlationId.value = getCorrelationId(error);
+      errorCode.value = getProblemCode(error);
       throw error;
     } finally {
       status.value = "idle";
@@ -133,6 +139,7 @@ export const useAIExplorationsStore = defineStore("aiExplorations", () => {
     } catch (error) {
       errorMessage.value = getAIExplorationErrorMessage(error, "AI 浏览器探索取消失败。");
       correlationId.value = getCorrelationId(error);
+      errorCode.value = getProblemCode(error);
       throw error;
     } finally {
       status.value = "idle";
@@ -145,6 +152,7 @@ export const useAIExplorationsStore = defineStore("aiExplorations", () => {
     status,
     errorMessage,
     correlationId,
+    errorCode,
     clear,
     create,
     load,

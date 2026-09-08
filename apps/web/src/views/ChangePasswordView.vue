@@ -3,7 +3,7 @@ import { reactive, ref, watch } from "vue";
 import { ElMessage, type FormInstance, type FormRules } from "element-plus";
 import { useRouter } from "vue-router";
 
-import { getAuthenticationErrorMessage, getCorrelationId } from "../api/errors";
+import { getAuthenticationErrorMessage, getCorrelationId, getProblemCode } from "../api/errors";
 import type { ChangePasswordRequest } from "../generated/types";
 import { useSessionStore } from "../stores/session";
 
@@ -19,6 +19,7 @@ const passwordVisibility = reactive({ current: false, next: false, confirm: fals
 const passwordChangeIdempotencyKey = ref<string>();
 const errorMessage = ref("");
 const correlationId = ref<string>();
+const errorCode = ref<string>();
 const session = useSessionStore();
 const router = useRouter();
 
@@ -66,6 +67,7 @@ async function submit(): Promise<void> {
   // 未知网络结果必须复用同一幂等键，只有请求内容变化后才能生成新键，避免重复改密。
   errorMessage.value = "";
   correlationId.value = undefined;
+  errorCode.value = undefined;
   if (!form.current_password || !form.new_password || !form.confirm_password) {
     errorMessage.value = "请完整填写密码表单。";
     void formRef.value?.validate().catch(() => undefined);
@@ -97,6 +99,7 @@ async function submit(): Promise<void> {
       "密码修改失败，请检查当前密码和新密码策略。",
     );
     correlationId.value = getCorrelationId(error);
+    errorCode.value = getProblemCode(error);
   }
 }
 
@@ -135,8 +138,10 @@ async function logout(): Promise<void> {
         show-icon
         class="form-alert"
       >
-        <template v-if="correlationId" #default>
-          <span class="correlation-id">请求标识：{{ correlationId }}</span>
+        <template v-if="errorCode || correlationId" #default>
+          <span v-if="errorCode">错误代码：{{ errorCode }}</span>
+          <span v-if="errorCode && correlationId"> · </span>
+          <span v-if="correlationId" class="correlation-id">请求标识：{{ correlationId }}</span>
         </template>
       </el-alert>
 

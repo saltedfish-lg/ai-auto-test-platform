@@ -8,6 +8,7 @@ import type {
   BusinessTerminalResource,
   EnvironmentTerminalAccessRevisionResource,
 } from "../generated/types";
+import { enumLabel, statusLabel } from "../presentation/labels";
 import { useBusinessTerminalsStore } from "../stores/businessTerminals";
 import { useEnvironmentsStore } from "../stores/environments";
 
@@ -16,6 +17,17 @@ const router = useRouter();
 const terminals = useBusinessTerminalsStore();
 const environments = useEnvironmentsStore();
 const projectId = computed(() => String(route.params.projectId));
+
+function environmentName(id: string): string {
+  const item = environments.items.find((environment) => environment.environment_id === id);
+  return item?.display_name || item?.environment_code || "未命名环境";
+}
+
+function loginStrategyName(id: string | null | undefined): string {
+  if (!id) return "未配置";
+  const item = terminals.strategies.find((strategy) => strategy.login_strategy_id === id);
+  return item?.display_name || "未命名登录策略";
+}
 const currentPage = ref(1);
 const pageSize = ref(50);
 const environmentFilter = ref("");
@@ -274,7 +286,7 @@ async function submitRevision(): Promise<void> {
       });
     }
     revisionVisible.value = false;
-    ElMessage.success(editingRevision.value ? "DRAFT 访问修订已更新。" : "DRAFT 访问修订已创建。");
+    ElMessage.success(editingRevision.value ? "草稿访问修订已更新。" : "草稿访问修订已创建。");
   } catch (error) {
     if (
       error instanceof SyntaxError ||
@@ -292,12 +304,12 @@ function viewRevision(revision: EnvironmentTerminalAccessRevisionResource): void
 
 async function abandonRevision(revision: EnvironmentTerminalAccessRevisionResource): Promise<void> {
   try {
-    const { value } = await ElMessageBox.prompt("请输入放弃原因", "放弃 DRAFT 访问修订", {
+    const { value } = await ElMessageBox.prompt("请输入放弃原因", "放弃草稿访问修订", {
       inputPattern: /\S+/,
       inputErrorMessage: "原因不能为空。",
     });
     await terminals.abandonRevision(revision, value.trim());
-    ElMessage.success("DRAFT 访问修订已安全放弃。");
+    ElMessage.success("草稿访问修订已安全放弃。");
   } catch (error) {
     if (error !== "cancel" && error !== "close") {
       /* store exposes formal error */
@@ -319,12 +331,12 @@ async function returnRevisionToDraft(
   revision: EnvironmentTerminalAccessRevisionResource,
 ): Promise<void> {
   try {
-    const { value } = await ElMessageBox.prompt("请输入返回草稿原因", "返回 DRAFT 访问修订", {
+    const { value } = await ElMessageBox.prompt("请输入返回草稿原因", "返回草稿访问修订", {
       inputPattern: /\S+/,
       inputErrorMessage: "原因不能为空。",
     });
     await terminals.returnRevisionToDraft(revision, value.trim());
-    ElMessage.success("访问修订已返回 DRAFT，可继续编辑修正。");
+    ElMessage.success("访问修订已返回草稿，可继续编辑修正。");
   } catch (error) {
     if (error !== "cancel" && error !== "close") {
       /* store exposes formal error */
@@ -355,7 +367,7 @@ async function publishRevision(revision: EnvironmentTerminalAccessRevisionResour
         >
         <h2 id="terminal-title">业务终端</h2>
         <p class="muted">
-          管理端、客户端与 PDA 均为 Web 终端；访问配置由终端自己的不可变 Revision 发布。
+          管理端、客户端与 PDA 均为 Web 终端；访问配置由终端自己的不可变访问修订发布。
         </p>
       </div>
       <div>
@@ -373,7 +385,13 @@ async function publishRevision(revision: EnvironmentTerminalAccessRevisionResour
       type="error"
       :closable="false"
       show-icon
-    />
+    >
+      <template v-if="terminals.errorCode || terminals.correlationId" #default>
+        <span v-if="terminals.errorCode">错误代码：{{ terminals.errorCode }}</span>
+        <span v-if="terminals.errorCode && terminals.correlationId"> · </span>
+        <span v-if="terminals.correlationId">请求标识：{{ terminals.correlationId }}</span>
+      </template>
+    </el-alert>
     <el-card shadow="never">
       <div class="environment-toolbar">
         <el-select
@@ -398,7 +416,7 @@ async function publishRevision(revision: EnvironmentTerminalAccessRevisionResour
           <el-option
             v-for="value in ['MANAGEMENT', 'CLIENT', 'PDA']"
             :key="value"
-            :label="value"
+            :label="enumLabel('terminalType', value)"
             :value="value"
           />
         </el-select>
@@ -419,7 +437,7 @@ async function publishRevision(revision: EnvironmentTerminalAccessRevisionResour
               'ARCHIVED',
             ]"
             :key="value"
-            :label="value"
+            :label="statusLabel('lifecycle', value)"
             :value="value"
           />
         </el-select>
@@ -438,14 +456,10 @@ async function publishRevision(revision: EnvironmentTerminalAccessRevisionResour
       >
         <el-table-column prop="terminal_code" label="终端编码" min-width="150" />
         <el-table-column prop="display_name" label="终端名称" min-width="150" />
-        <el-table-column prop="environment_id" label="Environment" min-width="210" />
-        <el-table-column prop="terminal_type" label="终端类型" min-width="120" />
-        <el-table-column
-          prop="current_published_revision_id"
-          label="当前发布 Revision"
-          min-width="220"
-        />
-        <el-table-column prop="lifecycle_status" label="状态" min-width="120" />
+        <el-table-column label="环境" min-width="170"><template #default="{ row }">{{ environmentName(row.environment_id) }}</template></el-table-column>
+        <el-table-column label="终端类型" min-width="120"><template #default="{ row }">{{ enumLabel('terminalType', row.terminal_type) }}</template></el-table-column>
+        <el-table-column label="访问配置" min-width="160"><template #default="{ row }">{{ row.current_published_revision_id ? "已发布" : "未发布" }}</template></el-table-column>
+        <el-table-column label="状态" min-width="120"><template #default="{ row }">{{ statusLabel('lifecycle', row.lifecycle_status) }}</template></el-table-column>
         <el-table-column prop="updated_at" label="更新时间" min-width="190" />
         <el-table-column label="操作" width="290" fixed="right">
           <template #default="{ row }">
@@ -503,7 +517,7 @@ async function publishRevision(revision: EnvironmentTerminalAccessRevisionResour
 
     <el-dialog v-model="createVisible" title="创建业务终端" width="min(560px, 92vw)"
       ><el-form label-position="top">
-        <el-form-item label="Environment" required
+        <el-form-item label="环境" required
           ><el-select v-model="createForm.environment_id"
             ><el-option
               v-for="item in environments.items"
@@ -522,13 +536,13 @@ async function publishRevision(revision: EnvironmentTerminalAccessRevisionResour
             ><el-option
               v-for="value in ['MANAGEMENT', 'CLIENT', 'PDA']"
               :key="value"
-              :label="value"
+              :label="enumLabel('terminalType', value)"
               :value="value" /></el-select
         ></el-form-item>
         <el-form-item label="原因"
           ><el-input v-model="createForm.reason" type="textarea"
         /></el-form-item>
-        <p class="security-form-note">创建终端不会隐式创建占位 Revision。</p> </el-form
+        <p class="security-form-note">创建终端不会隐式创建占位访问修订。</p> </el-form
       ><template #footer
         ><el-button @click="createVisible = false">取消</el-button
         ><el-button type="primary" @click="submitCreate">确认创建</el-button></template
@@ -557,8 +571,8 @@ async function publishRevision(revision: EnvironmentTerminalAccessRevisionResour
         </el-form-item>
         <el-form-item label="验证码策略" required>
           <el-select v-model="loginStrategyForm.captcha_policy">
-            <el-option label="NONE" value="NONE" />
-            <el-option label="RESPONSE_HEADER" value="RESPONSE_HEADER" />
+            <el-option :label="enumLabel('captchaPolicy', 'NONE')" value="NONE" />
+            <el-option :label="enumLabel('captchaPolicy', 'RESPONSE_HEADER')" value="RESPONSE_HEADER" />
           </el-select>
         </el-form-item>
         <template v-if="loginStrategyForm.captcha_policy === 'RESPONSE_HEADER'">
@@ -580,8 +594,7 @@ async function publishRevision(revision: EnvironmentTerminalAccessRevisionResour
           <el-input v-model="loginStrategyForm.reason" type="textarea" />
         </el-form-item>
         <p class="security-form-note">
-          此操作复用正式 AutomationAsset → LoginStrategy → Configure DRAFT → Activate
-          路径；失败重试会复用已创建对象。
+          此操作复用正式自动化资产 → 登录策略 → 配置草稿 → 启用路径；失败重试会复用已创建对象。
         </p>
       </el-form>
       <template #footer>
@@ -597,17 +610,14 @@ async function publishRevision(revision: EnvironmentTerminalAccessRevisionResour
 
     <el-dialog v-model="detailVisible" title="业务终端详情" width="min(900px, 94vw)">
       <dl v-if="selected" class="identity-list">
-        <dt>Terminal ID</dt>
-        <dd class="monospace">{{ selected.business_terminal_id }}</dd>
-        <dt>终端类型</dt>
-        <dd>{{ selected.terminal_type }}</dd>
-        <dt>状态</dt>
-        <dd>{{ selected.lifecycle_status }}</dd>
-        <dt>当前发布 Revision</dt>
-        <dd class="monospace">{{ selected.current_published_revision_id || "未发布" }}</dd>
+        <dt>环境</dt><dd>{{ environmentName(selected.environment_id) }}</dd>
+        <dt>终端类型</dt><dd>{{ enumLabel('terminalType', selected.terminal_type) }}</dd>
+        <dt>状态</dt><dd>{{ statusLabel('lifecycle', selected.lifecycle_status) }}</dd>
+        <dt>访问配置</dt><dd>{{ selected.current_published_revision_id ? "已有发布修订" : "未发布" }}</dd>
       </dl>
+      <el-collapse v-if="selected"><el-collapse-item title="技术信息" name="technical"><p>终端标识：<code>{{ selected.business_terminal_id }}</code></p><p>当前发布修订标识：<code>{{ selected.current_published_revision_id || "—" }}</code></p></el-collapse-item></el-collapse>
       <div class="page-heading">
-        <h3>Terminal Access Revisions</h3>
+        <h3>终端访问修订</h3>
         <PermissionGate permission="BUSINESS_TERMINAL_EDIT"
           ><el-button type="primary" @click="openRevision()"
             >新建访问修订</el-button
@@ -615,7 +625,7 @@ async function publishRevision(revision: EnvironmentTerminalAccessRevisionResour
         >
       </div>
       <el-table :data="terminals.revisions" empty-text="尚无访问修订">
-        <el-table-column prop="revision_no" label="Revision No" width="110" />
+        <el-table-column prop="revision_no" label="修订号" width="110" />
         <el-table-column label="当前" width="75">
           <template #default="{ row }">{{
             row.environment_terminal_access_revision_id === selected?.current_published_revision_id
@@ -625,10 +635,10 @@ async function publishRevision(revision: EnvironmentTerminalAccessRevisionResour
         </el-table-column>
         <el-table-column prop="entry_url" label="入口 URL" min-width="230" />
         <el-table-column prop="login_url" label="登录 URL" min-width="220" />
-        <el-table-column prop="login_strategy_id" label="Login Strategy" min-width="220" />
+        <el-table-column label="登录策略" min-width="180"><template #default="{ row }">{{ loginStrategyName(row.login_strategy_id) }}</template></el-table-column>
         <el-table-column prop="created_at" label="创建时间" min-width="180" />
         <el-table-column prop="published_at" label="发布时间" min-width="180" />
-        <el-table-column prop="lifecycle_status" label="状态" width="120" />
+        <el-table-column label="状态" width="120"><template #default="{ row }">{{ statusLabel('lifecycle', row.lifecycle_status) }}</template></el-table-column>
         <el-table-column label="操作" min-width="320" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" @click="viewRevision(row)">查看</el-button>
@@ -685,7 +695,7 @@ async function publishRevision(revision: EnvironmentTerminalAccessRevisionResour
 
     <el-dialog
       v-model="revisionVisible"
-      :title="editingRevision ? '编辑 DRAFT 访问修订' : '新建 DRAFT 访问修订'"
+      :title="editingRevision ? '编辑草稿访问修订' : '新建草稿访问修订'"
       width="min(600px,92vw)"
       ><el-form label-position="top"
         ><el-form-item label="入口 URL" required
@@ -693,14 +703,14 @@ async function publishRevision(revision: EnvironmentTerminalAccessRevisionResour
             v-model="revisionForm.entry_url"
             placeholder="https://example.test/app" /></el-form-item
         ><el-form-item label="登录 URL"><el-input v-model="revisionForm.login_url" /></el-form-item
-        ><el-form-item label="Login Strategy"
+        ><el-form-item label="登录策略"
           ><el-select v-model="revisionForm.login_strategy_id" clearable
             ><el-option
               v-for="item in terminals.strategies.filter(
                 (value) => value.lifecycle_status === 'ACTIVE',
               )"
               :key="item.login_strategy_id"
-              :label="item.display_name || item.login_strategy_id"
+              :label="item.display_name || '未命名登录策略'"
               :value="item.login_strategy_id" /></el-select></el-form-item
         ><el-form-item label="名称"><el-input v-model="revisionForm.display_name" /></el-form-item
         ><el-form-item label="登录前置条件（JSON 对象）"
@@ -718,22 +728,22 @@ async function publishRevision(revision: EnvironmentTerminalAccessRevisionResour
       ><template #footer
         ><el-button @click="revisionVisible = false">取消</el-button
         ><el-button type="primary" @click="submitRevision">{{
-          editingRevision ? "保存 DRAFT" : "创建 DRAFT"
+          editingRevision ? "保存草稿" : "创建草稿"
         }}</el-button></template
       ></el-dialog
     >
     <el-dialog v-model="revisionReadOnlyVisible" title="查看访问修订" width="min(680px,92vw)">
       <dl v-if="viewedRevision" class="identity-list">
-        <dt>Revision No</dt>
+        <dt>修订号</dt>
         <dd>{{ viewedRevision.revision_no }}</dd>
         <dt>状态</dt>
-        <dd>{{ viewedRevision.lifecycle_status }}</dd>
+        <dd>{{ statusLabel('lifecycle', viewedRevision.lifecycle_status) }}</dd>
         <dt>入口 URL</dt>
         <dd>{{ viewedRevision.entry_url }}</dd>
         <dt>登录 URL</dt>
         <dd>{{ viewedRevision.login_url || "—" }}</dd>
-        <dt>Login Strategy</dt>
-        <dd class="monospace">{{ viewedRevision.login_strategy_id || "—" }}</dd>
+        <dt>登录策略</dt>
+        <dd>{{ loginStrategyName(viewedRevision.login_strategy_id) }}</dd>
         <dt>创建时间</dt>
         <dd>{{ viewedRevision.created_at }}</dd>
         <dt>发布时间</dt>

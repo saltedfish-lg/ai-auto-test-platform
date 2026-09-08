@@ -50,7 +50,7 @@ OBJ-048,登录策略,CONFIGURATION_ENTITY,AGG-017,TABLE,atp_login_strategy_audit
 OBJ-049,页面对象,CONFIGURATION_ENTITY,AGG-017,TABLE,atp_page_object,page_object_id,LC-049,lifecycle_status
 OBJ-050,动作资产,CONFIGURATION_ENTITY,AGG-017,TABLE,atp_action_asset,action_asset_id,LC-050,lifecycle_status
 OBJ-051,断言资产,CONFIGURATION_ENTITY,AGG-017,TABLE,atp_assertion_asset,assertion_asset_id,LC-051,lifecycle_status
-OBJ-052,Runner,AGGREGATE_ROOT,AGG-018,TABLE,atp_runner,runner_id,LC-052,health_status|scheduling_status|registration_status|connection_status|health_status|enable_status|project_binding_status|scheduling_status|resource_status|lifecycle_status
+OBJ-052,Runner,AGGREGATE_ROOT,AGG-018,TABLE,atp_runner,runner_id,LC-052,health_status|scheduling_status|registration_status|connection_status|health_status|enable_status|project_binding_status|scheduling_status|resource_status|version_compatibility|lifecycle_status
 OBJ-053,Runner能力,CONFIGURATION_ENTITY,AGG-018,TABLE,atp_runner_capability,runner_capability_id,LC-053,lifecycle_status
 OBJ-054,Runner项目绑定,RELATIONSHIP_ENTITY,AGG-018,TABLE,atp_runner_project_binding,runner_project_binding_id,LC-054,lifecycle_status
 OBJ-055,执行槽位,CONFIGURATION_ENTITY,AGG-018,TABLE,atp_execution_slot,execution_slot_id,LC-055,lifecycle_status

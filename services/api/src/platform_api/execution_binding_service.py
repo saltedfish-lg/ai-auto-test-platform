@@ -30,6 +30,10 @@ from platform_api.execution_binding_schemas import (
     RuntimePolicyRevisionResource,
     RuntimePolicySnapshot,
 )
+from platform_api.execution_owner_transitions import (
+    prepare_execution_attempt,
+    prepare_run_task,
+)
 from platform_api.idempotency import IdempotencyCoordinator
 from platform_api.models import (
     AccountMappingRevision,
@@ -50,10 +54,12 @@ from platform_api.models import (
     Role,
     Runner,
     RunnerCapability,
+    RunTask,
     TerminalAccessRevision,
     TestAccount,
     UserRoleBinding,
 )
+from platform_api.runner_readiness import runner_can_continue_bound_execution
 from platform_api.security import new_ulid
 
 IDENTITY_LEASE_TTL_SECONDS = 600
@@ -62,9 +68,9 @@ RUNNER_LEASE_TTL_SECONDS = 120
 RUNNER_LEASE_RENEW_SECONDS = 30
 
 _TERMINAL_CAPABILITIES = {
-    "ADMIN_WEB": "TERMINAL_ADMIN_WEB",
-    "CLIENT_WEB": "TERMINAL_CLIENT_WEB",
-    "PDA_WEB": "TERMINAL_PDA_WEB",
+    "MANAGEMENT": "TERMINAL_ADMIN_WEB",
+    "CLIENT": "TERMINAL_CLIENT_WEB",
+    "PDA": "TERMINAL_PDA_WEB",
 }
 _BROWSER_CAPABILITIES = {
     "CHROMIUM": "BROWSER_CHROMIUM",
@@ -234,6 +240,34 @@ class ExecutionBindingService:
                 db.flush()
                 resolved.attempt.execution_binding_snapshot_id = (
                     binding.execution_binding_snapshot_id
+                )
+                run_task = db.get(RunTask, root_execution_task_id)
+                if run_task is None:
+                    raise RuntimeError("ExecutionBinding RunTask disappeared")
+                owner_summary = {
+                    "execution_binding_snapshot_id": binding.execution_binding_snapshot_id,
+                    "runner_id": binding.runner_id,
+                }
+                # The direct binding path performs snapshot/preflight/resource acquisition
+                # synchronously.  Project those actual facts through every canonical
+                # LC-035/LC-036 preparation edge; no Scheduler/Queue is introduced.
+                prepare_run_task(
+                    db,
+                    run_task,
+                    actor_user_id=actor.user.user_id,
+                    operation_id="create_execution_binding_snapshot",
+                    context=context,
+                    now=now,
+                    change_summary=owner_summary,
+                )
+                prepare_execution_attempt(
+                    db,
+                    resolved.attempt,
+                    actor_user_id=actor.user.user_id,
+                    operation_id="create_execution_binding_snapshot",
+                    context=context,
+                    now=now,
+                    change_summary=owner_summary,
                 )
                 self._audit(
                     db,
@@ -786,15 +820,11 @@ class ExecutionBindingService:
         )
         runner_ready = (
             runner is not None
-            and runner.lifecycle_status == "ACTIVE"
-            and runner.registration_status == "REGISTERED"
-            and runner.connection_status == "ONLINE"
-            and runner.health_status == "HEALTHY"
-            and runner.enable_status == "ENABLED"
-            and runner.project_binding_status == "BOUND"
-            and runner.version_compatibility == "COMPATIBLE"
+            and runner_can_continue_bound_execution(
+                runner,
+                project_lifecycle_status=project.lifecycle_status if project else None,
+            )
             and runner.resource_status in {"AVAILABLE", "PARTIALLY_OCCUPIED"}
-            and runner.last_heartbeat_at is not None
         )
         _check(
             checks,
@@ -946,6 +976,9 @@ class ExecutionBindingService:
             {
                 "capability_code": item.capability_code,
                 "capability_type": item.capability_type,
+                "availability_status": item.availability_status,
+                "validation_status": item.validation_status,
+                "lifecycle_status": item.lifecycle_status,
                 "observed_version": item.observed_version,
                 "reported_at": item.reported_at.replace(tzinfo=UTC).isoformat(),
             }
@@ -1498,11 +1531,7 @@ def _concurrency_conflict() -> PlatformError:
 
 def _persistence_conflict(error: IntegrityError) -> PlatformError:
     message = str(error.orig).casefold()
-    if (
-        "uq_atp_resource_lease_active" in message
-        or "uq_atp_execution_binding_attempt" in message
-        or "duplicate" in message
-    ):
+    if "uq_atp_resource_lease_active" in message or "uq_atp_execution_binding_attempt" in message:
         return PlatformError(
             title="Resource lease conflict",
             detail="The execution attempt or resource identity is already bound.",

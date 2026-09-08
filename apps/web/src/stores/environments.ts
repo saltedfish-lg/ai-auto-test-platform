@@ -2,7 +2,7 @@ import { ref } from "vue";
 import { defineStore } from "pinia";
 
 import { apiClient } from "../api/client";
-import { getApiErrorMessage, getCorrelationId } from "../api/errors";
+import { getApiErrorMessage, getCorrelationId, getProblemCode } from "../api/errors";
 import type {
   CreateEnvironmentRequest,
   EnvironmentResource,
@@ -23,17 +23,20 @@ export const useEnvironmentsStore = defineStore("environments", () => {
   const status = ref<"idle" | "loading" | "saving">("idle");
   const errorMessage = ref("");
   const correlationId = ref<string>();
+  const errorCode = ref<string>();
   const activeProjectId = ref("");
   const activeLifecycleStatus = ref<string>();
 
   function clearError() {
     errorMessage.value = "";
     correlationId.value = undefined;
+    errorCode.value = undefined;
   }
 
   function capture(error: unknown, fallback: string): never {
     errorMessage.value = getApiErrorMessage(error, fallback);
     correlationId.value = getCorrelationId(error);
+    errorCode.value = getProblemCode(error);
     throw error;
   }
 
@@ -176,6 +179,7 @@ export const useEnvironmentsStore = defineStore("environments", () => {
     status,
     errorMessage,
     correlationId,
+    errorCode,
     clearError,
     load,
     create,
